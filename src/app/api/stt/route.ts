@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const file = formData.get("audio") as File | null;
+  const language = formData.get("language") as string | null;
 
   if (!file) {
     return NextResponse.json(
@@ -16,12 +17,34 @@ export async function POST(req: NextRequest) {
   }
 
   const arrayBuffer = await file.arrayBuffer();
+
+  // 音声ファイルが短すぎる場合はスキップ
+  if (arrayBuffer.byteLength < 1000) {
+    console.log("[STT] Audio file too small, skipping:", arrayBuffer.byteLength, "bytes");
+    return NextResponse.json({ text: "" });
+  }
+
   const openai = getOpenAI();
 
-  const transcription = await openai.audio.transcriptions.create({
-    file: await toFile(arrayBuffer, file.name || "audio.webm"),
-    model: "whisper-1",
-  });
+  try {
+    const transcription = await openai.audio.transcriptions.create({
+      file: await toFile(arrayBuffer, file.name || "audio.webm"),
+      model: "whisper-1",
+      language: language || "ja", // デフォルトは日本語
+      prompt: "これは日本語または英語の音声です。", // 認識精度向上のためのヒント
+    });
 
-  return NextResponse.json({ text: transcription.text });
+    console.log("[STT] Transcription result:", transcription.text);
+    return NextResponse.json({ text: transcription.text });
+  } catch (error) {
+    console.error("[STT] Transcription error:", error);
+    // audio_too_short エラーの場合は空文字を返す
+    if (error instanceof Error && error.message.includes("too short")) {
+      return NextResponse.json({ text: "" });
+    }
+    return NextResponse.json(
+      { error: "Transcription failed" },
+      { status: 500 }
+    );
+  }
 }

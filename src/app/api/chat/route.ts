@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   });
 
   // RAGで回答を生成
-  const { reply } = await answerWithRAG({ companyId, question: message });
+  const { reply, relatedLinks } = await answerWithRAG({ companyId, question: message });
 
   // アシスタントメッセージを保存
   await chatLogsCol.insertOne({
@@ -43,5 +43,5 @@ export async function POST(req: NextRequest) {
     createdAt: new Date(),
   });
 
-  return NextResponse.json({ reply, sessionId });
+  return NextResponse.json({ reply, sessionId, relatedLinks });
 }

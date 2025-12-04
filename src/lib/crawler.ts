@@ -17,6 +17,197 @@ export interface CrawlProgress {
   message: string;
 }
 
+// クロール結果の型
+export interface CrawlResult {
+  success: boolean;
+  pagesVisited: number;
+  totalChunks: number;
+  themeColor: string;
+  error?: string;
+}
+
+// URLを正規化・検証する関数
+export function validateAndNormalizeUrl(input: string): { valid: boolean; url: string; error?: string } {
+  let urlString = input.trim();
+
+  // 空白チェック
+  if (!urlString) {
+    return { valid: false, url: "", error: "URLが入力されていません" };
+  }
+
+  // プロトコルがなければ追加
+  if (!urlString.startsWith("http://") && !urlString.startsWith("https://")) {
+    urlString = "https://" + urlString;
+  }
+
+  try {
+    const urlObj = new URL(urlString);
+
+    // ホスト名の検証
+    const hostname = urlObj.hostname;
+
+    // ホスト名が空またはローカルホスト
+    if (!hostname || hostname === "localhost" || hostname === "127.0.0.1") {
+      return { valid: false, url: "", error: "有効なドメインを入力してください" };
+    }
+
+    // ホスト名に少なくとも1つのドットが必要（TLD）
+    if (!hostname.includes(".")) {
+      return { valid: false, url: "", error: "有効なドメイン名を入力してください（例: example.com）" };
+    }
+
+    // ホスト名が数字だけの場合は無効
+    const parts = hostname.split(".");
+    const allNumeric = parts.every(part => /^\d+$/.test(part));
+    if (allNumeric && parts.length === 4) {
+      // IPアドレスは許可しない（プライベートIP含む可能性）
+      return { valid: false, url: "", error: "ドメイン名を入力してください（IPアドレスは使用できません）" };
+    }
+
+    // ランダム文字列チェック（TLDが存在しなさそうな場合）
+    const tld = parts[parts.length - 1].toLowerCase();
+    const validTlds = ["com", "net", "org", "io", "co", "jp", "dev", "app", "ai", "me", "info", "biz", "edu", "gov", "xyz", "tech", "site", "online", "store", "blog", "cloud"];
+    const looksLikeTld = tld.length >= 2 && tld.length <= 6 && /^[a-z]+$/.test(tld);
+
+    if (!validTlds.includes(tld) && !looksLikeTld) {
+      return { valid: false, url: "", error: "有効なドメインを入力してください" };
+    }
+
+    return { valid: true, url: urlObj.toString() };
+  } catch {
+    return { valid: false, url: "", error: "無効なURL形式です" };
+  }
+}
+
+// サイトのテーマカラーを抽出する関数
+export function extractThemeColor(html: string): string {
+  const $ = cheerio.load(html);
+  const colorCounts = new Map<string, number>();
+
+  // 1. meta theme-colorを確認
+  const themeColorMeta = $('meta[name="theme-color"]').attr("content");
+  if (themeColorMeta && isValidColor(themeColorMeta)) {
+    return normalizeColor(themeColorMeta);
+  }
+
+  // 2. OGP関連のカラーを確認
+  const msAppColor = $('meta[name="msapplication-TileColor"]').attr("content");
+  if (msAppColor && isValidColor(msAppColor)) {
+    return normalizeColor(msAppColor);
+  }
+
+  // 3. インラインスタイルから主要な色を抽出
+  $("[style]").each((_, el) => {
+    const style = $(el).attr("style") || "";
+    const colorMatches = style.match(/(?:background-color|background|color)\s*:\s*(#[0-9a-fA-F]{3,6}|rgb\([^)]+\))/gi);
+    if (colorMatches) {
+      colorMatches.forEach((match) => {
+        const colorValue = match.split(":")[1].trim();
+        const normalized = normalizeColor(colorValue);
+        if (normalized && !isGrayOrWhiteOrBlack(normalized)) {
+          colorCounts.set(normalized, (colorCounts.get(normalized) || 0) + 1);
+        }
+      });
+    }
+  });
+
+  // 4. CSSクラスから推測（よくあるプライマリーカラー系クラス）
+  const primaryElements = $(".primary, .brand, .accent, [class*='primary'], [class*='brand'], header, nav");
+  primaryElements.each((_, el) => {
+    const style = $(el).attr("style") || "";
+    const bgMatch = style.match(/background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6}|rgb\([^)]+\))/i);
+    if (bgMatch) {
+      const normalized = normalizeColor(bgMatch[1]);
+      if (normalized && !isGrayOrWhiteOrBlack(normalized)) {
+        colorCounts.set(normalized, (colorCounts.get(normalized) || 0) + 5); // 重み付け
+      }
+    }
+  });
+
+  // 5. リンクの色を確認
+  $("a").slice(0, 10).each((_, el) => {
+    const style = $(el).attr("style") || "";
+    const colorMatch = style.match(/color\s*:\s*(#[0-9a-fA-F]{3,6}|rgb\([^)]+\))/i);
+    if (colorMatch) {
+      const normalized = normalizeColor(colorMatch[1]);
+      if (normalized && !isGrayOrWhiteOrBlack(normalized)) {
+        colorCounts.set(normalized, (colorCounts.get(normalized) || 0) + 2);
+      }
+    }
+  });
+
+  // 6. ボタンの背景色を確認
+  $("button, .btn, [class*='button'], input[type='submit']").each((_, el) => {
+    const style = $(el).attr("style") || "";
+    const bgMatch = style.match(/background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6}|rgb\([^)]+\))/i);
+    if (bgMatch) {
+      const normalized = normalizeColor(bgMatch[1]);
+      if (normalized && !isGrayOrWhiteOrBlack(normalized)) {
+        colorCounts.set(normalized, (colorCounts.get(normalized) || 0) + 3);
+      }
+    }
+  });
+
+  // 最も頻度の高い色を選択
+  if (colorCounts.size > 0) {
+    const sorted = Array.from(colorCounts.entries()).sort((a, b) => b[1] - a[1]);
+    return sorted[0][0];
+  }
+
+  // デフォルトカラー（ブルー）
+  return "#2563eb";
+}
+
+// 色が有効かどうかを確認
+function isValidColor(color: string): boolean {
+  const hexRegex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+  const rgbRegex = /^rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)$/;
+  return hexRegex.test(color.trim()) || rgbRegex.test(color.trim());
+}
+
+// 色を正規化（hex形式に統一）
+function normalizeColor(color: string): string {
+  const trimmed = color.trim().toLowerCase();
+
+  // 既にhex形式
+  if (trimmed.startsWith("#")) {
+    // 3桁を6桁に変換
+    if (trimmed.length === 4) {
+      return "#" + trimmed[1] + trimmed[1] + trimmed[2] + trimmed[2] + trimmed[3] + trimmed[3];
+    }
+    return trimmed;
+  }
+
+  // rgb形式をhexに変換
+  const rgbMatch = trimmed.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1], 10);
+    const g = parseInt(rgbMatch[2], 10);
+    const b = parseInt(rgbMatch[3], 10);
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  }
+
+  return "";
+}
+
+// グレー、白、黒は除外
+function isGrayOrWhiteOrBlack(hex: string): boolean {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+
+  // 白に近い
+  if (r > 240 && g > 240 && b > 240) return true;
+  // 黒に近い
+  if (r < 20 && g < 20 && b < 20) return true;
+  // グレー（R, G, Bの差が小さい）
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max - min < 20 && r > 50 && r < 200) return true;
+
+  return false;
+}
+
 // 構造化セクションの型
 interface StructuredSection {
   sectionTitle: string;  // h1/h2/h3のテキスト
@@ -238,7 +429,7 @@ export async function crawlAndEmbedSiteWithProgress(
     rootUrl: string;
   },
   onProgress: (progress: CrawlProgress) => void
-) {
+): Promise<CrawlResult> {
   const { companyId, agentId, rootUrl } = params;
   const visited = new Set<string>();
   const queue: string[] = [rootUrl];
@@ -247,6 +438,8 @@ export async function crawlAndEmbedSiteWithProgress(
   const openai = getOpenAI();
 
   let totalChunks = 0;
+  let themeColor = "#2563eb"; // デフォルト色
+  let firstPageHtml: string | null = null;
 
   // 開始通知
   onProgress({
@@ -278,6 +471,13 @@ export async function crawlAndEmbedSiteWithProgress(
 
     const html = await fetchHtml(url);
     if (!html) continue;
+
+    // 最初のページからテーマカラーを抽出
+    if (!firstPageHtml) {
+      firstPageHtml = html;
+      themeColor = extractThemeColor(html);
+      console.log(`[Crawler] Extracted theme color: ${themeColor}`);
+    }
 
     const pageMeta = extractPageMeta(html, url);
     const sections = extractStructuredContent(html, url);
@@ -415,6 +615,14 @@ export async function crawlAndEmbedSiteWithProgress(
     chunksFound: totalChunks,
     message: `✅ 完了！ ${visited.size}ページから${totalChunks}件の情報を学習しました`,
   });
+
+  // 結果を返す
+  return {
+    success: totalChunks > 0,
+    pagesVisited: visited.size,
+    totalChunks,
+    themeColor,
+  };
 }
 
 // 後方互換性のための従来関数
@@ -422,6 +630,6 @@ export async function crawlAndEmbedSite(params: {
   companyId: string;
   agentId: string;
   rootUrl: string;
-}) {
-  await crawlAndEmbedSiteWithProgress(params, () => {});
+}): Promise<CrawlResult> {
+  return await crawlAndEmbedSiteWithProgress(params, () => {});
 }

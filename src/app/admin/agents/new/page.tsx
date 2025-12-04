@@ -91,10 +91,15 @@ export default function NewAgentPage() {
                   router.push("/admin");
                 }, 2000);
               } else if (data.type === "error") {
-                throw new Error(data.message || "エラーが発生しました");
+                setError(data.message || "エラーが発生しました");
+                setLoading(false);
+                return;
               }
             } catch (parseError) {
-              console.error("JSON parse error:", parseError);
+              // JSON parse error - not an error event, just skip
+              if (!(parseError instanceof SyntaxError)) {
+                console.error("Unexpected error:", parseError);
+              }
             }
           }
         }

@@ -1,14 +1,78 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Building2, Users, Briefcase } from "lucide-react";
+import { Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Building2, Users, Briefcase, ExternalLink, Play, Square } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+
+type RelatedLink = {
+  url: string;
+  title: string;
+  description: string;
+};
 
 type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  type?: "text" | "links";
+  links?: RelatedLink[];
+};
+
+type Language = "ja" | "en";
+
+// Translations
+const translations = {
+  ja: {
+    defaultAgentName: "AI コンシェルジュ",
+    welcomeMessage: "こんにちは！何についてお聞きになりたいですか？",
+    subtitle: "24時間対応のAIアシスタント",
+    stop: "停止",
+    play: "再生",
+    voiceOn: "音声ON",
+    voiceOff: "音声OFF",
+    recognizingVoice: "音声を認識中...",
+    recording: "録音中... タップで停止",
+    inputPlaceholder: "メッセージを入力...",
+    poweredBy: "Powered by AI • 24時間対応",
+    voiceResponseOn: "🎧 音声応答ON",
+    voiceResponseOff: "🔇 音声応答OFF",
+    errorResponse: "申し訳ございません。応答を取得できませんでした。",
+    errorGeneral: "エラーが発生しました。もう一度お試しください。",
+    micPermissionError: "マイクへのアクセスが許可されていません。",
+    holdToSpeak: "長押しで音声入力",
+    relatedLinks: "関連リンク",
+    quickQuestions: [
+      { label: "会社について", query: "会社について教えてください" },
+      { label: "採用について", query: "採用情報について教えてください" },
+      { label: "サービスについて", query: "提供しているサービスについて教えてください" },
+    ],
+  },
+  en: {
+    defaultAgentName: "AI Concierge",
+    welcomeMessage: "Hello! What would you like to know about?",
+    subtitle: "24/7 AI Assistant",
+    stop: "Stop",
+    play: "Play",
+    voiceOn: "Voice ON",
+    voiceOff: "Voice OFF",
+    recognizingVoice: "Recognizing voice...",
+    recording: "Recording... Tap to stop",
+    inputPlaceholder: "Type a message...",
+    poweredBy: "Powered by AI • Available 24/7",
+    voiceResponseOn: "🎧 Voice Response ON",
+    voiceResponseOff: "🔇 Voice Response OFF",
+    errorResponse: "Sorry, we could not get a response.",
+    errorGeneral: "An error occurred. Please try again.",
+    micPermissionError: "Microphone access is not allowed.",
+    holdToSpeak: "Hold to speak",
+    relatedLinks: "Related Links",
+    quickQuestions: [
+      { label: "About Company", query: "Tell me about the company" },
+      { label: "Careers", query: "Tell me about job opportunities" },
+      { label: "Services", query: "Tell me about your services" },
+    ],
+  },
 };
 
 export default function WidgetPage({
@@ -17,37 +81,118 @@ export default function WidgetPage({
   searchParams: Promise<{ companyId?: string; agentName?: string }>;
 }) {
   const [companyId, setCompanyId] = useState("");
-  const [agentName, setAgentName] = useState("AI コンシェルジュ");
+  const [language, setLanguage] = useState<Language>("ja");
+  const [agentName, setAgentName] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [themeColor, setThemeColor] = useState("#FF6FB1"); // デフォルトのピンク
+
+  const t = translations[language];
+
+  // 色からグラデーションを生成
+  const generateGradient = (baseColor: string) => {
+    // hex to rgb
+    const r = parseInt(baseColor.slice(1, 3), 16);
+    const g = parseInt(baseColor.slice(3, 5), 16);
+    const b = parseInt(baseColor.slice(5, 7), 16);
+
+    // より明るいバージョン
+    const lighterR = Math.min(255, r + 30);
+    const lighterG = Math.min(255, g + 30);
+    const lighterB = Math.min(255, b + 30);
+    const lighter = `rgb(${lighterR}, ${lighterG}, ${lighterB})`;
+
+    // より暗いバージョン
+    const darkerR = Math.max(0, r - 20);
+    const darkerG = Math.max(0, g - 20);
+    const darkerB = Math.max(0, b - 20);
+    const darker = `rgb(${darkerR}, ${darkerG}, ${darkerB})`;
+
+    return `linear-gradient(135deg, ${baseColor} 0%, ${darker} 50%, ${lighter} 100%)`;
+  };
 
   // Next.js 15では searchParams は Promise - useEffect内で処理
   useEffect(() => {
-    searchParams.then((params) => {
-      setCompanyId(params.companyId || "");
-      setAgentName(params.agentName || "AI コンシェルジュ");
+    searchParams.then(async (params) => {
+      const cid = params.companyId || "";
+      setCompanyId(cid);
+
+      if (cid) {
+        // Fetch company and agent info to get language setting
+        try {
+          const res = await fetch(`/api/company/${cid}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.company?.language) {
+              setLanguage(data.company.language);
+            }
+            if (data.agent?.name) {
+              setAgentName(data.agent.name);
+            }
+            if (data.agent?.themeColor) {
+              setThemeColor(data.agent.themeColor);
+            }
+            if (data.agent?.welcomeMessage) {
+              setMessages([{
+                id: "welcome",
+                role: "assistant",
+                content: data.agent.welcomeMessage,
+                timestamp: new Date(),
+              }]);
+            }
+          }
+        } catch (error) {
+          console.error("Failed to fetch company info:", error);
+        }
+      }
+
+      if (params.agentName) {
+        setAgentName(params.agentName);
+      }
+
+      setIsInitialized(true);
     });
   }, [searchParams]);
+
+  // Set default agent name based on language after initialization
+  useEffect(() => {
+    if (isInitialized && !agentName) {
+      setAgentName(t.defaultAgentName);
+    }
+  }, [isInitialized, language, agentName, t.defaultAgentName]);
+
+  // Update welcome message when language changes and no custom message
+  useEffect(() => {
+    if (isInitialized && messages.length === 1 && messages[0].id === "welcome") {
+      // Only update if it's the default welcome message
+      const isDefaultJa = messages[0].content === translations.ja.welcomeMessage;
+      const isDefaultEn = messages[0].content === translations.en.welcomeMessage;
+      if (isDefaultJa || isDefaultEn) {
+        setMessages([{
+          id: "welcome",
+          role: "assistant",
+          content: t.welcomeMessage,
+          timestamp: new Date(),
+        }]);
+      }
+    }
+  }, [language, isInitialized]);
 
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       role: "assistant",
-      content: "こんにちは！何についてお聞きになりたいですか？",
+      content: translations.ja.welcomeMessage,
       timestamp: new Date(),
     },
   ]);
   const [showQuickButtons, setShowQuickButtons] = useState(true);
 
-  // クイック質問の選択肢
-  const quickQuestions = [
-    { icon: Building2, label: "会社について", query: "会社について教えてください" },
-    { icon: Users, label: "採用について", query: "採用情報について教えてください" },
-    { icon: Briefcase, label: "サービスについて", query: "提供しているサービスについて教えてください" },
-  ];
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [lastReply, setLastReply] = useState<string | null>(null);
 
   // 音声入力関連
   const [isRecording, setIsRecording] = useState(false);
@@ -89,9 +234,6 @@ export default function WidgetPage({
     setLoading(true);
 
     try {
-      // POST /api/chat
-      // Request: { companyId: string, agentId?: string, message: string, sessionId?: string }
-      // Response: { reply: string, sessionId: string }
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -103,7 +245,8 @@ export default function WidgetPage({
       });
 
       const data = await res.json();
-      const reply = data.reply || "申し訳ございません。応答を取得できませんでした。";
+      const reply = data.reply || t.errorResponse;
+      const relatedLinks: RelatedLink[] = data.relatedLinks || [];
 
       if (data.sessionId) {
         setSessionId(data.sessionId);
@@ -114,8 +257,27 @@ export default function WidgetPage({
         role: "assistant",
         content: reply,
         timestamp: new Date(),
+        type: "text",
       };
+
+      // メッセージを追加（本文のみ）
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // 最後の回答を保存（再生用）
+      setLastReply(reply);
+
+      // 関連リンクがあれば、別のメッセージとして追加
+      if (relatedLinks.length > 0) {
+        const linksMessage: Message = {
+          id: generateId(),
+          role: "assistant",
+          content: t.relatedLinks,
+          timestamp: new Date(),
+          type: "links",
+          links: relatedLinks,
+        };
+        setMessages((prev) => [...prev, linksMessage]);
+      }
 
       // TTS再生
       if (voiceEnabled) {
@@ -127,7 +289,7 @@ export default function WidgetPage({
         {
           id: generateId(),
           role: "assistant",
-          content: "エラーが発生しました。もう一度お試しください。",
+          content: t.errorGeneral,
           timestamp: new Date(),
         },
       ]);
@@ -139,9 +301,6 @@ export default function WidgetPage({
   // TTS再生
   const playTTS = async (text: string) => {
     try {
-      // POST /api/tts
-      // Request: { text: string }
-      // Response: audio/mpeg blob
       const res = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -176,13 +335,31 @@ export default function WidgetPage({
     }
   };
 
+  // 録音開始時刻を保持
+  const recordingStartTimeRef = useRef<number>(0);
+
   // 録音開始
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000,
+        }
+      });
+
+      // サポートされているMIMEタイプを確認
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : "audio/mp4";
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      recordingStartTimeRef.current = Date.now();
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -192,15 +369,30 @@ export default function WidgetPage({
 
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop());
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+
+        const recordingDuration = Date.now() - recordingStartTimeRef.current;
+        console.log("[Recording] Duration:", recordingDuration, "ms");
+
+        // 録音が短すぎる場合（500ms未満）はスキップ
+        if (recordingDuration < 500) {
+          console.log("[Recording] Too short, skipping transcription");
+          return;
+        }
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        console.log("[Recording] Blob size:", audioBlob.size, "bytes");
+
+        // 音声データが小さすぎる場合はスキップ
+        if (audioBlob.size < 1000) {
+          console.log("[Recording] Blob too small, skipping transcription");
+          return;
+        }
 
         setIsTranscribing(true);
         try {
-          // POST /api/stt
-          // Request: FormData with audio file
-          // Response: { text: string }
           const formData = new FormData();
           formData.append("audio", audioBlob, "recording.webm");
+          formData.append("language", language); // 言語設定を送信
 
           const res = await fetch("/api/stt", {
             method: "POST",
@@ -209,10 +401,14 @@ export default function WidgetPage({
 
           if (res.ok) {
             const data = await res.json();
-            if (data.text) {
-              // 音声認識結果を直接送信
+            if (data.text && data.text.trim()) {
+              console.log("[STT] Transcribed:", data.text);
               await sendMessage(data.text);
+            } else {
+              console.log("[STT] Empty transcription result");
             }
+          } else {
+            console.error("[STT] API error:", res.status);
           }
         } catch (error) {
           console.error("STT error:", error);
@@ -221,11 +417,12 @@ export default function WidgetPage({
         }
       };
 
-      mediaRecorder.start();
+      // 100msごとにデータを取得（より細かくデータを収集）
+      mediaRecorder.start(100);
       setIsRecording(true);
     } catch (error) {
       console.error("Failed to start recording:", error);
-      alert("マイクへのアクセスが許可されていません。");
+      alert(t.micPermissionError);
     }
   };
 
@@ -247,7 +444,7 @@ export default function WidgetPage({
 
   // 時刻フォーマット
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString("ja-JP", {
+    return date.toLocaleTimeString(language === "ja" ? "ja-JP" : "en-US", {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -259,11 +456,11 @@ export default function WidgetPage({
         background: "linear-gradient(180deg, #fff7fb 0%, #ffe9f4 50%, #ffd6eb 100%)",
       }}
     >
-      {/* ヘッダー - ピンクグラデーション */}
+      {/* Header */}
       <div
         className="flex-shrink-0 px-5 py-4"
         style={{
-          background: "linear-gradient(135deg, #FF6FB1 0%, #FF5E9F 50%, #FF7C8F 100%)",
+          background: generateGradient(themeColor),
         }}
       >
         <div className="flex items-center gap-3">
@@ -271,42 +468,105 @@ export default function WidgetPage({
             <Sparkles className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-white font-semibold text-lg tracking-tight">{agentName}</h1>
-            <p className="text-white/80 text-xs">24時間対応のAIアシスタント</p>
+            <h1 className="text-white font-semibold text-lg tracking-tight">{agentName || t.defaultAgentName}</h1>
+            <p className="text-white/80 text-xs">{t.subtitle}</p>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1">
+            {/* 再生/停止ボタン */}
             {isPlaying ? (
               <button
                 onClick={stopTTS}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 text-white text-xs font-medium hover:bg-white/30 transition-all"
-                title="クリックで停止"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-red-500/80 text-white text-xs font-medium hover:bg-red-500 transition-all"
+                title={t.stop}
               >
-                <VolumeX className="w-4 h-4" />
-                <span className="animate-pulse">停止</span>
+                <Square className="w-3.5 h-3.5" />
+                <span>{t.stop}</span>
               </button>
-            ) : (
+            ) : lastReply ? (
               <button
-                onClick={() => setVoiceEnabled(!voiceEnabled)}
-                className={`p-2 rounded-full transition-all ${
-                  voiceEnabled
-                    ? "bg-white/20 text-white"
-                    : "bg-white/10 text-white/60"
-                }`}
-                title={voiceEnabled ? "音声ON" : "音声OFF"}
+                onClick={() => playTTS(lastReply)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/20 text-white text-xs font-medium hover:bg-white/30 transition-all"
+                title={t.play}
               >
-                {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                <Play className="w-3.5 h-3.5" />
+                <span>{t.play}</span>
               </button>
-            )}
+            ) : null}
+            {/* 音声ON/OFFボタン */}
+            <button
+              onClick={() => setVoiceEnabled(!voiceEnabled)}
+              className={`p-2 rounded-full transition-all ${
+                voiceEnabled
+                  ? "bg-white/20 text-white"
+                  : "bg-white/10 text-white/60"
+              }`}
+              title={voiceEnabled ? t.voiceOn : t.voiceOff}
+            >
+              {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
           </div>
         </div>
 
       </div>
 
-      {/* メッセージエリア */}
+      {/* Message area */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {messages.map((msg, index) => (
+        {messages.map((msg) => (
           <div key={msg.id}>
-          {/* メッセージ表示 */}
+          {/* Link cards message */}
+          {msg.type === "links" && msg.links && msg.links.length > 0 ? (
+            <div className="flex justify-start">
+              <div className="max-w-[85%]">
+                <div className="flex items-end gap-2">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white border border-pink-200 shadow-sm flex items-center justify-center">
+                    <ExternalLink className="w-4 h-4 text-pink-500" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-slate-500 mb-2 ml-1">{msg.content}</p>
+                    <div className="space-y-2">
+                      {msg.links.map((link, idx) => {
+                        const hostname = new URL(link.url).hostname;
+                        const faviconUrl = `https://www.google.com/s2/favicons?domain=${hostname}&sz=64`;
+                        return (
+                          <a
+                            key={idx}
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block bg-white rounded-xl border border-pink-100 shadow-sm hover:shadow-md hover:border-pink-300 transition-all overflow-hidden"
+                          >
+                            <div className="flex gap-3 p-3">
+                              <div className="flex-shrink-0 w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
+                                <img
+                                  src={faviconUrl}
+                                  alt=""
+                                  className="w-8 h-8 object-contain"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                  }}
+                                />
+                                <ExternalLink className="w-5 h-5 text-pink-500 hidden" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-700 line-clamp-1">{link.title}</p>
+                                <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{link.description}</p>
+                                <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                                  <ExternalLink className="w-3 h-3" />
+                                  {hostname}
+                                </p>
+                              </div>
+                            </div>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+          /* Regular message display */
           <div
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
@@ -317,24 +577,29 @@ export default function WidgetPage({
                   : "order-1"
               }`}
             >
-              {/* アバター + バブル */}
+              {/* Avatar + Bubble */}
               <div className={`flex items-end gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
-                {/* アバター */}
+                {/* Avatar */}
                 <div
                   className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
                     msg.role === "user"
-                      ? "bg-gradient-to-br from-pink-400 to-pink-600"
-                      : "bg-white border border-pink-200 shadow-sm"
+                      ? ""
+                      : "bg-white shadow-sm"
                   }`}
+                  style={
+                    msg.role === "user"
+                      ? { background: generateGradient(themeColor) }
+                      : { border: `1px solid ${themeColor}30` }
+                  }
                 >
                   {msg.role === "user" ? (
                     <span className="text-white text-xs font-medium">U</span>
                   ) : (
-                    <Sparkles className="w-4 h-4 text-pink-500" />
+                    <Sparkles className="w-4 h-4" style={{ color: themeColor }} />
                   )}
                 </div>
 
-                {/* メッセージバブル */}
+                {/* Message bubble */}
                 <div
                   className={`px-4 py-3 rounded-2xl ${
                     msg.role === "user"
@@ -344,7 +609,7 @@ export default function WidgetPage({
                   style={
                     msg.role === "user"
                       ? {
-                          background: "linear-gradient(135deg, #FF6FB1 0%, #FF5E9F 100%)",
+                          background: generateGradient(themeColor),
                         }
                       : {}
                   }
@@ -373,50 +638,56 @@ export default function WidgetPage({
               </div>
             </div>
           </div>
-          {/* ウェルカムメッセージの後にクイックボタンを表示 */}
+          )}
+          {/* Quick buttons after welcome message */}
           {msg.id === "welcome" && showQuickButtons && (
             <div className="flex flex-wrap gap-2 justify-center mt-4">
-              {quickQuestions.map((q, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleQuickQuestion(q.query)}
-                  disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl border border-pink-200 text-sm text-slate-700 hover:border-pink-400 hover:bg-pink-50 transition-all shadow-sm disabled:opacity-50"
-                >
-                  <q.icon className="w-4 h-4 text-pink-500" />
-                  {q.label}
-                </button>
-              ))}
+              {t.quickQuestions.map((q, i) => {
+                const icons = [Building2, Users, Briefcase];
+                const Icon = icons[i];
+                return (
+                  <button
+                    key={i}
+                    onClick={() => handleQuickQuestion(q.query)}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl border text-sm text-slate-700 transition-all shadow-sm disabled:opacity-50"
+                    style={{ borderColor: `${themeColor}40` }}
+                  >
+                    <Icon className="w-4 h-4" style={{ color: themeColor }} />
+                    {q.label}
+                  </button>
+                );
+              })}
             </div>
           )}
           </div>
         ))}
 
-        {/* ローディング */}
+        {/* Loading */}
         {loading && (
           <div className="flex justify-start">
             <div className="flex items-end gap-2">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white border border-pink-200 shadow-sm flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-pink-500" />
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center" style={{ border: `1px solid ${themeColor}30` }}>
+                <Sparkles className="w-4 h-4" style={{ color: themeColor }} />
               </div>
-              <div className="px-4 py-3 rounded-2xl rounded-bl-md bg-white border border-pink-100 shadow-sm">
+              <div className="px-4 py-3 rounded-2xl rounded-bl-md bg-white shadow-sm" style={{ border: `1px solid ${themeColor}20` }}>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-pink-400 animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <div className="w-2 h-2 rounded-full bg-pink-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <div className="w-2 h-2 rounded-full bg-pink-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: themeColor, animationDelay: "0ms" }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: themeColor, animationDelay: "150ms" }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: themeColor, animationDelay: "300ms" }} />
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* 音声変換中 */}
+        {/* Voice transcribing */}
         {isTranscribing && (
           <div className="flex justify-center">
-            <div className="px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm border border-pink-200 shadow-sm">
-              <p className="text-xs text-pink-600 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-pink-500 animate-pulse" />
-                音声を認識中...
+            <div className="px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm shadow-sm" style={{ border: `1px solid ${themeColor}30` }}>
+              <p className="text-xs flex items-center gap-2" style={{ color: themeColor }}>
+                <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: themeColor }} />
+                {t.recognizingVoice}
               </p>
             </div>
           </div>
@@ -425,10 +696,10 @@ export default function WidgetPage({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 入力エリア */}
+      {/* Input area */}
       <div className="flex-shrink-0 px-4 pb-4 pt-2">
         <div className="bg-white rounded-2xl shadow-lg border border-pink-100 p-3">
-          {/* 録音中のインジケーター */}
+          {/* Recording indicator */}
           {isRecording && (
             <div className="flex items-center justify-center gap-2 mb-3 py-2 bg-pink-50 rounded-xl">
               <div className="flex items-center gap-1">
@@ -438,12 +709,12 @@ export default function WidgetPage({
                 <div className="w-3 h-3 rounded-full bg-red-400 animate-pulse" style={{ animationDelay: "300ms" }} />
                 <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" style={{ animationDelay: "400ms" }} />
               </div>
-              <span className="text-sm text-red-600 font-medium ml-2">録音中... タップで停止</span>
+              <span className="text-sm text-red-600 font-medium ml-2">{t.recording}</span>
             </div>
           )}
 
           <div className="flex items-end gap-2">
-            {/* マイクボタン */}
+            {/* Mic button */}
             <button
               onMouseDown={startRecording}
               onMouseUp={stopRecording}
@@ -456,9 +727,14 @@ export default function WidgetPage({
                   ? "bg-red-500 text-white shadow-lg scale-110"
                   : isTranscribing
                   ? "bg-yellow-100 text-yellow-600"
-                  : "bg-pink-50 text-pink-500 hover:bg-pink-100 hover:scale-105"
+                  : "hover:scale-105"
               } ${(loading || isTranscribing) && !isRecording ? "opacity-50 cursor-not-allowed" : ""}`}
-              title="長押しで音声入力"
+              style={
+                !isRecording && !isTranscribing
+                  ? { backgroundColor: `${themeColor}15`, color: themeColor }
+                  : {}
+              }
+              title={t.holdToSpeak}
             >
               {isTranscribing ? (
                 <div className="w-5 h-5 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin" />
@@ -469,40 +745,45 @@ export default function WidgetPage({
               )}
             </button>
 
-            {/* テキスト入力 */}
+            {/* Text input */}
             <div className="flex-1 relative">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="メッセージを入力..."
+                placeholder={t.inputPlaceholder}
                 rows={1}
                 disabled={isRecording || isTranscribing || loading}
                 className="w-full px-4 py-3 pr-12 rounded-xl bg-slate-50 text-slate-700 placeholder-slate-400 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-pink-300 focus:bg-white transition-all disabled:opacity-50"
                 style={{ minHeight: "48px", maxHeight: "120px" }}
               />
-              {/* 送信ボタン */}
+              {/* Send button */}
               <button
                 onClick={() => sendMessage()}
                 disabled={loading || !input.trim() || isRecording || isTranscribing}
                 className={`absolute right-2 bottom-2 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
                   input.trim() && !loading
-                    ? "bg-gradient-to-r from-pink-500 to-pink-600 text-white shadow-md hover:shadow-lg hover:scale-105"
+                    ? "text-white shadow-md hover:shadow-lg hover:scale-105"
                     : "bg-slate-200 text-slate-400 cursor-not-allowed"
                 }`}
+                style={
+                  input.trim() && !loading
+                    ? { background: generateGradient(themeColor) }
+                    : {}
+                }
               >
                 <Send className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* フッター */}
+          {/* Footer */}
           <div className="mt-3 flex items-center justify-between">
             <p className="text-[10px] text-slate-400">
-              Powered by AI • 24時間対応
+              {t.poweredBy}
             </p>
             <p className="text-[10px] text-slate-400">
-              {voiceEnabled ? "🎧 音声応答ON" : "🔇 音声応答OFF"}
+              {voiceEnabled ? t.voiceResponseOn : t.voiceResponseOff}
             </p>
           </div>
         </div>

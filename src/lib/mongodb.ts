@@ -10,7 +10,14 @@ export async function getDb(): Promise<Db> {
     throw new Error("MONGODB_URI / MONGODB_DB_NAME is not set");
   }
 
-  client = new MongoClient(process.env.MONGODB_URI);
+  client = new MongoClient(process.env.MONGODB_URI, {
+    serverSelectionTimeoutMS: 30000,
+    connectTimeoutMS: 30000,
+    socketTimeoutMS: 45000,
+    maxPoolSize: 10,
+    retryWrites: true,
+    retryReads: true,
+  });
   await client.connect();
   db = client.db(process.env.MONGODB_DB_NAME);
 

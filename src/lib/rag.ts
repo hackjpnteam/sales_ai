@@ -1,6 +1,6 @@
 import { getOpenAI } from "./openai";
 import { getCollection } from "./mongodb";
-import { DocChunk, Company } from "./types";
+import { DocChunk } from "./types";
 
 // コサイン類似度を計算
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -15,12 +15,6 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-// 会社のrootUrlを取得
-async function getCompanyRootUrl(companyId: string): Promise<string | null> {
-  const companiesCol = await getCollection<Company>("companies");
-  const company = await companiesCol.findOne({ companyId });
-  return company?.rootUrl || null;
-}
 
 export async function findRelevantChunks(companyId: string, question: string) {
   const docsCol = await getCollection<DocChunk>("documents");
@@ -104,11 +98,13 @@ export async function findRelevantChunks(companyId: string, question: string) {
   return scored;
 }
 
-// URL関連の質問かどうか判定
-function isUrlQuestion(question: string): boolean {
-  const urlKeywords = ["url", "URL", "リンク", "サイト", "ホームページ", "アドレス", "ページ", "詳細", "詳しく", "こちら", "申し込み", "問い合わせ", "contact"];
-  return urlKeywords.some(keyword => question.includes(keyword));
-}
+
+// 関連URLの型
+export type RelatedLink = {
+  url: string;
+  title: string;
+  description: string;
+};
 
 export async function answerWithRAG(params: {
   companyId: string;
@@ -118,37 +114,96 @@ export async function answerWithRAG(params: {
   const chunks = await findRelevantChunks(companyId, question);
   const openai = getOpenAI();
 
-  // 会社のrootUrlを取得（フォールバック用）
-  const rootUrl = await getCompanyRootUrl(companyId);
-
   console.log(`[RAG] Retrieved ${chunks.length} chunks for question: "${question}"`);
 
   if (chunks.length === 0) {
-    // フォールバック: rootUrlを案内
-    if (rootUrl) {
-      return {
-        reply: `詳細については、公式サイトをご確認ください。\n\n🔗 公式サイト → ${rootUrl}`,
-        sourceChunks: [],
-      };
-    }
     return {
-      reply: "申し訳ございません。サイト情報が見つかりませんでした。しばらくしてから再度お試しください。",
+      reply: "申し訳ございません。お探しの情報が見つかりませんでした。別のご質問をお試しください。",
       sourceChunks: [],
+      relatedLinks: [],
     };
   }
 
-  // チャンクからユニークなURLを抽出
-  const uniqueUrls = [...new Set(chunks.map(c => c.url))].slice(0, 5);
-  const urlList = uniqueUrls.map(url => `・${url}`).join("\n");
+  // チャンクからユニークなURL+タイトル+チャンク内容を抽出（上位3件）
+  const seenUrls = new Set<string>();
+  const urlChunks: { url: string; title: string; chunk: string }[] = [];
+  for (const c of chunks) {
+    if (c.url && !seenUrls.has(c.url)) {
+      seenUrls.add(c.url);
+      urlChunks.push({ url: c.url, title: c.title || c.url, chunk: c.chunk || '' });
+      if (urlChunks.length >= 3) break;
+    }
+  }
+
+  // AIで各URLの説明を1行に要約
+  const relatedLinks: RelatedLink[] = [];
+  if (urlChunks.length > 0) {
+    try {
+      const summaryPrompt = urlChunks.map((u, i) =>
+        `【URL${i + 1}】${u.title}\n内容: ${u.chunk.substring(0, 300)}`
+      ).join('\n\n');
+
+      const summaryRes = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "あなたはウェブページの内容を簡潔に要約するアシスタントです。各URLについて、そのページで何ができるか・何の情報があるかを1行（25文字以内）で説明してください。番号やプレフィックスは付けず、説明文のみを返してください。JSONで返してください。"
+          },
+          {
+            role: "user",
+            content: `以下のURLの内容を1行ずつ要約してください:\n\n${summaryPrompt}\n\n回答形式（JSON配列のみ）:\n{"summaries": ["説明文1", "説明文2", "説明文3"]}\n\n注意: 各説明文は25文字以内で、「URL1:」などのプレフィックスは付けないでください。`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 200,
+      });
+
+      const summaryText = summaryRes.choices[0].message.content || '';
+      try {
+        const jsonMatch = summaryText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          const summaries = parsed.summaries || [];
+          for (let i = 0; i < urlChunks.length; i++) {
+            relatedLinks.push({
+              url: urlChunks[i].url,
+              title: urlChunks[i].title,
+              description: summaries[i] || 'ページの詳細情報'
+            });
+          }
+        }
+      } catch {
+        // JSONパースに失敗した場合はデフォルトの説明を使用
+        for (const u of urlChunks) {
+          relatedLinks.push({
+            url: u.url,
+            title: u.title,
+            description: 'ページの詳細情報'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[RAG] Summary generation error:', error);
+      // エラー時はデフォルトの説明を使用
+      for (const u of urlChunks) {
+        relatedLinks.push({
+          url: u.url,
+          title: u.title,
+          description: 'ページの詳細情報'
+        });
+      }
+    }
+  }
 
   const contextText = chunks
     .map(
       (c, i) =>
-        `【情報${i + 1}】${c.title}\nソースURL: ${c.url}\n${c.chunk}`
+        `【情報${i + 1}】${c.title}\n${c.chunk}`
     )
     .join("\n\n");
 
-  // 接客AI専用の強化プロンプト（URL回答指示を追加）
+  // 接客AI専用の強化プロンプト
   const systemPrompt = `あなたは「企業サイトの詳細を理解した案内AI」です。
 
 ■ルール
@@ -160,37 +215,23 @@ export async function answerWithRAG(params: {
 6. 見出し（h1/h2/h3）をサービスカテゴリとして解釈し説明する
 7. 文章はプロの接客レベルで、分かりやすく・端的・丁寧に
 
-■URL・リンクに関するルール（重要）
-- リンク（URL）がサイト内に存在する場合は、必ず回答に含めてください
-- リンクは「◯◯はこちら → URL」の形式で案内してください
-- 🔗マークがついているリンク情報は特に重要なので優先して案内してください
-- ユーザーがURLやリンクを求めている場合は、関連するURLを必ず提示してください
-
 ■回答形式
 - まず結論（1〜2行）
 - その後に「具体的サービス内容を箇条書き」
-- 関連するURLがあれば「🔗 詳細はこちら → URL」形式で案内
 - さらに理解を深める追加説明（必要に応じて）
 
 ■禁止事項
 - 「情報が見つかりませんでした」という回答
 - 曖昧な表現（〜かもしれません、〜と思われます）
-- コンテキストに言及する（「提供された情報によると」等）`;
-
-  // URL質問の場合は追加の指示
-  const urlHint = isUrlQuestion(question)
-    ? `\n\n【重要】この質問はURL/リンクに関する質問です。必ず関連URLを回答に含めてください。見つからない場合は公式サイト（${rootUrl}）を案内してください。`
-    : "";
+- コンテキストに言及する（「提供された情報によると」等）
+- URLやリンクを回答に含めること（URLは絶対に表示しない）
+- 「詳細はこちら」などのリンク案内`;
 
   const userPrompt = `[サイトから抽出した情報]
 ${contextText}
 
-[関連ページURL一覧]
-${urlList}
-${rootUrl ? `\n[公式サイトURL]\n${rootUrl}` : ""}
-
 [お客様からの質問]
-${question}${urlHint}
+${question}
 
 上記の情報を元に、プロの接客AIとして質問に回答してください。`;
 
@@ -205,5 +246,5 @@ ${question}${urlHint}
   });
 
   const reply = completion.choices[0].message.content ?? "";
-  return { reply, sourceChunks: chunks };
+  return { reply, sourceChunks: chunks, relatedLinks };
 }
