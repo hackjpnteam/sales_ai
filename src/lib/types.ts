@@ -37,6 +37,7 @@ export type Agent = {
   agentId: string;
   companyId: string;
   name: string;
+  rootUrl?: string;
   welcomeMessage: string;
   voiceEnabled: boolean;
   themeColor: string;

@@ -59,7 +59,7 @@ const translations = {
     voiceOff: "音声OFF",
     recognizingVoice: "音声を認識中...",
     recording: "録音中... タップで停止",
-    inputPlaceholder: "メッセージを入力...",
+    inputPlaceholder: "メッセージを入力... (Shift+Enterで送信)",
     poweredBy: "Powered by AI • 24時間対応",
     voiceResponseOn: "🎧 音声応答ON",
     voiceResponseOff: "🔇 音声応答OFF",
@@ -84,7 +84,7 @@ const translations = {
     voiceOff: "Voice OFF",
     recognizingVoice: "Recognizing voice...",
     recording: "Recording... Tap to stop",
-    inputPlaceholder: "Type a message...",
+    inputPlaceholder: "Type a message... (Shift+Enter to send)",
     poweredBy: "Powered by AI • Available 24/7",
     voiceResponseOn: "🎧 Voice Response ON",
     voiceResponseOff: "🔇 Voice Response OFF",
@@ -109,7 +109,7 @@ const translations = {
     voiceOff: "语音关",
     recognizingVoice: "正在识别语音...",
     recording: "录音中... 点击停止",
-    inputPlaceholder: "输入消息...",
+    inputPlaceholder: "输入消息... (Shift+Enter发送)",
     poweredBy: "由AI驱动 • 24小时服务",
     voiceResponseOn: "🎧 语音回复开",
     voiceResponseOff: "🔇 语音回复关",
@@ -627,12 +627,13 @@ function WidgetContent() {
     }
   };
 
-  // キーボードイベント（Enterで送信、Shift+Enterは改行）
+  // キーボードイベント（Shift+Enterで送信、Enterは改行）
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
+    // Enterのみの場合は改行（デフォルト動作）
   };
 
   // 時刻フォーマット
@@ -853,13 +854,23 @@ function WidgetContent() {
                         }
                   }
                 >
-                  <div className="text-sm leading-relaxed prose prose-sm max-w-none prose-a:underline prose-headings:font-semibold prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0" style={{ color: colors.text }}>
+                  <div
+                    className={`text-sm leading-relaxed ${
+                      msg.role === "user"
+                        ? ""
+                        : "prose prose-sm max-w-none prose-a:underline prose-headings:font-semibold prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0"
+                    }`}
+                    style={{ color: msg.role === "user" ? "#FFFFFF" : colors.text }}
+                  >
                     <ReactMarkdown
                       components={{
                         a: ({ href, children }) => (
-                          <a href={href} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: colors.primary }}>
+                          <a href={href} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: msg.role === "user" ? "#FFFFFF" : colors.primary }}>
                             {children}
                           </a>
+                        ),
+                        p: ({ children }) => (
+                          <p style={{ color: msg.role === "user" ? "#FFFFFF" : colors.text }}>{children}</p>
                         ),
                       }}
                     >

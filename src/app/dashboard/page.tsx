@@ -32,6 +32,7 @@ import {
   Save,
   Upload,
   Shield,
+  HelpCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -185,6 +186,9 @@ function DashboardContent() {
 
   // エージェント削除
   const [deletingAgent, setDeletingAgent] = useState<string | null>(null);
+
+  // 埋め込みコードヘルプモーダル
+  const [showEmbedHelp, setShowEmbedHelp] = useState(false);
 
   const fetchCompanies = useCallback(async () => {
     try {
@@ -1172,6 +1176,13 @@ function DashboardContent() {
                         <h4 className="font-medium text-slate-700 flex items-center gap-2">
                           <Copy className="w-4 h-4 text-rose-500" />
                           埋め込みコード
+                          <button
+                            onClick={() => setShowEmbedHelp(true)}
+                            className="p-1 rounded-full hover:bg-slate-100 transition-all"
+                            title="埋め込み方法を確認"
+                          >
+                            <HelpCircle className="w-4 h-4 text-slate-400" />
+                          </button>
                         </h4>
                         {!isPaid && (
                           <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
@@ -1503,6 +1514,133 @@ function DashboardContent() {
                   <span>端末情報分析</span>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 埋め込みコードヘルプモーダル */}
+      {showEmbedHelp && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* ヘッダー */}
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <HelpCircle className="w-5 h-5 text-rose-500" />
+                  埋め込みコードの設置方法
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                  サイトにチャットボットを追加する手順
+                </p>
+              </div>
+              <button
+                onClick={() => setShowEmbedHelp(false)}
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600" />
+              </button>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="p-4 sm:p-6 space-y-6">
+              {/* ステップ1 */}
+              <div className="flex gap-3 sm:gap-4">
+                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-sm">
+                  1
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-800 text-sm sm:text-base">埋め込みコードをコピー</h3>
+                  <p className="text-slate-600 text-xs sm:text-sm mt-1">
+                    ダッシュボードの「埋め込みコード」セクションにある「コードをコピー」ボタンをクリックします。
+                  </p>
+                </div>
+              </div>
+
+              {/* ステップ2 */}
+              <div className="flex gap-3 sm:gap-4">
+                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-sm">
+                  2
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-800 text-sm sm:text-base">HTMLファイルを開く</h3>
+                  <p className="text-slate-600 text-xs sm:text-sm mt-1">
+                    サイトのHTMLファイル（通常は <code className="bg-slate-100 px-1.5 py-0.5 rounded text-rose-600">index.html</code> など）をテキストエディタで開きます。
+                  </p>
+                </div>
+              </div>
+
+              {/* ステップ3 */}
+              <div className="flex gap-3 sm:gap-4">
+                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-sm">
+                  3
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-800 text-sm sm:text-base">コードを貼り付け</h3>
+                  <p className="text-slate-600 text-xs sm:text-sm mt-1">
+                    コピーした埋め込みコードを <code className="bg-slate-100 px-1.5 py-0.5 rounded text-rose-600">&lt;/body&gt;</code> タグの直前に貼り付けます。
+                  </p>
+                  <div className="mt-3 bg-slate-900 rounded-xl p-3 sm:p-4 text-xs overflow-x-auto">
+                    <pre className="text-slate-300">
+{`<html>
+<head>...</head>
+<body>
+  <!-- サイトのコンテンツ -->
+
+  `}<span className="text-green-400">{`<!-- ここに埋め込みコードを貼り付け -->`}</span>{`
+  `}<span className="text-yellow-300">{`<script src="..." defer></script>`}</span>{`
+</body>
+</html>`}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+
+              {/* ステップ4 */}
+              <div className="flex gap-3 sm:gap-4">
+                <div className="flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-sm">
+                  4
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-800 text-sm sm:text-base">保存してアップロード</h3>
+                  <p className="text-slate-600 text-xs sm:text-sm mt-1">
+                    ファイルを保存し、サーバーにアップロードします。サイトを開くと右下にチャットボタンが表示されます。
+                  </p>
+                </div>
+              </div>
+
+              {/* CMSの場合 */}
+              <div className="bg-blue-50 rounded-xl p-3 sm:p-4 border border-blue-100">
+                <h4 className="font-semibold text-blue-800 text-sm flex items-center gap-2 mb-2">
+                  <Globe className="w-4 h-4" />
+                  WordPress・Wix・STUDIOなどのCMSの場合
+                </h4>
+                <p className="text-blue-700 text-xs sm:text-sm">
+                  管理画面の「カスタムHTML」や「スクリプト設定」などから、フッター部分にコードを追加できます。
+                  各CMSのドキュメントで「カスタムスクリプト」の追加方法を確認してください。
+                </p>
+              </div>
+
+              {/* 注意事項 */}
+              <div className="bg-amber-50 rounded-xl p-3 sm:p-4 border border-amber-100">
+                <h4 className="font-semibold text-amber-800 text-sm mb-2">ご注意</h4>
+                <ul className="text-amber-700 text-xs sm:text-sm space-y-1">
+                  <li>• コードは各ページに1回だけ設置してください</li>
+                  <li>• 設置後、変更が反映されるまで数分かかる場合があります</li>
+                  <li>• ご不明な点があれば、サポートまでお問い合わせください</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* フッター */}
+            <div className="p-4 sm:p-6 border-t border-slate-100">
+              <button
+                onClick={() => setShowEmbedHelp(false)}
+                className="w-full py-3 rounded-xl font-semibold text-white transition-all"
+                style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
+              >
+                閉じる
+              </button>
             </div>
           </div>
         </div>

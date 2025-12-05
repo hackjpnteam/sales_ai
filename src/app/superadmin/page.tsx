@@ -18,6 +18,9 @@ import {
   Globe,
   MapPin,
   Monitor,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle,
 } from "lucide-react";
 
 type Company = {
@@ -54,6 +57,13 @@ type GuestCompany = {
   agents: { agentId: string; name: string }[];
 };
 
+type RecrawlStats = {
+  total: number;
+  withCeoInfo: number;
+  withFoundingInfo: number;
+  needsRecrawl: number;
+};
+
 const SUPER_ADMIN_EMAILS = ["tomura@hackjpn.com"];
 
 export default function SuperAdminPage() {
@@ -70,6 +80,9 @@ export default function SuperAdminPage() {
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [recrawlStats, setRecrawlStats] = useState<RecrawlStats | null>(null);
+  const [recrawling, setRecrawling] = useState(false);
+  const [recrawlProgress, setRecrawlProgress] = useState<string>("");
 
   const isSuperAdmin =
     session?.user?.email &&
@@ -89,7 +102,57 @@ export default function SuperAdminPage() {
     }
 
     fetchUsers();
+    fetchRecrawlStats();
   }, [session, status, router, isSuperAdmin]);
+
+  const fetchRecrawlStats = async () => {
+    try {
+      const res = await fetch("/api/superadmin/recrawl");
+      if (res.ok) {
+        const data = await res.json();
+        setRecrawlStats(data.stats);
+      }
+    } catch (error) {
+      console.error("Failed to fetch recrawl stats:", error);
+    }
+  };
+
+  const handleRecrawl = async (mode: "missing" | "all") => {
+    const confirmMsg =
+      mode === "missing"
+        ? `情報が不足している${recrawlStats?.needsRecrawl || 0}件のエージェントを再クロールしますか？\n\nこの処理には数分かかる場合があります。`
+        : `全${recrawlStats?.total || 0}件のエージェントを再クロールしますか？\n\nこの処理には数十分かかる場合があります。`;
+
+    if (!confirm(confirmMsg)) return;
+
+    setRecrawling(true);
+    setRecrawlProgress("再クロールを開始しています...");
+
+    try {
+      const res = await fetch("/api/superadmin/recrawl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setRecrawlProgress(data.message);
+        // 統計を更新
+        await fetchRecrawlStats();
+        alert(`再クロール完了: ${data.message}`);
+      } else {
+        alert("再クロールに失敗しました: " + (data.error || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Recrawl error:", error);
+      alert("再クロール中にエラーが発生しました");
+    } finally {
+      setRecrawling(false);
+      setRecrawlProgress("");
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -324,6 +387,81 @@ export default function SuperAdminPage() {
           </div>
         </div>
 
+        {/* 再クロールセクション */}
+        {recrawlStats && (
+          <div className="bg-white rounded-xl sm:rounded-2xl border border-rose-100 shadow-sm p-4 sm:p-6 mb-4 sm:mb-8">
+            <h3 className="text-slate-800 font-semibold flex items-center gap-2 mb-4">
+              <RefreshCw className="w-5 h-5 text-rose-500" />
+              データ品質 & 再クロール
+            </h3>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <div className="bg-slate-50 rounded-lg p-3">
+                <p className="text-slate-500 text-xs">総エージェント</p>
+                <p className="text-slate-800 text-xl font-bold">{recrawlStats.total}</p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-3">
+                <p className="text-green-600 text-xs flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" /> 代表者情報
+                </p>
+                <p className="text-green-700 text-xl font-bold">
+                  {recrawlStats.withCeoInfo}
+                  <span className="text-sm font-normal ml-1">
+                    ({Math.round((recrawlStats.withCeoInfo / recrawlStats.total) * 100)}%)
+                  </span>
+                </p>
+              </div>
+              <div className="bg-green-50 rounded-lg p-3">
+                <p className="text-green-600 text-xs flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" /> 創業/設立情報
+                </p>
+                <p className="text-green-700 text-xl font-bold">
+                  {recrawlStats.withFoundingInfo}
+                  <span className="text-sm font-normal ml-1">
+                    ({Math.round((recrawlStats.withFoundingInfo / recrawlStats.total) * 100)}%)
+                  </span>
+                </p>
+              </div>
+              <div className="bg-amber-50 rounded-lg p-3">
+                <p className="text-amber-600 text-xs flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> 要再クロール
+                </p>
+                <p className="text-amber-700 text-xl font-bold">
+                  {recrawlStats.needsRecrawl}
+                  <span className="text-sm font-normal ml-1">
+                    ({Math.round((recrawlStats.needsRecrawl / recrawlStats.total) * 100)}%)
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            {recrawling ? (
+              <div className="flex items-center gap-3 p-4 bg-rose-50 rounded-lg">
+                <Loader2 className="w-5 h-5 text-rose-500 animate-spin" />
+                <span className="text-rose-700">{recrawlProgress || "処理中..."}</span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => handleRecrawl("missing")}
+                  disabled={recrawlStats.needsRecrawl === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  不足分のみ再クロール ({recrawlStats.needsRecrawl}件)
+                </button>
+                <button
+                  onClick={() => handleRecrawl("all")}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-500 text-white rounded-lg hover:bg-slate-600 transition-all"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  全て再クロール ({recrawlStats.total}件)
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* ユーザー一覧 */}
         <div className="bg-white rounded-xl sm:rounded-2xl border border-rose-100 shadow-sm overflow-hidden">
           <div className="p-3 sm:p-4 border-b border-rose-100">
@@ -504,88 +642,88 @@ export default function SuperAdminPage() {
         </div>
 
         {/* ゲストユーザー（未登録）一覧 */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 overflow-hidden mt-8">
-          <div className="p-4 border-b border-white/10">
-            <h2 className="text-white font-semibold flex items-center gap-2">
-              <Globe className="w-5 h-5 text-slate-400" />
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-rose-100 shadow-sm overflow-hidden mt-8">
+          <div className="p-3 sm:p-4 border-b border-rose-100">
+            <h2 className="text-slate-800 font-semibold flex items-center gap-2 text-sm sm:text-base">
+              <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
               未登録ユーザー作成エージェント
-              <span className="text-white/50 text-sm font-normal ml-2">
+              <span className="text-slate-500 text-xs sm:text-sm font-normal ml-2">
                 （アカウント未作成でエージェントを作成したユーザー）
               </span>
             </h2>
           </div>
 
-          <div className="divide-y divide-white/10">
+          <div className="divide-y divide-rose-100">
             {guestCompanies.length === 0 ? (
-              <div className="p-8 text-center text-white/50">
+              <div className="p-6 sm:p-8 text-center text-slate-400">
                 未登録ユーザーの作成したエージェントはありません
               </div>
             ) : (
               guestCompanies.map((guest) => (
-                <div key={guest.companyId} className="bg-white/5">
+                <div key={guest.companyId} className="bg-white">
                   <button
                     onClick={() =>
                       setExpandedGuest(
                         expandedGuest === guest.companyId ? null : guest.companyId
                       )
                     }
-                    className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition-all"
+                    className="w-full p-3 sm:p-4 flex items-center justify-between hover:bg-rose-50 transition-all"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-500 to-slate-600 flex items-center justify-center text-white font-bold">
+                    <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
                         ?
                       </div>
-                      <div className="text-left">
-                        <p className="text-white font-medium">{guest.name}</p>
-                        <p className="text-white/50 text-sm">
+                      <div className="text-left min-w-0">
+                        <p className="text-slate-800 font-medium text-sm sm:text-base truncate">{guest.name}</p>
+                        <p className="text-slate-500 text-xs sm:text-sm truncate">
                           作成: {formatDate(guest.createdAt)}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right text-white/60 text-sm flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+                      <div className="text-right text-slate-500 text-xs sm:text-sm flex flex-col items-end gap-1">
                         {guest.creatorLocation && (
-                          <span className="flex items-center gap-1 text-amber-400">
+                          <span className="flex items-center gap-1 text-rose-500">
                             <MapPin className="w-3 h-3" />
                             {guest.creatorLocation}
                           </span>
                         )}
-                        <span className="flex items-center gap-1 text-xs">
+                        <span className="flex items-center gap-1 text-slate-500 text-xs">
                           IP: {guest.creatorIp || "不明"}
                         </span>
                       </div>
                       {expandedGuest === guest.companyId ? (
-                        <ChevronUp className="w-5 h-5 text-white/50" />
+                        <ChevronUp className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
                       ) : (
-                        <ChevronDown className="w-5 h-5 text-white/50" />
+                        <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
                       )}
                     </div>
                   </button>
 
                   {expandedGuest === guest.companyId && (
-                    <div className="px-4 pb-4">
-                      <div className="ml-14 p-4 bg-white/10 rounded-xl">
-                        <div className="flex items-center justify-between">
+                    <div className="px-3 sm:px-4 pb-3 sm:pb-4">
+                      <div className="ml-10 sm:ml-14 p-3 sm:p-4 bg-rose-50 rounded-lg sm:rounded-xl">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                           <div className="space-y-2">
-                            <p className="text-white font-medium flex items-center gap-2">
-                              <Building2 className="w-4 h-4 text-blue-400" />
+                            <p className="text-slate-800 font-medium flex items-center gap-2 text-sm sm:text-base">
+                              <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500" />
                               {guest.name}
                             </p>
-                            <p className="text-white/50 text-xs">
+                            <p className="text-slate-500 text-[10px] sm:text-xs">
                               URL: {guest.rootUrl}
                             </p>
-                            <p className="text-white/50 text-xs">
+                            <p className="text-slate-500 text-[10px] sm:text-xs">
                               ID: {guest.companyId}
                             </p>
-                            <div className="flex flex-col gap-2 text-white/50 text-xs mt-2">
+                            <div className="flex flex-col gap-2 text-slate-500 text-[10px] sm:text-xs mt-2">
                               <div className="flex items-center gap-4">
                                 <span className="flex items-center gap-1">
-                                  <MapPin className="w-3 h-3" />
                                   IP: {guest.creatorIp || "不明"}
                                 </span>
                                 {guest.creatorLocation && (
-                                  <span className="flex items-center gap-1 text-amber-400">
-                                    📍 {guest.creatorLocation}
+                                  <span className="flex items-center gap-1 text-rose-500">
+                                    <MapPin className="w-3 h-3" />
+                                    {guest.creatorLocation}
                                   </span>
                                 )}
                               </div>
@@ -610,7 +748,7 @@ export default function SuperAdminPage() {
                                 )
                               }
                               disabled={deleting === guest.companyId}
-                              className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all disabled:opacity-50"
+                              className="p-2 rounded-lg bg-red-500/20 text-red-500 hover:bg-red-500/30 transition-all disabled:opacity-50"
                             >
                               {deleting === guest.companyId ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -626,9 +764,9 @@ export default function SuperAdminPage() {
                           {guest.agents.map((agent) => (
                             <div
                               key={agent.agentId}
-                              className="flex items-center gap-2 text-white/60 text-sm"
+                              className="flex items-center gap-2 text-slate-600 text-sm"
                             >
-                              <Bot className="w-3 h-3 text-purple-400" />
+                              <Bot className="w-3 h-3 text-purple-500" />
                               {agent.name}
                             </div>
                           ))}

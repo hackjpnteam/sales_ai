@@ -3,8 +3,20 @@ import { getOpenAI } from "./openai";
 import { getCollection } from "./mongodb";
 import { DocChunk } from "./types";
 
-const MAX_PAGES = 30;
+const MAX_PAGES = 15; // 重要ページを確実に取得するため
 const CHUNK_SIZE = 600; // 500〜800文字程度でチャンク分割
+const PARALLEL_LIMIT = 5; // 並列クロール数
+const FETCH_TIMEOUT = 5000; // 5秒タイムアウト
+const MIN_CHUNKS_FOR_EARLY_EXIT = 50; // 十分なコンテンツを確保
+
+// 優先的にクロールすべき重要ページのパターン
+const PRIORITY_PATHS = [
+  '/company', '/about', '/corporate', '/profile',  // 会社概要
+  '/contact', '/inquiry',  // お問い合わせ
+  '/service', '/services', '/business',  // サービス
+  '/news', '/topics',  // ニュース
+  '/recruit', '/careers', '/jobs',  // 採用
+];
 
 // 進捗イベントの型
 export interface CrawlProgress {
@@ -268,12 +280,19 @@ interface StructuredSection {
 
 async function fetchHtml(url: string): Promise<string | null> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+
     const res = await fetch(url, {
       cache: "no-store",
+      signal: controller.signal,
       headers: {
         "User-Agent": "hackjpn-ai-crawler/1.0",
       },
     });
+
+    clearTimeout(timeoutId);
+
     if (!res.ok) return null;
     return await res.text();
   } catch {
@@ -459,6 +478,26 @@ function extractLinks(html: string, baseUrl: string): string[] {
   return Array.from(links);
 }
 
+// URLが重要ページかどうかを判定
+function isPriorityUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    const path = urlObj.pathname.toLowerCase();
+    return PRIORITY_PATHS.some(p => path.includes(p));
+  } catch {
+    return false;
+  }
+}
+
+// リンクを優先度でソート（重要ページを前に）
+function sortLinksByPriority(links: string[]): string[] {
+  return links.sort((a, b) => {
+    const aPriority = isPriorityUrl(a) ? 0 : 1;
+    const bPriority = isPriorityUrl(b) ? 0 : 1;
+    return aPriority - bPriority;
+  });
+}
+
 // URLからページ名を抽出（進捗表示用）
 function getPageName(url: string): string {
   try {
@@ -472,7 +511,99 @@ function getPageName(url: string): string {
   }
 }
 
-// 進捗コールバック付きクロール
+// 単一ページの処理結果
+interface PageProcessResult {
+  url: string;
+  docs: Omit<DocChunk, "_id">[];
+  links: string[];
+  html: string | null;
+}
+
+// 単一ページを処理する関数
+async function processPage(
+  url: string,
+  companyId: string,
+  agentId: string
+): Promise<PageProcessResult> {
+  const html = await fetchHtml(url);
+  if (!html) {
+    return { url, docs: [], links: [], html: null };
+  }
+
+  const pageMeta = extractPageMeta(html, url);
+  const sections = extractStructuredContent(html, url);
+  const docsToInsert: Omit<DocChunk, "_id">[] = [];
+
+  for (const section of sections) {
+    const sectionText = [
+      `【${section.sectionTitle}】`,
+      ...section.content,
+      ...section.links,
+    ].join("\n");
+
+    const chunks = splitIntoChunks(sectionText);
+
+    for (const chunk of chunks) {
+      if (chunk.length < 20) continue;
+      docsToInsert.push({
+        companyId,
+        agentId,
+        url,
+        title: pageMeta.title,
+        sectionTitle: section.sectionTitle,
+        chunk,
+        embeddings: [],
+        createdAt: new Date(),
+      });
+    }
+  }
+
+  // セクションが少ない場合はフォールバック抽出
+  if (docsToInsert.length < 2) {
+    const $ = cheerio.load(html);
+    $("script, style, nav, header, footer, aside, noscript").remove();
+    const fullText = $("main, article, .content, #content, body")
+      .first()
+      .text()
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (fullText.length > 100) {
+      const chunks = splitIntoChunks(fullText, 800);
+      for (let i = 0; i < chunks.length; i++) {
+        docsToInsert.push({
+          companyId,
+          agentId,
+          url,
+          title: pageMeta.title,
+          sectionTitle: `ページ内容 (パート${i + 1})`,
+          chunk: chunks[i],
+          embeddings: [],
+          createdAt: new Date(),
+        });
+      }
+    }
+  }
+
+  // ページ概要も追加
+  if (pageMeta.description && pageMeta.description.length > 20) {
+    docsToInsert.push({
+      companyId,
+      agentId,
+      url,
+      title: pageMeta.title,
+      sectionTitle: "ページ概要",
+      chunk: `【ページ概要】${pageMeta.description}`,
+      embeddings: [],
+      createdAt: new Date(),
+    });
+  }
+
+  const links = extractLinks(html, url);
+  return { url, docs: docsToInsert, links, html };
+}
+
+// 進捗コールバック付きクロール（並列処理版）
 export async function crawlAndEmbedSiteWithProgress(
   params: {
     companyId: string;
@@ -489,8 +620,8 @@ export async function crawlAndEmbedSiteWithProgress(
   const openai = getOpenAI();
 
   let totalChunks = 0;
-  let themeColor = "#2563eb"; // デフォルト色
-  let firstPageHtml: string | null = null;
+  let themeColor = "#2563eb";
+  let themeColorExtracted = false;
 
   // 開始通知
   onProgress({
@@ -502,158 +633,109 @@ export async function crawlAndEmbedSiteWithProgress(
   });
 
   while (queue.length > 0 && visited.size < MAX_PAGES) {
-    const url = queue.shift()!;
-    if (visited.has(url)) continue;
-    visited.add(url);
+    // 早期終了チェック: 十分なコンテンツが集まったら終了
+    if (totalChunks >= MIN_CHUNKS_FOR_EARLY_EXIT) {
+      console.log(`[Crawler] Early exit: ${totalChunks} chunks collected`);
+      break;
+    }
+
+    // 並列処理するURLを取得
+    const urlsToProcess: string[] = [];
+    while (queue.length > 0 && urlsToProcess.length < PARALLEL_LIMIT && visited.size + urlsToProcess.length < MAX_PAGES) {
+      const url = queue.shift()!;
+      if (!visited.has(url)) {
+        urlsToProcess.push(url);
+        visited.add(url);
+      }
+    }
+
+    if (urlsToProcess.length === 0) break;
 
     const currentPage = visited.size;
     const percent = Math.round((currentPage / MAX_PAGES) * 100);
-    const pageName = getPageName(url);
 
     // クロール進捗通知
     onProgress({
       type: "crawling",
-      currentUrl: url,
       currentPage,
       totalPages: MAX_PAGES,
       percent,
-      message: `📄 ${pageName} を解析中...`,
+      message: `📄 ${urlsToProcess.length}ページを並列解析中...`,
     });
 
-    const html = await fetchHtml(url);
-    if (!html) continue;
+    // 並列でページを処理
+    const results = await Promise.all(
+      urlsToProcess.map((url) => processPage(url, companyId, agentId))
+    );
 
-    // 最初のページからテーマカラーを抽出
-    if (!firstPageHtml) {
-      firstPageHtml = html;
-      themeColor = extractThemeColor(html);
-      console.log(`[Crawler] Extracted theme color: ${themeColor}`);
-    }
+    // 結果を処理
+    const allDocs: Omit<DocChunk, "_id">[] = [];
+    for (const result of results) {
+      if (!result.html) continue;
 
-    const pageMeta = extractPageMeta(html, url);
-    const sections = extractStructuredContent(html, url);
-
-    // セクションごとにチャンクを生成
-    const docsToInsert: Omit<DocChunk, "_id">[] = [];
-
-    for (const section of sections) {
-      // セクションの全文を構築
-      const sectionText = [
-        `【${section.sectionTitle}】`,
-        ...section.content,
-        ...section.links,
-      ].join("\n");
-
-      // チャンク分割
-      const chunks = splitIntoChunks(sectionText);
-
-      for (const chunk of chunks) {
-        if (chunk.length < 20) continue;
-        docsToInsert.push({
-          companyId,
-          agentId,
-          url,
-          title: pageMeta.title,
-          sectionTitle: section.sectionTitle,
-          chunk,
-          embeddings: [], // 後で設定
-          createdAt: new Date(),
-        });
+      // テーマカラー抽出（最初の成功したページから）
+      if (!themeColorExtracted && result.html) {
+        themeColor = extractThemeColor(result.html);
+        themeColorExtracted = true;
+        console.log(`[Crawler] Extracted theme color: ${themeColor}`);
       }
-    }
 
-    // セクションが少ない場合はページ全体からフォールバック抽出
-    if (docsToInsert.length < 2) {
-      const $ = cheerio.load(html);
-      $("script, style, nav, header, footer, aside, noscript").remove();
-      const fullText = $("main, article, .content, #content, body")
-        .first()
-        .text()
-        .replace(/\s+/g, " ")
-        .trim();
+      allDocs.push(...result.docs);
 
-      if (fullText.length > 100) {
-        const chunks = splitIntoChunks(fullText, 800);
-        for (let i = 0; i < chunks.length; i++) {
-          docsToInsert.push({
-            companyId,
-            agentId,
-            url,
-            title: pageMeta.title,
-            sectionTitle: `ページ内容 (パート${i + 1})`,
-            chunk: chunks[i],
-            embeddings: [],
-            createdAt: new Date(),
-          });
+      // リンクをキューに追加（優先ページを先に）
+      const sortedLinks = sortLinksByPriority(result.links);
+      for (const link of sortedLinks) {
+        if (!visited.has(link) && !queue.includes(link) && queue.length + visited.size < MAX_PAGES) {
+          // 重要ページは先頭に、そうでないものは末尾に
+          if (isPriorityUrl(link)) {
+            queue.unshift(link);
+          } else {
+            queue.push(link);
+          }
         }
       }
     }
 
-    // ページ概要(description)も追加
-    if (pageMeta.description && pageMeta.description.length > 20) {
-      docsToInsert.push({
-        companyId,
-        agentId,
-        url,
-        title: pageMeta.title,
-        sectionTitle: "ページ概要",
-        chunk: `【ページ概要】${pageMeta.description}`,
-        embeddings: [],
-        createdAt: new Date(),
-      });
-    }
-
-    if (docsToInsert.length === 0) continue;
+    if (allDocs.length === 0) continue;
 
     // Embedding生成の進捗通知
     onProgress({
       type: "embedding",
-      currentUrl: url,
       currentPage,
       totalPages: MAX_PAGES,
       percent,
-      chunksFound: docsToInsert.length,
-      message: `🧠 ${pageName} の内容をAI学習用に変換中... (${docsToInsert.length}件)`,
+      chunksFound: allDocs.length,
+      message: `🧠 ${allDocs.length}件のコンテンツをAI学習用に変換中...`,
     });
 
     try {
-      // Embeddingを生成
-      const textsToEmbed = docsToInsert.map((d) => d.chunk);
+      // Embeddingをバッチ生成
+      const textsToEmbed = allDocs.map((d) => d.chunk);
       const embRes = await openai.embeddings.create({
         model: "text-embedding-3-small",
         input: textsToEmbed,
       });
 
-      // Embeddingを設定
-      for (let i = 0; i < docsToInsert.length; i++) {
-        docsToInsert[i].embeddings = embRes.data[i].embedding;
+      for (let i = 0; i < allDocs.length; i++) {
+        allDocs[i].embeddings = embRes.data[i].embedding;
       }
 
       // 保存の進捗通知
       onProgress({
         type: "saving",
-        currentUrl: url,
         currentPage,
         totalPages: MAX_PAGES,
         percent,
-        chunksFound: docsToInsert.length,
-        message: `💾 ${pageName} のデータを保存中...`,
+        chunksFound: allDocs.length,
+        message: `💾 ${allDocs.length}件のデータを保存中...`,
       });
 
       // MongoDBに保存
-      await docsCol.insertMany(docsToInsert as DocChunk[]);
-      totalChunks += docsToInsert.length;
+      await docsCol.insertMany(allDocs as DocChunk[]);
+      totalChunks += allDocs.length;
 
     } catch (error) {
-      console.error(`[Crawler] Error processing ${url}:`, error);
-    }
-
-    // 同一ドメインのリンクをキューに追加
-    const links = extractLinks(html, url);
-    for (const link of links) {
-      if (!visited.has(link) && queue.length + visited.size < MAX_PAGES) {
-        queue.push(link);
-      }
+      console.error(`[Crawler] Error processing batch:`, error);
     }
   }
 
@@ -667,7 +749,6 @@ export async function crawlAndEmbedSiteWithProgress(
     message: `✅ 完了！ ${visited.size}ページから${totalChunks}件の情報を学習しました`,
   });
 
-  // 結果を返す
   return {
     success: totalChunks > 0,
     pagesVisited: visited.size,
