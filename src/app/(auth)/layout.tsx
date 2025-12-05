@@ -18,7 +18,7 @@ export default function AuthLayout({
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-500 to-rose-600 shadow-lg mb-4">
             <Sparkles className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">ChatSales AI</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Saleschat AI</h1>
           <p className="text-slate-500 text-sm mt-1">接客AIエージェント管理</p>
         </div>
 

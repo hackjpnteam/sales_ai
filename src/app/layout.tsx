@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ChatSales AI - 接客AIエージェント",
+  title: "Saleschat AI - 接客AIエージェント",
   description: "URLを入れるだけでAIチャットボットが完成。あなたの会社専用の接客担当チャットを作成します。",
 };
 

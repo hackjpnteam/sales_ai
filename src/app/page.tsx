@@ -284,7 +284,7 @@ export default function Home() {
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-white font-bold text-xl tracking-tight">ChatSales AI</h1>
+              <h1 className="text-white font-bold text-xl tracking-tight">Saleschat AI</h1>
               <p className="text-white/70 text-xs">接客AIエージェント管理</p>
             </div>
           </div>
@@ -772,7 +772,7 @@ export default function Home() {
 
       {/* フッター */}
       <footer className="text-center py-8 text-sm text-slate-400">
-        <p>Powered by ChatSales AI 1.2</p>
+        <p>Powered by Saleschat AI 1.2</p>
       </footer>
 
       {/* アップグレードモーダル */}

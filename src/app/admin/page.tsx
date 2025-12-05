@@ -98,7 +98,7 @@ export default function AdminPage() {
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-white font-bold text-xl tracking-tight">ChatSales AI</h1>
+                <h1 className="text-white font-bold text-xl tracking-tight">Saleschat AI</h1>
                 <p className="text-white/70 text-xs">管理画面</p>
               </div>
             </Link>
