@@ -427,9 +427,9 @@ export default function WidgetPage({
     }
   };
 
-  // キーボードイベント（Shift+Enterで送信、Enterのみは改行）
+  // キーボードイベント（Enterで送信、Shift+Enterは改行）
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
