@@ -50,6 +50,7 @@ type GuestCompany = {
   createdAt: string;
   creatorIp?: string;
   creatorUserAgent?: string;
+  creatorLocation?: string;
   agents: { agentId: string; name: string }[];
 };
 
@@ -542,10 +543,15 @@ export default function SuperAdminPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <div className="text-right text-white/60 text-sm">
-                        <span className="mr-3 flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {guest.creatorIp || "不明"}
+                      <div className="text-right text-white/60 text-sm flex flex-col items-end gap-1">
+                        {guest.creatorLocation && (
+                          <span className="flex items-center gap-1 text-amber-400">
+                            <MapPin className="w-3 h-3" />
+                            {guest.creatorLocation}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1 text-xs">
+                          IP: {guest.creatorIp || "不明"}
                         </span>
                       </div>
                       {expandedGuest === guest.companyId ? (
@@ -571,16 +577,23 @@ export default function SuperAdminPage() {
                             <p className="text-white/50 text-xs">
                               ID: {guest.companyId}
                             </p>
-                            <div className="flex items-center gap-4 text-white/50 text-xs mt-2">
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-3 h-3" />
-                                IP: {guest.creatorIp || "不明"}
-                              </span>
+                            <div className="flex flex-col gap-2 text-white/50 text-xs mt-2">
+                              <div className="flex items-center gap-4">
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="w-3 h-3" />
+                                  IP: {guest.creatorIp || "不明"}
+                                </span>
+                                {guest.creatorLocation && (
+                                  <span className="flex items-center gap-1 text-amber-400">
+                                    📍 {guest.creatorLocation}
+                                  </span>
+                                )}
+                              </div>
                               {guest.creatorUserAgent && (
-                                <span className="flex items-center gap-1 truncate max-w-[300px]" title={guest.creatorUserAgent}>
+                                <span className="flex items-center gap-1 truncate max-w-[400px]" title={guest.creatorUserAgent}>
                                   <Monitor className="w-3 h-3" />
-                                  {guest.creatorUserAgent.length > 50
-                                    ? guest.creatorUserAgent.substring(0, 50) + "..."
+                                  {guest.creatorUserAgent.length > 60
+                                    ? guest.creatorUserAgent.substring(0, 60) + "..."
                                     : guest.creatorUserAgent}
                                 </span>
                               )}

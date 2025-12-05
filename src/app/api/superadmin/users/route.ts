@@ -77,6 +77,7 @@ export async function GET() {
       createdAt: c.createdAt,
       creatorIp: c.creatorIp,
       creatorUserAgent: c.creatorUserAgent,
+      creatorLocation: c.creatorLocation,
       agents: guestAgents
         .filter((a) => a.companyId === c.companyId)
         .map((a) => ({

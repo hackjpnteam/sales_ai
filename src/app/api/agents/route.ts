@@ -4,6 +4,7 @@ import { Agent, Company, User } from "@/lib/types";
 import { crawlAndEmbedSiteWithProgress, validateAndNormalizeUrl } from "@/lib/crawler";
 import { auth } from "@/lib/auth";
 import { randomUUID } from "crypto";
+import { getGeoFromIP, formatGeoLocation } from "@/lib/geoip";
 
 export async function POST(req: NextRequest) {
   // Get authenticated user (optional - agent creation works without auth too)
@@ -60,6 +61,13 @@ export async function POST(req: NextRequest) {
 
   const now = new Date();
 
+  // ゲストユーザーの場合、IPから位置情報を取得
+  let creatorLocation: string | undefined;
+  if (!userId && creatorIp && creatorIp !== "unknown") {
+    const geo = await getGeoFromIP(creatorIp);
+    creatorLocation = formatGeoLocation(geo) || undefined;
+  }
+
   const company: Company = {
     companyId,
     name: companyName,
@@ -71,6 +79,7 @@ export async function POST(req: NextRequest) {
     // ゲストユーザー作成時の情報を保存
     creatorIp: !userId ? creatorIp : undefined,
     creatorUserAgent: !userId ? creatorUserAgent : undefined,
+    creatorLocation: !userId ? creatorLocation : undefined,
   };
 
   const agent: Agent = {

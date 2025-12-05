@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
+    "@types/maxmind": "^2.0.4",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.1.2",
     "lucide-react": "^0.555.0",
+    "maxmind": "^5.0.1",
     "mongodb": "^7.0.0",
     "next": "16.0.6",
     "next-auth": "^5.0.0-beta.30",
