@@ -1,5 +1,11 @@
 import { MongoClient, Db, Collection } from "mongodb";
 
+// グローバル変数でコネクションをキャッシュ（Vercelのコールドスタート対策）
+declare global {
+  // eslint-disable-next-line no-var
+  var _mongoClientPromise: Promise<MongoClient> | undefined;
+}
+
 let client: MongoClient | null = null;
 let db: Db | null = null;
 
@@ -10,15 +16,20 @@ export async function getDb(): Promise<Db> {
     throw new Error("MONGODB_URI / MONGODB_DB_NAME is not set");
   }
 
-  client = new MongoClient(process.env.MONGODB_URI, {
-    serverSelectionTimeoutMS: 30000,
-    connectTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    maxPoolSize: 10,
-    retryWrites: true,
-    retryReads: true,
-  });
-  await client.connect();
+  // グローバルキャッシュを使用
+  if (!global._mongoClientPromise) {
+    client = new MongoClient(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,  // 30秒→5秒に短縮
+      connectTimeoutMS: 5000,          // 30秒→5秒に短縮
+      socketTimeoutMS: 10000,          // 45秒→10秒に短縮
+      maxPoolSize: 10,
+      retryWrites: true,
+      retryReads: true,
+    });
+    global._mongoClientPromise = client.connect();
+  }
+
+  client = await global._mongoClientPromise;
   db = client.db(process.env.MONGODB_DB_NAME);
 
   return db;

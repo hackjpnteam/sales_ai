@@ -33,18 +33,25 @@ export async function GET() {
       .find({ companyId: { $in: user.companyIds } })
       .toArray();
 
-    // Get agents for each company
-    const companiesWithAgents = await Promise.all(
-      companies.map(async (company) => {
-        const agents = await agentsCol
-          .find({ companyId: company.companyId })
-          .toArray();
-        return {
-          ...company,
-          agents,
-        };
-      })
-    );
+    // 全エージェントを一括取得（N+1クエリ問題を解決）
+    const companyIds = companies.map(c => c.companyId);
+    const allAgents = await agentsCol
+      .find({ companyId: { $in: companyIds } })
+      .toArray();
+
+    // 会社ごとにエージェントをマッピング
+    const agentsByCompany = allAgents.reduce((acc, agent) => {
+      if (!acc[agent.companyId]) {
+        acc[agent.companyId] = [];
+      }
+      acc[agent.companyId].push(agent);
+      return acc;
+    }, {} as Record<string, typeof allAgents>);
+
+    const companiesWithAgents = companies.map((company) => ({
+      ...company,
+      agents: agentsByCompany[company.companyId] || [],
+    }));
 
     return NextResponse.json({
       companies: companiesWithAgents,
