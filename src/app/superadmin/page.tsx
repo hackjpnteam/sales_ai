@@ -240,83 +240,83 @@ export default function SuperAdminPage() {
       className="min-h-screen"
       style={{
         background:
-          "linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
+          "linear-gradient(180deg, #F1E8F0 0%, #E8DDE7 50%, #DFD4DE 100%)",
       }}
     >
       {/* ヘッダー */}
-      <header className="px-6 py-4 bg-gradient-to-r from-amber-600 to-orange-600">
+      <header className="px-4 sm:px-6 py-3 sm:py-4" style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}>
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <button
               onClick={() => router.push("/dashboard")}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/20 backdrop-blur-sm text-white text-sm font-medium hover:bg-white/30 transition-all"
+              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-white/20 backdrop-blur-sm text-white text-xs sm:text-sm font-medium hover:bg-white/30 transition-all"
             >
-              <ArrowLeft className="w-4 h-4" />
-              戻る
+              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">戻る</span>
             </button>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                <Shield className="w-5 h-5 text-white" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-white font-bold text-xl tracking-tight flex items-center gap-2">
-                  <Crown className="w-5 h-5 text-amber-300" />
+                <h1 className="text-white font-bold text-base sm:text-xl tracking-tight flex items-center gap-1.5 sm:gap-2">
+                  <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300" />
                   Super Admin
                 </h1>
-                <p className="text-white/70 text-xs">システム管理者専用</p>
+                <p className="text-white/70 text-[10px] sm:text-xs hidden sm:block">システム管理者専用</p>
               </div>
             </div>
           </div>
-          <div className="text-white/70 text-sm">{session?.user?.email}</div>
+          <div className="text-white/70 text-xs sm:text-sm truncate max-w-[120px] sm:max-w-none">{session?.user?.email}</div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
         {/* 統計 */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                <Users className="w-6 h-6 text-amber-400" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-8">
+          <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-6 border border-rose-100 shadow-sm">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-rose-100 flex items-center justify-center">
+                <Users className="w-4 h-4 sm:w-6 sm:h-6 text-rose-500" />
               </div>
               <div>
-                <p className="text-white/60 text-sm">登録ユーザー</p>
-                <p className="text-white text-2xl font-bold">{users.length}</p>
+                <p className="text-slate-500 text-[10px] sm:text-sm">登録ユーザー</p>
+                <p className="text-slate-800 text-lg sm:text-2xl font-bold">{users.length}</p>
               </div>
             </div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-slate-500/20 flex items-center justify-center">
-                <Globe className="w-6 h-6 text-slate-400" />
+          <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-6 border border-rose-100 shadow-sm">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-slate-100 flex items-center justify-center">
+                <Globe className="w-4 h-4 sm:w-6 sm:h-6 text-slate-500" />
               </div>
               <div>
-                <p className="text-white/60 text-sm">ゲスト作成</p>
-                <p className="text-white text-2xl font-bold">{guestCompanies.length}</p>
+                <p className="text-slate-500 text-[10px] sm:text-sm">ゲスト作成</p>
+                <p className="text-slate-800 text-lg sm:text-2xl font-bold">{guestCompanies.length}</p>
               </div>
             </div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                <Building2 className="w-6 h-6 text-blue-400" />
+          <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-6 border border-rose-100 shadow-sm">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-blue-100 flex items-center justify-center">
+                <Building2 className="w-4 h-4 sm:w-6 sm:h-6 text-blue-500" />
               </div>
               <div>
-                <p className="text-white/60 text-sm">総会社数</p>
-                <p className="text-white text-2xl font-bold">
+                <p className="text-slate-500 text-[10px] sm:text-sm">総会社数</p>
+                <p className="text-slate-800 text-lg sm:text-2xl font-bold">
                   {users.reduce((sum, u) => sum + u.companies.length, 0) + guestCompanies.length}
                 </p>
               </div>
             </div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                <Bot className="w-6 h-6 text-purple-400" />
+          <div className="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-6 border border-rose-100 shadow-sm">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-purple-100 flex items-center justify-center">
+                <Bot className="w-4 h-4 sm:w-6 sm:h-6 text-purple-500" />
               </div>
               <div>
-                <p className="text-white/60 text-sm">エージェント数</p>
-                <p className="text-white text-2xl font-bold">
+                <p className="text-slate-500 text-[10px] sm:text-sm">エージェント数</p>
+                <p className="text-slate-800 text-lg sm:text-2xl font-bold">
                   {users.reduce((sum, u) => sum + u.agents.length, 0) + guestCompanies.reduce((sum, g) => sum + g.agents.length, 0)}
                 </p>
               </div>
@@ -325,76 +325,76 @@ export default function SuperAdminPage() {
         </div>
 
         {/* ユーザー一覧 */}
-        <div className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 overflow-hidden">
-          <div className="p-4 border-b border-white/10">
-            <h2 className="text-white font-semibold flex items-center gap-2">
-              <Users className="w-5 h-5 text-amber-400" />
+        <div className="bg-white rounded-xl sm:rounded-2xl border border-rose-100 shadow-sm overflow-hidden">
+          <div className="p-3 sm:p-4 border-b border-rose-100">
+            <h2 className="text-slate-800 font-semibold flex items-center gap-2 text-sm sm:text-base">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-rose-500" />
               登録ユーザー一覧
             </h2>
           </div>
 
-          <div className="divide-y divide-white/10">
+          <div className="divide-y divide-rose-100">
             {users.length === 0 ? (
-              <div className="p-8 text-center text-white/50">
+              <div className="p-6 sm:p-8 text-center text-slate-400">
                 ユーザーがいません
               </div>
             ) : (
               users.map((user) => (
-                <div key={user.userId} className="bg-white/5">
+                <div key={user.userId} className="bg-white">
                   <button
                     onClick={() =>
                       setExpandedUser(
                         expandedUser === user.userId ? null : user.userId
                       )
                     }
-                    className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition-all"
+                    className="w-full p-3 sm:p-4 flex items-center justify-between hover:bg-rose-50 transition-all"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold">
+                    <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-rose-400 to-rose-600 flex items-center justify-center text-white font-bold text-sm sm:text-base flex-shrink-0">
                         {user.email.charAt(0).toUpperCase()}
                       </div>
-                      <div className="text-left">
-                        <p className="text-white font-medium">{user.email}</p>
-                        <p className="text-white/50 text-sm">
+                      <div className="text-left min-w-0">
+                        <p className="text-slate-800 font-medium text-sm sm:text-base truncate">{user.email}</p>
+                        <p className="text-slate-500 text-xs sm:text-sm truncate">
                           {user.name || "名前未設定"} • 登録:{" "}
                           {formatDate(user.createdAt)}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right text-white/60 text-sm">
+                    <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+                      <div className="text-right text-slate-500 text-xs sm:text-sm hidden sm:block">
                         <span className="mr-3">
                           会社: {user.companies.length}
                         </span>
                         <span>エージェント: {user.agents.length}</span>
                       </div>
                       {expandedUser === user.userId ? (
-                        <ChevronUp className="w-5 h-5 text-white/50" />
+                        <ChevronUp className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
                       ) : (
-                        <ChevronDown className="w-5 h-5 text-white/50" />
+                        <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
                       )}
                     </div>
                   </button>
 
                   {expandedUser === user.userId && (
-                    <div className="px-4 pb-4 space-y-3">
+                    <div className="px-3 sm:px-4 pb-3 sm:pb-4 space-y-2 sm:space-y-3">
                       {user.companies.length === 0 ? (
-                        <p className="text-white/40 text-sm pl-14">
+                        <p className="text-slate-400 text-xs sm:text-sm pl-10 sm:pl-14">
                           会社がありません
                         </p>
                       ) : (
                         user.companies.map((company) => (
                           <div
                             key={company.companyId}
-                            className="ml-14 p-4 bg-white/10 rounded-xl"
+                            className="ml-10 sm:ml-14 p-3 sm:p-4 bg-rose-50 rounded-lg sm:rounded-xl"
                           >
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                               <div>
-                                <p className="text-white font-medium flex items-center gap-2">
-                                  <Building2 className="w-4 h-4 text-blue-400" />
+                                <p className="text-slate-800 font-medium flex items-center gap-2 text-sm sm:text-base">
+                                  <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500" />
                                   {company.name}
                                 </p>
-                                <p className="text-white/50 text-xs mt-1">
+                                <p className="text-slate-500 text-[10px] sm:text-xs mt-1 truncate">
                                   ID: {company.companyId}
                                 </p>
                               </div>

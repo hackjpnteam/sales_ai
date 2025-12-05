@@ -71,18 +71,18 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="bg-white rounded-3xl shadow-xl border border-rose-100 p-8">
-      <h2 className="text-xl font-bold text-slate-800 text-center mb-6">
+    <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8">
+      <h2 className="text-lg sm:text-xl font-bold text-slate-800 text-center mb-4 sm:mb-6">
         新規登録
       </h2>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-6">
-          <p className="text-red-700 text-sm text-center">{error}</p>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 sm:mb-6">
+          <p className="text-red-700 text-xs sm:text-sm text-center">{error}</p>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
         <div>
           <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
             <User className="w-4 h-4 text-rose-500" />
@@ -170,8 +170,8 @@ export default function SignupPage() {
         </button>
       </form>
 
-      <div className="mt-6 text-center">
-        <p className="text-sm text-slate-600">
+      <div className="mt-4 sm:mt-6 text-center">
+        <p className="text-xs sm:text-sm text-slate-600">
           既にアカウントをお持ちの方は{" "}
           <Link
             href="/login"

@@ -681,48 +681,49 @@ function DashboardContent() {
   return (
     <div>
       {/* ユーザー情報 */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-800">
             ようこそ、{session?.user?.name || session?.user?.email?.split("@")[0]}さん
           </h2>
-          <p className="text-slate-600 text-sm mt-1">
+          <p className="text-slate-600 text-xs sm:text-sm mt-1 truncate max-w-[250px] sm:max-w-none">
             {session?.user?.email}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {session?.user?.email && SUPER_ADMIN_EMAILS.includes(session.user.email.toLowerCase()) && (
             <Link
               href="/superadmin"
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-medium hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs sm:text-sm font-medium hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg"
             >
-              <Shield className="w-4 h-4" />
-              Super Admin
+              <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Super Admin</span>
+              <span className="sm:hidden">管理</span>
             </Link>
           )}
           <button
             onClick={() => signOut({ callbackUrl: "/" })}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 transition-all"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white border border-slate-200 text-slate-600 text-xs sm:text-sm hover:bg-slate-50 transition-all"
           >
-            <LogOut className="w-4 h-4" />
-            ログアウト
+            <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">ログアウト</span>
           </button>
         </div>
       </div>
 
       {/* 新規作成ボタン */}
-      <div className="mb-6">
+      <div className="mb-4 sm:mb-6">
         {!showCreateForm ? (
           <button
             onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white shadow-lg hover:shadow-xl transition-all"
+            className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-white shadow-lg hover:shadow-xl transition-all text-sm sm:text-base"
             style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
             新しいエージェントを作成
           </button>
         ) : (
-          <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-6">
+          <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-rose-100 p-4 sm:p-6">
             <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
               <Globe className="w-5 h-5 text-rose-500" />
               新規エージェント作成
