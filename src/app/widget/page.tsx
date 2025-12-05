@@ -210,7 +210,10 @@ export default function WidgetPage({
   // チャット送信
   const sendMessage = async (text?: string) => {
     const messageText = text || input.trim();
-    if (!messageText || !companyId) return;
+    if (!messageText) return;
+
+    // companyIdがない場合はデモモードとして動作
+    const effectiveCompanyId = companyId || "demo";
 
     setShowQuickButtons(false);
     setInput("");
@@ -228,7 +231,7 @@ export default function WidgetPage({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          companyId,
+          companyId: effectiveCompanyId,
           message: messageText,
           sessionId,
         }),
