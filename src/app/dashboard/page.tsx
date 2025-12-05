@@ -153,6 +153,16 @@ function DashboardContent() {
     themeColor: string;
   } | null>(null);
 
+  // ウィジェットプレビュー（実際の埋め込み形式）
+  const [showWidgetPreview, setShowWidgetPreview] = useState(false);
+  const [previewAgent, setPreviewAgent] = useState<{
+    companyId: string;
+    agentId: string;
+    agentName: string;
+    themeColor: string;
+    widgetPosition: string;
+  } | null>(null);
+
   // プラン選択モーダル
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [selectedCompanyForPlan, setSelectedCompanyForPlan] = useState<Company | null>(null);
@@ -1223,22 +1233,40 @@ function DashboardContent() {
                         <ExternalLink className="w-4 h-4 text-rose-500" />
                         プレビュー
                       </h4>
-                      <button
-                        onClick={() => {
-                          setCreatedAgent({
-                            companyId: company.companyId,
-                            agentId: agent.agentId,
-                            agentName: agent.name,
-                            themeColor: agent.themeColor,
-                          });
-                          setShowWidget(true);
-                        }}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all hover:shadow-lg"
-                        style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
-                      >
-                        チャットを試す
-                        <MessageCircle className="w-4 h-4" />
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => {
+                            setCreatedAgent({
+                              companyId: company.companyId,
+                              agentId: agent.agentId,
+                              agentName: agent.name,
+                              themeColor: agent.themeColor,
+                            });
+                            setShowWidget(true);
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all hover:shadow-lg"
+                          style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          チャットを試す
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPreviewAgent({
+                              companyId: company.companyId,
+                              agentId: agent.agentId,
+                              agentName: agent.name,
+                              themeColor: agent.themeColor,
+                              widgetPosition: agent.widgetPosition || "bottom-right",
+                            });
+                            setShowWidgetPreview(true);
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all"
+                        >
+                          <Globe className="w-4 h-4" />
+                          ウィジェットで試す
+                        </button>
+                      </div>
                     </div>
 
                     {/* Proプラン: 分析 */}
@@ -1475,6 +1503,116 @@ function DashboardContent() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ウィジェットプレビューモーダル */}
+      {showWidgetPreview && previewAgent && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+          {/* 背景 - サンプルサイト風 */}
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-slate-200">
+            <div className="h-full flex flex-col">
+              {/* ダミーヘッダー */}
+              <div className="bg-white shadow-sm px-8 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-8 h-8 rounded bg-slate-300" />
+                  <div className="w-24 h-4 bg-slate-300 rounded" />
+                </div>
+                <div className="flex gap-6">
+                  <div className="w-16 h-4 bg-slate-200 rounded" />
+                  <div className="w-16 h-4 bg-slate-200 rounded" />
+                  <div className="w-16 h-4 bg-slate-200 rounded" />
+                </div>
+              </div>
+
+              {/* ダミーコンテンツ */}
+              <div className="flex-1 p-8">
+                <div className="max-w-4xl mx-auto">
+                  <div className="w-48 h-8 bg-slate-300 rounded mb-4" />
+                  <div className="w-full h-4 bg-slate-200 rounded mb-2" />
+                  <div className="w-3/4 h-4 bg-slate-200 rounded mb-2" />
+                  <div className="w-5/6 h-4 bg-slate-200 rounded mb-8" />
+
+                  <div className="grid grid-cols-3 gap-4 mb-8">
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="w-12 h-12 rounded bg-slate-200 mb-3" />
+                      <div className="w-20 h-4 bg-slate-200 rounded mb-2" />
+                      <div className="w-full h-3 bg-slate-100 rounded" />
+                    </div>
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="w-12 h-12 rounded bg-slate-200 mb-3" />
+                      <div className="w-20 h-4 bg-slate-200 rounded mb-2" />
+                      <div className="w-full h-3 bg-slate-100 rounded" />
+                    </div>
+                    <div className="bg-white rounded-lg p-4 shadow-sm">
+                      <div className="w-12 h-12 rounded bg-slate-200 mb-3" />
+                      <div className="w-20 h-4 bg-slate-200 rounded mb-2" />
+                      <div className="w-full h-3 bg-slate-100 rounded" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 閉じるボタン */}
+          <button
+            onClick={() => setShowWidgetPreview(false)}
+            className="absolute top-4 right-4 z-[110] w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-slate-100 transition-all"
+          >
+            <X className="w-5 h-5 text-slate-600" />
+          </button>
+
+          {/* 説明バナー */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[110] bg-white/90 backdrop-blur-sm rounded-full px-6 py-2 shadow-lg">
+            <p className="text-sm text-slate-700">
+              <span className="font-medium">ウィジェットプレビュー</span> - 実際のサイトでの表示イメージです
+            </p>
+          </div>
+
+          {/* ウィジェットボタン */}
+          <button
+            onClick={() => {
+              const wrapper = document.getElementById("widget-preview-wrapper");
+              if (wrapper) {
+                wrapper.style.display = wrapper.style.display === "none" ? "block" : "none";
+              }
+            }}
+            className="fixed z-[105] rounded-full px-4 py-2.5 text-white text-sm font-medium shadow-lg hover:scale-105 transition-all"
+            style={{
+              backgroundColor: previewAgent.themeColor,
+              ...(previewAgent.widgetPosition === "bottom-left"
+                ? { left: "16px", bottom: "16px" }
+                : previewAgent.widgetPosition === "bottom-center"
+                ? { left: "50%", bottom: "16px", transform: "translateX(-50%)" }
+                : { right: "16px", bottom: "16px" }),
+            }}
+          >
+            AI相談
+          </button>
+
+          {/* ウィジェット iframe */}
+          <div
+            id="widget-preview-wrapper"
+            className="fixed z-[104] shadow-2xl rounded-2xl overflow-hidden"
+            style={{
+              width: "360px",
+              height: "520px",
+              maxWidth: "95vw",
+              maxHeight: "80vh",
+              bottom: "70px",
+              ...(previewAgent.widgetPosition === "bottom-left"
+                ? { left: "16px" }
+                : previewAgent.widgetPosition === "bottom-center"
+                ? { left: "50%", transform: "translateX(-50%)" }
+                : { right: "16px" }),
+            }}
+          >
+            <iframe
+              src={`/widget?companyId=${previewAgent.companyId}&agentName=${encodeURIComponent(previewAgent.agentName)}&themeColor=${encodeURIComponent(previewAgent.themeColor)}`}
+              className="w-full h-full border-none"
+            />
           </div>
         </div>
       )}
