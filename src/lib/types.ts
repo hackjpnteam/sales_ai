@@ -37,6 +37,7 @@ export type Agent = {
   voiceEnabled: boolean;
   themeColor: string;
   avatarUrl?: string;
+  widgetPosition?: "bottom-right" | "bottom-left" | "bottom-center";
   createdAt: Date;
 };
 

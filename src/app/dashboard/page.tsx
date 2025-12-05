@@ -45,6 +45,7 @@ type Agent = {
   voiceEnabled: boolean;
   themeColor: string;
   avatarUrl?: string;
+  widgetPosition?: "bottom-right" | "bottom-left" | "bottom-center";
   createdAt: Date;
 };
 
@@ -86,6 +87,13 @@ const colorOptions = [
   { name: "オレンジ", value: "#F59E0B" },
   { name: "ピンク", value: "#EC4899" },
 ];
+
+// 位置オプション
+const positionOptions = [
+  { name: "右下", value: "bottom-right" },
+  { name: "左下", value: "bottom-left" },
+  { name: "中央下", value: "bottom-center" },
+] as const;
 
 // プラン情報
 const plans = {
@@ -393,6 +401,48 @@ function DashboardContent() {
     }
   };
 
+  // 位置変更ハンドラー
+  const handlePositionChange = async (agentId: string, companyId: string, newPosition: "bottom-right" | "bottom-left" | "bottom-center") => {
+    setUpdatingColor(agentId); // 同じローディング状態を共有
+
+    try {
+      const res = await fetch("/api/agents/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId,
+          widgetPosition: newPosition,
+        }),
+      });
+
+      if (res.ok) {
+        // ローカルの状態を更新
+        setCompanies((prev) =>
+          prev.map((company) =>
+            company.companyId === companyId
+              ? {
+                  ...company,
+                  agents: company.agents.map((agent) =>
+                    agent.agentId === agentId
+                      ? { ...agent, widgetPosition: newPosition }
+                      : agent
+                  ),
+                }
+              : company
+          )
+        );
+      } else {
+        const data = await res.json();
+        alert(data.error || "位置の更新に失敗しました");
+      }
+    } catch (error) {
+      console.error("Position update error:", error);
+      alert("エラーが発生しました");
+    } finally {
+      setUpdatingColor(null);
+    }
+  };
+
   // アバター一覧を取得
   const fetchAvatars = async (agentId: string) => {
     setLoadingAvatars(true);
@@ -565,11 +615,14 @@ function DashboardContent() {
       ? window.location.origin + "/widget"
       : "http://localhost:4000/widget";
 
+    const position = agent.widgetPosition || "bottom-right";
+
     return `<script
   src="${typeof window !== "undefined" ? window.location.origin : "http://localhost:4000"}/widget.js"
   data-company-id="${company.companyId}"
   data-agent-name="${agent.name}"
   data-theme-color="${agent.themeColor}"
+  data-widget-position="${position}"
   data-widget-base-url="${widgetBaseUrl}"
   defer
 ></script>`;
@@ -1055,6 +1108,51 @@ function DashboardContent() {
                       <p className="text-xs text-slate-500 mt-2">
                         カラーをクリックして変更できます
                       </p>
+                    </div>
+
+                    {/* ウィジェット位置 - Pro会員のみ */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-rose-500" />
+                          表示位置
+                        </h4>
+                        {company.plan !== "pro" ? (
+                          <span className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
+                            <Lock className="w-3 h-3" />
+                            Pro
+                          </span>
+                        ) : (
+                          <span className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
+                            Pro
+                          </span>
+                        )}
+                      </div>
+                      {company.plan === "pro" ? (
+                        <div className="flex gap-2">
+                          {positionOptions.map((pos) => (
+                            <button
+                              key={pos.value}
+                              onClick={() => handlePositionChange(agent.agentId, company.companyId, pos.value)}
+                              disabled={updatingColor === agent.agentId}
+                              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                                (agent.widgetPosition || "bottom-right") === pos.value
+                                  ? "bg-purple-500 text-white shadow-md"
+                                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                              } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                            >
+                              {pos.name}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="bg-slate-100 rounded-xl p-4 text-center">
+                          <Lock className="w-5 h-5 text-slate-400 mx-auto mb-2" />
+                          <p className="text-sm text-slate-600">
+                            Proプランで表示位置を変更できます
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* 埋め込みコード */}
