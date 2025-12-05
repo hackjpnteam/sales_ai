@@ -10,6 +10,12 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   const userId = session?.user?.id;
 
+  // IPアドレスを取得
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  const realIp = req.headers.get("x-real-ip");
+  const creatorIp = forwardedFor?.split(",")[0]?.trim() || realIp || "unknown";
+  const creatorUserAgent = req.headers.get("user-agent") || "unknown";
+
   const body = await req.json();
   const {
     companyName,
@@ -57,6 +63,9 @@ export async function POST(req: NextRequest) {
     userId, // Link to user if authenticated
     plan: "free",
     createdAt: now,
+    // ゲストユーザー作成時の情報を保存
+    creatorIp: !userId ? creatorIp : undefined,
+    creatorUserAgent: !userId ? creatorUserAgent : undefined,
   };
 
   const agent: Agent = {

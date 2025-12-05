@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/admin";
 import { User, Company, Agent } from "@/lib/types";
 
-// GET: 全ユーザー一覧を取得
+// GET: 全ユーザー一覧を取得（ゲストユーザー含む）
 export async function GET() {
   try {
     const session = await auth();
@@ -37,6 +37,7 @@ export async function GET() {
           companies: companies.map((c) => ({
             companyId: c.companyId,
             name: c.name,
+            rootUrl: c.rootUrl,
             plan: c.plan,
             planStartedAt: c.planStartedAt,
           })),
@@ -49,7 +50,45 @@ export async function GET() {
       })
     );
 
-    return NextResponse.json({ users: usersWithDetails });
+    // ゲストユーザー（userIdを持たない）の会社を取得
+    const allUserCompanyIds = users.flatMap((u) => u.companyIds || []);
+    const guestCompanies = await companiesCol
+      .find({
+        $or: [
+          { userId: { $exists: false } },
+          { userId: "" },
+          { companyId: { $nin: allUserCompanyIds } },
+        ],
+      } as Parameters<typeof companiesCol.find>[0])
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    // ゲスト会社のエージェントを取得
+    const guestCompanyIds = guestCompanies.map((c) => c.companyId);
+    const guestAgents = await agentsCol
+      .find({ companyId: { $in: guestCompanyIds } })
+      .toArray();
+
+    const guestData = guestCompanies.map((c) => ({
+      companyId: c.companyId,
+      name: c.name,
+      rootUrl: c.rootUrl,
+      plan: c.plan || "free",
+      createdAt: c.createdAt,
+      creatorIp: c.creatorIp,
+      creatorUserAgent: c.creatorUserAgent,
+      agents: guestAgents
+        .filter((a) => a.companyId === c.companyId)
+        .map((a) => ({
+          agentId: a.agentId,
+          name: a.name,
+        })),
+    }));
+
+    return NextResponse.json({
+      users: usersWithDetails,
+      guestCompanies: guestData,
+    });
   } catch (error) {
     console.error("Super admin get users error:", error);
     return NextResponse.json(

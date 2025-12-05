@@ -25,6 +25,10 @@ export type Company = {
   planStartedAt?: Date;
   planEndedAt?: Date;
   createdAt: Date;
+  // ゲストユーザー作成時の情報
+  creatorIp?: string;
+  creatorUserAgent?: string;
+  creatorLocation?: string;
 };
 
 // AIエージェント設定

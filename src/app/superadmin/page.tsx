@@ -15,6 +15,9 @@ import {
   Trash2,
   Save,
   Crown,
+  Globe,
+  MapPin,
+  Monitor,
 } from "lucide-react";
 
 type Company = {
@@ -39,14 +42,27 @@ type User = {
   agents: Agent[];
 };
 
+type GuestCompany = {
+  companyId: string;
+  name: string;
+  rootUrl: string;
+  plan: string;
+  createdAt: string;
+  creatorIp?: string;
+  creatorUserAgent?: string;
+  agents: { agentId: string; name: string }[];
+};
+
 const SUPER_ADMIN_EMAILS = ["tomura@hackjpn.com"];
 
 export default function SuperAdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
+  const [guestCompanies, setGuestCompanies] = useState<GuestCompany[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [expandedGuest, setExpandedGuest] = useState<string | null>(null);
   const [editingPlan, setEditingPlan] = useState<{
     companyId: string;
     plan: string;
@@ -80,6 +96,7 @@ export default function SuperAdminPage() {
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users || []);
+        setGuestCompanies(data.guestCompanies || []);
       }
     } catch (error) {
       console.error("Failed to fetch users:", error);
@@ -121,7 +138,7 @@ export default function SuperAdminPage() {
     }
   };
 
-  const handleDeleteCompany = async (companyId: string, companyName: string) => {
+  const handleDeleteCompany = async (companyId: string, companyName: string, isGuest = false) => {
     if (
       !confirm(
         `「${companyName}」を削除しますか？\n\nこの操作は取り消せません。関連するすべてのデータが削除されます。`
@@ -137,14 +154,21 @@ export default function SuperAdminPage() {
       });
 
       if (res.ok) {
-        // ユーザーリストを更新
-        setUsers((prev) =>
-          prev.map((user) => ({
-            ...user,
-            companies: user.companies.filter((c) => c.companyId !== companyId),
-            agents: user.agents.filter((a) => a.companyId !== companyId),
-          }))
-        );
+        if (isGuest) {
+          // ゲストリストを更新
+          setGuestCompanies((prev) =>
+            prev.filter((c) => c.companyId !== companyId)
+          );
+        } else {
+          // ユーザーリストを更新
+          setUsers((prev) =>
+            prev.map((user) => ({
+              ...user,
+              companies: user.companies.filter((c) => c.companyId !== companyId),
+              agents: user.agents.filter((a) => a.companyId !== companyId),
+            }))
+          );
+        }
       } else {
         alert("削除に失敗しました");
       }
@@ -248,7 +272,7 @@ export default function SuperAdminPage() {
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         {/* 統計 */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-4 gap-4 mb-8">
           <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
@@ -262,13 +286,24 @@ export default function SuperAdminPage() {
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
             <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-slate-500/20 flex items-center justify-center">
+                <Globe className="w-6 h-6 text-slate-400" />
+              </div>
+              <div>
+                <p className="text-white/60 text-sm">ゲスト作成</p>
+                <p className="text-white text-2xl font-bold">{guestCompanies.length}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
+            <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
                 <Building2 className="w-6 h-6 text-blue-400" />
               </div>
               <div>
-                <p className="text-white/60 text-sm">会社数</p>
+                <p className="text-white/60 text-sm">総会社数</p>
                 <p className="text-white text-2xl font-bold">
-                  {users.reduce((sum, u) => sum + u.companies.length, 0)}
+                  {users.reduce((sum, u) => sum + u.companies.length, 0) + guestCompanies.length}
                 </p>
               </div>
             </div>
@@ -281,7 +316,7 @@ export default function SuperAdminPage() {
               <div>
                 <p className="text-white/60 text-sm">エージェント数</p>
                 <p className="text-white text-2xl font-bold">
-                  {users.reduce((sum, u) => sum + u.agents.length, 0)}
+                  {users.reduce((sum, u) => sum + u.agents.length, 0) + guestCompanies.reduce((sum, g) => sum + g.agents.length, 0)}
                 </p>
               </div>
             </div>
@@ -459,6 +494,133 @@ export default function SuperAdminPage() {
                           </div>
                         ))
                       )}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* ゲストユーザー（未登録）一覧 */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 overflow-hidden mt-8">
+          <div className="p-4 border-b border-white/10">
+            <h2 className="text-white font-semibold flex items-center gap-2">
+              <Globe className="w-5 h-5 text-slate-400" />
+              未登録ユーザー作成エージェント
+              <span className="text-white/50 text-sm font-normal ml-2">
+                （アカウント未作成でエージェントを作成したユーザー）
+              </span>
+            </h2>
+          </div>
+
+          <div className="divide-y divide-white/10">
+            {guestCompanies.length === 0 ? (
+              <div className="p-8 text-center text-white/50">
+                未登録ユーザーの作成したエージェントはありません
+              </div>
+            ) : (
+              guestCompanies.map((guest) => (
+                <div key={guest.companyId} className="bg-white/5">
+                  <button
+                    onClick={() =>
+                      setExpandedGuest(
+                        expandedGuest === guest.companyId ? null : guest.companyId
+                      )
+                    }
+                    className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition-all"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-500 to-slate-600 flex items-center justify-center text-white font-bold">
+                        ?
+                      </div>
+                      <div className="text-left">
+                        <p className="text-white font-medium">{guest.name}</p>
+                        <p className="text-white/50 text-sm">
+                          作成: {formatDate(guest.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right text-white/60 text-sm">
+                        <span className="mr-3 flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          {guest.creatorIp || "不明"}
+                        </span>
+                      </div>
+                      {expandedGuest === guest.companyId ? (
+                        <ChevronUp className="w-5 h-5 text-white/50" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-white/50" />
+                      )}
+                    </div>
+                  </button>
+
+                  {expandedGuest === guest.companyId && (
+                    <div className="px-4 pb-4">
+                      <div className="ml-14 p-4 bg-white/10 rounded-xl">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-2">
+                            <p className="text-white font-medium flex items-center gap-2">
+                              <Building2 className="w-4 h-4 text-blue-400" />
+                              {guest.name}
+                            </p>
+                            <p className="text-white/50 text-xs">
+                              URL: {guest.rootUrl}
+                            </p>
+                            <p className="text-white/50 text-xs">
+                              ID: {guest.companyId}
+                            </p>
+                            <div className="flex items-center gap-4 text-white/50 text-xs mt-2">
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3" />
+                                IP: {guest.creatorIp || "不明"}
+                              </span>
+                              {guest.creatorUserAgent && (
+                                <span className="flex items-center gap-1 truncate max-w-[300px]" title={guest.creatorUserAgent}>
+                                  <Monitor className="w-3 h-3" />
+                                  {guest.creatorUserAgent.length > 50
+                                    ? guest.creatorUserAgent.substring(0, 50) + "..."
+                                    : guest.creatorUserAgent}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {getPlanBadge(guest.plan)}
+                            <button
+                              onClick={() =>
+                                handleDeleteCompany(
+                                  guest.companyId,
+                                  guest.name,
+                                  true
+                                )
+                              }
+                              disabled={deleting === guest.companyId}
+                              className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-all disabled:opacity-50"
+                            >
+                              {deleting === guest.companyId ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* エージェント一覧 */}
+                        <div className="mt-3 space-y-2">
+                          {guest.agents.map((agent) => (
+                            <div
+                              key={agent.agentId}
+                              className="flex items-center gap-2 text-white/60 text-sm"
+                            >
+                              <Bot className="w-3 h-3 text-purple-400" />
+                              {agent.name}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
