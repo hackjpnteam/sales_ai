@@ -148,12 +148,29 @@ export type RelatedLink = {
   description: string;
 };
 
+// プロンプト設定の型
+export type PromptSettings = {
+  systemPrompt?: string;
+  knowledge?: string;
+  style?: string;
+  guardrails?: string;
+};
+
+// デフォルトのガードレール
+const DEFAULT_GUARDRAILS = `# 制約条件
+- わからないことは推測せず「わかりません」と正直に答える
+- 個人情報や機密情報は取り扱わない
+- 法的・税務・医療などの専門的助言は一般的な情報にとどめる
+- 競合他社の批判や比較は行わない
+- 不適切な内容や攻撃的な表現は使用しない`;
+
 export async function answerWithRAG(params: {
   companyId: string;
   question: string;
   language?: string;
+  promptSettings?: PromptSettings;
 }) {
-  const { companyId, question, language = "ja" } = params;
+  const { companyId, question, language = "ja", promptSettings } = params;
   const chunks = await findRelevantChunks(companyId, question);
   const openai = getOpenAI();
 
@@ -252,9 +269,34 @@ ${linkEvalPrompt}
     )
     .join("\n\n");
 
-  // 言語別システムプロンプト（より的確な回答を重視）
-  const systemPrompts = {
-    ja: `あなたは当社の接客担当AIです。お客様のご質問に的確に、簡潔に回答してください。
+  // プロンプト設定がある場合はカスタムプロンプトを構築
+  let finalSystemPrompt: string;
+
+  if (promptSettings && (promptSettings.systemPrompt || promptSettings.knowledge || promptSettings.style)) {
+    // カスタムプロンプト設定がある場合
+    const baseSystemPrompt = promptSettings.systemPrompt || 'あなたは丁寧なカスタマーサポートAIです。お客様のご質問に的確に、簡潔に回答してください。';
+
+    const knowledgeSection = promptSettings.knowledge
+      ? `\n\n# 会社・サービスに関する情報\n${promptSettings.knowledge}`
+      : '';
+
+    const styleSection = promptSettings.style
+      ? `\n\n# 会話スタイル\n${promptSettings.style}`
+      : '';
+
+    const guardrailsSection = promptSettings.guardrails || DEFAULT_GUARDRAILS;
+
+    const languageInstructions = {
+      ja: '\n\n■回答のルール\n- 質問に直接的に答える\n- 150文字以内で簡潔に\n- 敬語を使いつつ自然な日本語で\n- URLやリンクは含めない',
+      en: '\n\n■ Response Rules\n- Answer the question directly\n- Keep it within 150 characters\n- Professional but friendly English\n- Do not include URLs or links\n\nIMPORTANT: Respond ONLY in English.',
+      zh: '\n\n■ 回答规则\n- 直接回答问题\n- 保持在150字以内\n- 专业但友好的中文\n- 不要包含URL或链接\n\n重要：请只用中文回复。',
+    };
+
+    finalSystemPrompt = `${baseSystemPrompt}${knowledgeSection}${styleSection}\n\n${guardrailsSection}${languageInstructions[language as keyof typeof languageInstructions] || languageInstructions.ja}`;
+  } else {
+    // デフォルトのシステムプロンプト（言語別）
+    const systemPrompts = {
+      ja: `あなたは当社の接客担当AIです。お客様のご質問に的確に、簡潔に回答してください。
 
 ■回答のルール
 1. 質問に対して直接的に答える（余計な情報は不要）
@@ -270,7 +312,7 @@ ${linkEvalPrompt}
 - 長すぎる回答
 - 「お気軽にどうぞ」等の定型フォローは必要な場合のみ`,
 
-    en: `You are our customer service AI. Answer customer questions accurately and concisely.
+      en: `You are our customer service AI. Answer customer questions accurately and concisely.
 
 ■ Response Rules
 1. Answer the question directly (no unnecessary information)
@@ -288,7 +330,7 @@ ${linkEvalPrompt}
 
 IMPORTANT: Respond ONLY in English.`,
 
-    zh: `您是我们的客服AI。请准确、简洁地回答客户问题。
+      zh: `您是我们的客服AI。请准确、简洁地回答客户问题。
 
 ■ 回答规则
 1. 直接回答问题（不需要多余信息）
@@ -305,9 +347,10 @@ IMPORTANT: Respond ONLY in English.`,
 - 不必要的通用跟进
 
 重要：请只用中文回复。`,
-  };
+    };
 
-  const systemPrompt = systemPrompts[language as keyof typeof systemPrompts] || systemPrompts.ja;
+    finalSystemPrompt = systemPrompts[language as keyof typeof systemPrompts] || systemPrompts.ja;
+  }
 
   // 言語別ユーザープロンプト
   const userPrompts = {
@@ -341,7 +384,7 @@ ${question}
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
-      { role: "system", content: systemPrompt },
+      { role: "system", content: finalSystemPrompt },
       { role: "user", content: userPrompt },
     ],
     temperature: 0.3,

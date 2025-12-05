@@ -43,6 +43,11 @@ export type Agent = {
   themeColor: string;
   avatarUrl?: string;
   widgetPosition?: "bottom-right" | "bottom-left" | "bottom-center";
+  // プロンプト設定（Pro機能）
+  systemPrompt?: string;    // 役割定義
+  knowledge?: string;       // 会社固有のナレッジ
+  style?: string;           // 会話スタイル
+  guardrails?: string;      // 制約条件（編集不可）
   createdAt: Date;
 };
 

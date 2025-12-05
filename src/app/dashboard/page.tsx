@@ -50,7 +50,18 @@ type Agent = {
   themeColor: string;
   avatarUrl?: string;
   widgetPosition?: "bottom-right" | "bottom-left" | "bottom-center";
+  // プロンプト設定（Pro機能）
+  systemPrompt?: string;
+  knowledge?: string;
+  style?: string;
   createdAt: Date;
+};
+
+type PromptSettings = {
+  systemPrompt: string;
+  knowledge: string;
+  style: string;
+  guardrails: string;
 };
 
 type UploadedAvatar = {
@@ -210,6 +221,19 @@ function DashboardContent() {
   const [knowledgeContent, setKnowledgeContent] = useState("");
   const [savingKnowledge, setSavingKnowledge] = useState(false);
 
+  // プロンプト設定（Pro機能）
+  const [showPromptModal, setShowPromptModal] = useState(false);
+  const [promptAgentId, setPromptAgentId] = useState<string>("");
+  const [promptCompanyPlan, setPromptCompanyPlan] = useState<string>("");
+  const [promptSettings, setPromptSettings] = useState<PromptSettings>({
+    systemPrompt: "",
+    knowledge: "",
+    style: "",
+    guardrails: "",
+  });
+  const [savingPrompt, setSavingPrompt] = useState(false);
+  const [loadingPrompt, setLoadingPrompt] = useState(false);
+
   const fetchCompanies = useCallback(async () => {
     try {
       const res = await fetch("/api/user/companies");
@@ -341,6 +365,70 @@ function DashboardContent() {
       console.error("Failed to delete knowledge:", error);
       alert("削除に失敗しました");
     }
+  };
+
+  // プロンプト設定取得
+  const fetchPromptSettings = async (agentId: string) => {
+    setLoadingPrompt(true);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/prompt`);
+      if (res.ok) {
+        const data = await res.json();
+        setPromptSettings({
+          systemPrompt: data.systemPrompt || "",
+          knowledge: data.knowledge || "",
+          style: data.style || "",
+          guardrails: data.guardrails || "",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch prompt settings:", error);
+    } finally {
+      setLoadingPrompt(false);
+    }
+  };
+
+  // プロンプト設定保存
+  const handleSavePromptSettings = async () => {
+    if (!promptAgentId) return;
+
+    setSavingPrompt(true);
+    try {
+      const res = await fetch(`/api/agents/${promptAgentId}/prompt`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemPrompt: promptSettings.systemPrompt,
+          knowledge: promptSettings.knowledge,
+          style: promptSettings.style,
+        }),
+      });
+
+      if (res.ok) {
+        setShowPromptModal(false);
+        alert("プロンプト設定を保存しました");
+      } else {
+        const data = await res.json();
+        if (data.code === "PRO_REQUIRED") {
+          alert("この機能はProプラン限定です。アップグレードしてください。");
+        } else {
+          alert(data.error || "保存に失敗しました");
+        }
+      }
+    } catch (error) {
+      console.error("Failed to save prompt settings:", error);
+      alert("保存に失敗しました");
+    } finally {
+      setSavingPrompt(false);
+    }
+  };
+
+  // プロンプト設定モーダルを開く
+  const openPromptModal = (agentId: string, companyPlan: string) => {
+    setPromptAgentId(agentId);
+    setPromptCompanyPlan(companyPlan);
+    setShowPromptModal(true);
+    fetchPromptSettings(agentId);
   };
 
   // ウェルカムメッセージ保存
@@ -1439,6 +1527,62 @@ function DashboardContent() {
                       )}
                     </div>
 
+                    {/* プロンプト設定 - Pro機能 */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4 text-blue-500" />
+                          プロンプト設定
+                          <span className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
+                            {company.plan === "pro" ? "Pro" : <>
+                              <Lock className="w-3 h-3" />
+                              Pro
+                            </>}
+                          </span>
+                        </h4>
+                        {company.plan === "pro" && agent && (
+                          <button
+                            onClick={() => openPromptModal(agent.agentId, company.plan || "free")}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            編集
+                          </button>
+                        )}
+                      </div>
+                      {company.plan === "pro" ? (
+                        <div className="bg-blue-50 rounded-xl p-4">
+                          <div className="space-y-3 text-sm">
+                            <div>
+                              <p className="text-xs text-blue-600 font-medium mb-1">役割定義</p>
+                              <p className="text-slate-700">
+                                {agent?.systemPrompt ? agent.systemPrompt.substring(0, 100) + (agent.systemPrompt.length > 100 ? "..." : "") : "（未設定）"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-blue-600 font-medium mb-1">会話スタイル</p>
+                              <p className="text-slate-700">
+                                {agent?.style || "（未設定）"}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-xs text-blue-500 mt-3">
+                            GPTsのようにAIの振る舞いをカスタマイズできます
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-100 rounded-xl p-4 text-center">
+                          <Lock className="w-5 h-5 text-slate-400 mx-auto mb-2" />
+                          <p className="text-sm text-slate-600">
+                            ProプランでAIの振る舞いをカスタマイズできます
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            役割定義・ナレッジ・会話スタイルを設定可能
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
                     {/* 埋め込みコード */}
                     <div>
                       <div className="flex items-center justify-between mb-3">
@@ -1872,6 +2016,147 @@ function DashboardContent() {
                   <Save className="w-4 h-4" />
                 )}
                 {editingKnowledge ? "更新" : "保存"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* プロンプト設定モーダル */}
+      {showPromptModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            {/* ヘッダー */}
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-blue-500" />
+                  プロンプト設定
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                  GPTsのようにAIの振る舞いをカスタマイズ
+                </p>
+              </div>
+              <button
+                onClick={() => setShowPromptModal(false)}
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600" />
+              </button>
+            </div>
+
+            {/* コンテンツ */}
+            {loadingPrompt ? (
+              <div className="p-8 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+              </div>
+            ) : (
+              <div className="p-4 sm:p-6 space-y-6">
+                {/* 役割定義 */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    役割定義（System Prompt）
+                  </label>
+                  <textarea
+                    value={promptSettings.systemPrompt}
+                    onChange={(e) => setPromptSettings(prev => ({ ...prev, systemPrompt: e.target.value }))}
+                    placeholder="例: あなたはプロの採用担当者です。弊社のキャリア情報をユーザーに的確に導けるように指導してください。"
+                    rows={4}
+                    disabled={promptCompanyPlan !== "pro"}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    AIの基本的な役割や人格を定義します
+                  </p>
+                </div>
+
+                {/* ナレッジ */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    ナレッジ（会社固有の情報）
+                  </label>
+                  <textarea
+                    value={promptSettings.knowledge}
+                    onChange={(e) => setPromptSettings(prev => ({ ...prev, knowledge: e.target.value }))}
+                    placeholder="例: 弊社は2010年設立のIT企業です。主力サービスはクラウド会計ソフト「○○」で、中小企業向けに提供しています。営業時間は平日9:00-18:00です。"
+                    rows={5}
+                    disabled={promptCompanyPlan !== "pro"}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    会社概要、サービス説明、よくある質問への回答など
+                  </p>
+                </div>
+
+                {/* 会話スタイル */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    会話スタイル
+                  </label>
+                  <textarea
+                    value={promptSettings.style}
+                    onChange={(e) => setPromptSettings(prev => ({ ...prev, style: e.target.value }))}
+                    placeholder="例: 丁寧で親しみやすいトーンで話してください。専門用語は避け、わかりやすく説明してください。"
+                    rows={3}
+                    disabled={promptCompanyPlan !== "pro"}
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    トーン、話し方、フォーマットなど
+                  </p>
+                </div>
+
+                {/* ガードレール（読み取り専用） */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-amber-500" />
+                    制約条件（編集不可）
+                  </label>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 whitespace-pre-line">
+                    {promptSettings.guardrails}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    安全性のため、この制約は自動的に適用されます
+                  </p>
+                </div>
+
+                {/* Pro限定の案内 */}
+                {promptCompanyPlan !== "pro" && (
+                  <div className="bg-purple-50 rounded-xl p-4 flex items-start gap-3">
+                    <Lock className="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-purple-800">
+                        プロンプト設定はProプラン限定機能です
+                      </p>
+                      <p className="text-xs text-purple-600 mt-1">
+                        Proプランにアップグレードすると、AIの振る舞いを自由にカスタマイズできます
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* フッター */}
+            <div className="p-4 sm:p-6 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={() => setShowPromptModal(false)}
+                className="flex-1 py-3 rounded-xl font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSavePromptSettings}
+                disabled={savingPrompt || promptCompanyPlan !== "pro"}
+                className="flex-1 py-3 rounded-xl font-medium text-white disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}
+              >
+                {savingPrompt ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                保存
               </button>
             </div>
           </div>
