@@ -85,7 +85,16 @@ export default function WidgetPage({
   const [agentName, setAgentName] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [themeColor, setThemeColor] = useState("#FF6FB1"); // デフォルトのピンク
+  const [themeColor, setThemeColor] = useState("#FF6FB1");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [showQuickButtons, setShowQuickButtons] = useState(true);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [lastReply, setLastReply] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   const t = translations[language];
 
@@ -165,42 +174,19 @@ export default function WidgetPage({
     }
   }, [isInitialized, language, agentName, t.defaultAgentName]);
 
-  // Update welcome message when language changes and no custom message
+  // Set initial welcome message on client side only
   useEffect(() => {
-    if (isInitialized && messages.length === 1 && messages[0].id === "welcome") {
-      // Only update if it's the default welcome message
-      const isDefaultJa = messages[0].content === translations.ja.welcomeMessage;
-      const isDefaultEn = messages[0].content === translations.en.welcomeMessage;
-      if (isDefaultJa || isDefaultEn) {
-        setMessages([{
-          id: "welcome",
-          role: "assistant",
-          content: t.welcomeMessage,
-          timestamp: new Date(),
-        }]);
-      }
+    if (isInitialized && messages.length === 0) {
+      setMessages([{
+        id: "welcome",
+        role: "assistant",
+        content: t.welcomeMessage,
+        timestamp: new Date(),
+      }]);
     }
-  }, [language, isInitialized]);
+  }, [isInitialized, t.welcomeMessage, messages.length]);
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: translations.ja.welcomeMessage,
-      timestamp: new Date(),
-    },
-  ]);
-  const [showQuickButtons, setShowQuickButtons] = useState(true);
-
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [lastReply, setLastReply] = useState<string | null>(null);
-
-  // 音声入力関連
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
+  // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
