@@ -20,7 +20,7 @@ export default function AuthLayout({
             <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Saleschat AI</h1>
-          <p className="text-slate-500 text-xs sm:text-sm mt-1">接客AIエージェント管理</p>
+          <p className="text-slate-500 text-xs sm:text-sm mt-1">Powered by hackjpn ver 2.1</p>
         </Link>
 
         {children}

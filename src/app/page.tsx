@@ -285,7 +285,7 @@ export default function Home() {
             </div>
             <div>
               <h1 className="text-white font-bold text-base sm:text-xl tracking-tight">Saleschat AI</h1>
-              <p className="text-white/70 text-[10px] sm:text-xs hidden sm:block">接客AIエージェント管理</p>
+              <p className="text-white/70 text-[10px] sm:text-xs">Powered by hackjpn ver 2.1</p>
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">

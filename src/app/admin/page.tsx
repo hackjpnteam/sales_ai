@@ -99,7 +99,7 @@ export default function AdminPage() {
               </div>
               <div>
                 <h1 className="text-white font-bold text-xl tracking-tight">Saleschat AI</h1>
-                <p className="text-white/70 text-xs">管理画面</p>
+                <p className="text-white/70 text-xs">Powered by hackjpn ver 2.1</p>
               </div>
             </Link>
           </div>

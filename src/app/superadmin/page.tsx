@@ -326,7 +326,7 @@ export default function SuperAdminPage() {
                   <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300" />
                   Super Admin
                 </h1>
-                <p className="text-white/70 text-[10px] sm:text-xs hidden sm:block">システム管理者専用</p>
+                <p className="text-white/70 text-[10px] sm:text-xs">Powered by hackjpn ver 2.1</p>
               </div>
             </div>
           </div>

@@ -195,7 +195,7 @@ export default function AgentDetailPage({
             </div>
             <div>
               <h1 className="text-white font-bold text-xl tracking-tight">{agent.name}</h1>
-              <p className="text-white/70 text-xs">{agent.companyId}</p>
+              <p className="text-white/70 text-xs">Powered by hackjpn ver 2.1</p>
             </div>
           </div>
         </div>
