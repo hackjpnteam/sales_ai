@@ -124,14 +124,18 @@ export default function WidgetPage({
   useEffect(() => {
     searchParams.then(async (params) => {
       const cid = params.companyId || "";
+      console.log("[Widget] Company ID from params:", cid);
       setCompanyId(cid);
 
       if (cid) {
         // Fetch company and agent info to get language setting
         try {
+          console.log("[Widget] Fetching company info for:", cid);
           const res = await fetch(`/api/company/${cid}`);
+          console.log("[Widget] API response status:", res.status);
           if (res.ok) {
             const data = await res.json();
+            console.log("[Widget] Company data:", data);
             if (data.company?.language) {
               setLanguage(data.company.language);
             }
@@ -139,6 +143,7 @@ export default function WidgetPage({
               setAgentName(data.agent.name);
             }
             if (data.agent?.themeColor) {
+              console.log("[Widget] Setting theme color:", data.agent.themeColor);
               setThemeColor(data.agent.themeColor);
             }
             if (data.agent?.welcomeMessage) {
@@ -153,9 +158,11 @@ export default function WidgetPage({
             if (typeof data.agent?.voiceEnabled === "boolean") {
               setVoiceEnabled(data.agent.voiceEnabled);
             }
+          } else {
+            console.error("[Widget] API error:", await res.text());
           }
         } catch (error) {
-          console.error("Failed to fetch company info:", error);
+          console.error("[Widget] Failed to fetch company info:", error);
         }
       }
 
