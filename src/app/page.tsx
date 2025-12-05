@@ -695,7 +695,14 @@ export default function Home() {
                       </li>
                     </ul>
                     <button
-                      onClick={() => { setSelectedPlan("lite"); setShowUpgradeModal(true); }}
+                      onClick={() => {
+                        if (!session) {
+                          window.location.href = "/login?callbackUrl=" + encodeURIComponent(window.location.href);
+                          return;
+                        }
+                        setSelectedPlan("lite");
+                        setShowUpgradeModal(true);
+                      }}
                       className="w-full py-2.5 rounded-xl font-semibold text-white text-sm shadow-md hover:shadow-lg transition-all"
                       style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}
                     >
@@ -736,7 +743,14 @@ export default function Home() {
                       </li>
                     </ul>
                     <button
-                      onClick={() => { setSelectedPlan("pro"); setShowUpgradeModal(true); }}
+                      onClick={() => {
+                        if (!session) {
+                          window.location.href = "/login?callbackUrl=" + encodeURIComponent(window.location.href);
+                          return;
+                        }
+                        setSelectedPlan("pro");
+                        setShowUpgradeModal(true);
+                      }}
                       className="w-full py-2.5 rounded-xl font-semibold text-white text-sm shadow-md hover:shadow-lg transition-all"
                       style={{ background: "linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)" }}
                     >
