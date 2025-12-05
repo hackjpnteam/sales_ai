@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
+import { User } from "@/lib/types";
 
 // 決済成功後にプランを確認・更新するAPI
 export async function POST(req: NextRequest) {
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ユーザーがこの会社を所有しているか確認
-    const usersCol = await getCollection("users");
+    const usersCol = await getCollection<User>("users");
     const user = await usersCol.findOne({ userId: session.user.id });
 
     if (!user?.companyIds?.includes(companyId)) {
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
 
     // Stripeで最新のサブスクリプションを確認
     const stripe = getStripe();
-    const companiesCol = await getCollection("companies");
+    const companiesCol = await getCollection<{ companyId: string; stripeSubscriptionId?: string }>("companies");
     const company = await companiesCol.findOne({ companyId });
 
     // サブスクリプションIDがある場合は、そのステータスを確認

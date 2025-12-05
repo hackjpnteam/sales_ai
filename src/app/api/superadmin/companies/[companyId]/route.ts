@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/admin";
+import { Agent } from "@/lib/types";
 
 // PUT: 会社のプランを更新
 export async function PUT(
@@ -75,7 +76,7 @@ export async function DELETE(
     }
 
     // 関連データを削除
-    const agentsCol = await getCollection("agents");
+    const agentsCol = await getCollection<Agent>("agents");
     const documentsCol = await getCollection("documents");
     const avatarsCol = await getCollection("avatars");
     const usersCol = await getCollection("users");

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
+import { User, Agent } from "@/lib/types";
 
 export async function PUT(req: NextRequest) {
   try {
@@ -18,7 +19,7 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const agentsCol = await getCollection("agents");
+    const agentsCol = await getCollection<Agent>("agents");
 
     // Find the agent
     const agent = await agentsCol.findOne({ agentId });
@@ -27,7 +28,7 @@ export async function PUT(req: NextRequest) {
     }
 
     // Check if user owns this company
-    const usersCol = await getCollection("users");
+    const usersCol = await getCollection<User>("users");
     const user = await usersCol.findOne({ userId: session.user.id });
 
     if (!user?.companyIds?.includes(agent.companyId)) {

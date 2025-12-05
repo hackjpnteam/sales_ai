@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/admin";
+import { User, Company, Agent } from "@/lib/types";
 
 // GET: 全ユーザー一覧を取得
 export async function GET() {
@@ -11,12 +12,12 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const usersCol = await getCollection("users");
+    const usersCol = await getCollection<User>("users");
     const users = await usersCol.find({}).sort({ createdAt: -1 }).toArray();
 
     // 各ユーザーの会社情報も取得
-    const companiesCol = await getCollection("companies");
-    const agentsCol = await getCollection("agents");
+    const companiesCol = await getCollection<Company>("companies");
+    const agentsCol = await getCollection<Agent>("agents");
 
     const usersWithDetails = await Promise.all(
       users.map(async (user) => {

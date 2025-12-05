@@ -36,6 +36,7 @@ export type Agent = {
   welcomeMessage: string;
   voiceEnabled: boolean;
   themeColor: string;
+  avatarUrl?: string;
   createdAt: Date;
 };
 

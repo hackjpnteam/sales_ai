@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
+import { User, Agent } from "@/lib/types";
 
 // DELETE: エージェントを削除
 export async function DELETE(
@@ -19,7 +20,7 @@ export async function DELETE(
       return NextResponse.json({ error: "agentId is required" }, { status: 400 });
     }
 
-    const agentsCol = await getCollection("agents");
+    const agentsCol = await getCollection<Agent>("agents");
     const agent = await agentsCol.findOne({ agentId });
 
     if (!agent) {
@@ -27,7 +28,7 @@ export async function DELETE(
     }
 
     // ユーザーがこの会社を所有しているか確認
-    const usersCol = await getCollection("users");
+    const usersCol = await getCollection<User>("users");
     const user = await usersCol.findOne({ userId: session.user.id });
 
     if (!user?.companyIds?.includes(agent.companyId)) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
+import { User, Agent as AgentType } from "@/lib/types";
 
 // アバター型
 type Avatar = {
@@ -28,14 +29,14 @@ export async function GET(req: NextRequest) {
     }
 
     // エージェントの所有権を確認
-    const agentsCol = await getCollection("agents");
+    const agentsCol = await getCollection<AgentType>("agents");
     const agent = await agentsCol.findOne({ agentId });
 
     if (!agent) {
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    const usersCol = await getCollection("users");
+    const usersCol = await getCollection<User>("users");
     const user = await usersCol.findOne({ userId: session.user.id });
 
     if (!user?.companyIds?.includes(agent.companyId)) {
@@ -93,14 +94,14 @@ export async function POST(req: NextRequest) {
     }
 
     // エージェントの所有権を確認
-    const agentsCol = await getCollection("agents");
+    const agentsCol = await getCollection<AgentType>("agents");
     const agent = await agentsCol.findOne({ agentId });
 
     if (!agent) {
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    const usersCol = await getCollection("users");
+    const usersCol = await getCollection<User>("users");
     const user = await usersCol.findOne({ userId: session.user.id });
 
     if (!user?.companyIds?.includes(agent.companyId)) {
@@ -164,7 +165,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // 所有権を確認
-    const usersCol = await getCollection("users");
+    const usersCol = await getCollection<User>("users");
     const user = await usersCol.findOne({ userId: session.user.id });
 
     if (!user?.companyIds?.includes(avatar.companyId)) {
