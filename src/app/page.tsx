@@ -786,7 +786,7 @@ export default function Home() {
 
       {/* フッター */}
       <footer className="text-center py-8 text-sm text-slate-400">
-        <p>Powered by Saleschat AI 1.2</p>
+        <p>Powered by hackjpn ver 2.0</p>
       </footer>
 
       {/* アップグレードモーダル */}
