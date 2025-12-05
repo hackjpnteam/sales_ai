@@ -69,3 +69,16 @@ export type ChatLog = {
   content: string;
   createdAt: Date;
 };
+
+// カスタムナレッジ（Pro機能）
+export type CustomKnowledge = {
+  _id?: string;
+  knowledgeId: string;
+  companyId: string;
+  agentId: string;
+  title: string;
+  content: string;         // 最大3000文字
+  embeddings: number[];
+  createdAt: Date;
+  updatedAt: Date;
+};

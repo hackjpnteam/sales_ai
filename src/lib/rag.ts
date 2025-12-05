@@ -1,6 +1,6 @@
 import { getOpenAI } from "./openai";
 import { getCollection } from "./mongodb";
-import { DocChunk } from "./types";
+import { DocChunk, CustomKnowledge } from "./types";
 
 // コサイン類似度を計算
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -15,9 +15,18 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
+// 検索結果の型
+type SearchResult = {
+  chunk: string;
+  url: string;
+  title: string;
+  score: number;
+  isCustomKnowledge?: boolean;
+};
 
-export async function findRelevantChunks(companyId: string, question: string) {
+export async function findRelevantChunks(companyId: string, question: string): Promise<SearchResult[]> {
   const docsCol = await getCollection<DocChunk>("documents");
+  const knowledgeCol = await getCollection<CustomKnowledge>("custom_knowledge");
   const openai = getOpenAI();
 
   const embRes = await openai.embeddings.create({
@@ -25,6 +34,9 @@ export async function findRelevantChunks(companyId: string, question: string) {
     input: question,
   });
   const queryVector = embRes.data[0].embedding;
+
+  // ドキュメント検索結果
+  let docResults: SearchResult[] = [];
 
   // まずVector Searchを試みる
   try {
@@ -35,7 +47,7 @@ export async function findRelevantChunks(companyId: string, question: string) {
           path: "embeddings",
           queryVector: queryVector,
           numCandidates: 150,
-          limit: 15,
+          limit: 10,
           filter: {
             companyId: companyId,
           },
@@ -56,46 +68,76 @@ export async function findRelevantChunks(companyId: string, question: string) {
 
     if (results.length > 0) {
       console.log(`[RAG] Vector Search found ${results.length} chunks`);
-      return results as {
-        chunk: string;
-        url: string;
-        title: string;
-        score: number;
-      }[];
+      docResults = results as SearchResult[];
     }
   } catch (error) {
     console.log("[RAG] Vector Search failed, using fallback:", error);
   }
 
-  // フォールバック: 全ドキュメントを取得してJavaScriptでコサイン類似度計算
-  console.log("[RAG] Using fallback similarity search");
+  // Vector Searchが失敗またはゼロ件の場合、フォールバック
+  if (docResults.length === 0) {
+    console.log("[RAG] Using fallback similarity search");
 
-  const allDocs = await docsCol
-    .find({ companyId })
-    .project({ chunk: 1, url: 1, title: 1, embeddings: 1, _id: 0 })
-    .toArray();
+    const allDocs = await docsCol
+      .find({ companyId })
+      .project({ chunk: 1, url: 1, title: 1, embeddings: 1, _id: 0 })
+      .toArray();
 
-  console.log(`[RAG] Found ${allDocs.length} documents for company ${companyId}`);
+    console.log(`[RAG] Found ${allDocs.length} documents for company ${companyId}`);
 
-  if (allDocs.length === 0) {
-    return [];
+    if (allDocs.length > 0) {
+      docResults = allDocs
+        .filter((doc) => doc.embeddings && doc.embeddings.length > 0)
+        .map((doc) => ({
+          chunk: doc.chunk,
+          url: doc.url,
+          title: doc.title,
+          score: cosineSimilarity(queryVector, doc.embeddings),
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
+    }
   }
 
-  // コサイン類似度でスコアリング
-  const scored = allDocs
-    .filter((doc) => doc.embeddings && doc.embeddings.length > 0)
-    .map((doc) => ({
-      chunk: doc.chunk,
-      url: doc.url,
-      title: doc.title,
-      score: cosineSimilarity(queryVector, doc.embeddings),
-    }))
+  // カスタムナレッジも検索（Pro機能）
+  let knowledgeResults: SearchResult[] = [];
+  try {
+    const customKnowledges = await knowledgeCol
+      .find({ companyId })
+      .project({ title: 1, content: 1, embeddings: 1, _id: 0 })
+      .toArray();
+
+    if (customKnowledges.length > 0) {
+      console.log(`[RAG] Found ${customKnowledges.length} custom knowledge entries`);
+      knowledgeResults = customKnowledges
+        .filter((k) => k.embeddings && k.embeddings.length > 0)
+        .map((k) => ({
+          chunk: k.content,
+          url: "",
+          title: k.title,
+          score: cosineSimilarity(queryVector, k.embeddings),
+          isCustomKnowledge: true,
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5);
+    }
+  } catch (error) {
+    console.log("[RAG] Custom knowledge search error:", error);
+  }
+
+  // 結合してスコア順にソート（カスタムナレッジはスコアにボーナス付与）
+  const allResults = [...docResults, ...knowledgeResults.map(k => ({
+    ...k,
+    score: k.score * 1.1, // カスタムナレッジを優先
+  }))];
+
+  const sorted = allResults
     .sort((a, b) => b.score - a.score)
-    .slice(0, 15);
+    .slice(0, 10);
 
-  console.log(`[RAG] Top scores: ${scored.slice(0, 3).map(s => s.score.toFixed(3)).join(", ")}`);
+  console.log(`[RAG] Top scores: ${sorted.slice(0, 3).map(s => s.score.toFixed(3)).join(", ")}`);
 
-  return scored;
+  return sorted;
 }
 
 
@@ -130,192 +172,168 @@ export async function answerWithRAG(params: {
     };
   }
 
-  // チャンクからユニークなURL+タイトル+チャンク内容を抽出（上位3件）
-  const seenUrls = new Set<string>();
-  const urlChunks: { url: string; title: string; chunk: string }[] = [];
-  for (const c of chunks) {
-    if (c.url && !seenUrls.has(c.url)) {
-      seenUrls.add(c.url);
-      urlChunks.push({ url: c.url, title: c.title || c.url, chunk: c.chunk || '' });
-      if (urlChunks.length >= 3) break;
-    }
-  }
+  // 高スコアのチャンクのみ使用（閾値0.3以上）
+  const relevantChunks = chunks.filter(c => c.score >= 0.3);
+  console.log(`[RAG] High-score chunks: ${relevantChunks.length} (threshold: 0.3)`);
 
-  // AIで各URLの説明を1行に要約
+  // URLを持つチャンクのみからリンクを抽出（カスタムナレッジは除外）
+  const urlChunks = relevantChunks
+    .filter(c => c.url && !c.isCustomKnowledge)
+    .slice(0, 3);
+
+  // 質問に関連するリンクのみをAIで判定
   const relatedLinks: RelatedLink[] = [];
   if (urlChunks.length > 0) {
     try {
-      const summaryPrompt = urlChunks.map((u, i) =>
-        `【URL${i + 1}】${u.title}\n内容: ${u.chunk.substring(0, 300)}`
+      const linkEvalPrompt = urlChunks.map((u, i) =>
+        `【URL${i + 1}】${u.title}\n内容: ${u.chunk.substring(0, 200)}`
       ).join('\n\n');
 
-      const summaryRes = await openai.chat.completions.create({
+      const evalRes = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
-            content: "あなたはウェブページの内容を簡潔に要約するアシスタントです。各URLについて、そのページで何ができるか・何の情報があるかを1行（25文字以内）で説明してください。番号やプレフィックスは付けず、説明文のみを返してください。JSONで返してください。"
+            content: `あなたは質問とURLの関連性を判定するアシスタントです。
+各URLが質問に直接関係があるかを判断し、関係あるURLのみの情報をJSONで返してください。
+関係ないURLは含めないでください。`
           },
           {
             role: "user",
-            content: `以下のURLの内容を1行ずつ要約してください:\n\n${summaryPrompt}\n\n回答形式（JSON配列のみ）:\n{"summaries": ["説明文1", "説明文2", "説明文3"]}\n\n注意: 各説明文は25文字以内で、「URL1:」などのプレフィックスは付けないでください。`
+            content: `質問: ${question}
+
+以下のURLから、質問に直接関係あるものだけを選んでください:
+
+${linkEvalPrompt}
+
+回答形式（JSON）:
+{"links": [{"index": 0, "description": "25文字以内の説明"}]}
+
+注意:
+- 質問に直接関係ないURLは配列に含めない
+- descriptionは「〜について」「〜の情報」などの形式で25文字以内
+- 関係あるURLがなければ {"links": []} を返す`
           }
         ],
-        temperature: 0.3,
+        temperature: 0.2,
         max_tokens: 200,
       });
 
-      const summaryText = summaryRes.choices[0].message.content || '';
+      const evalText = evalRes.choices[0].message.content || '';
       try {
-        const jsonMatch = summaryText.match(/\{[\s\S]*\}/);
+        const jsonMatch = evalText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          const summaries = parsed.summaries || [];
-          for (let i = 0; i < urlChunks.length; i++) {
-            relatedLinks.push({
-              url: urlChunks[i].url,
-              title: urlChunks[i].title,
-              description: summaries[i] || 'ページの詳細情報'
-            });
+          const links = parsed.links || [];
+          for (const link of links) {
+            const idx = link.index;
+            if (idx >= 0 && idx < urlChunks.length) {
+              relatedLinks.push({
+                url: urlChunks[idx].url,
+                title: urlChunks[idx].title,
+                description: link.description || 'ページの詳細情報'
+              });
+            }
           }
         }
       } catch {
-        // JSONパースに失敗した場合はデフォルトの説明を使用
-        for (const u of urlChunks) {
-          relatedLinks.push({
-            url: u.url,
-            title: u.title,
-            description: 'ページの詳細情報'
-          });
-        }
+        // JSONパースに失敗した場合はリンクを返さない
+        console.log('[RAG] Link evaluation parse failed, returning no links');
       }
     } catch (error) {
-      console.error('[RAG] Summary generation error:', error);
-      // エラー時はデフォルトの説明を使用
-      for (const u of urlChunks) {
-        relatedLinks.push({
-          url: u.url,
-          title: u.title,
-          description: 'ページの詳細情報'
-        });
-      }
+      console.error('[RAG] Link evaluation error:', error);
     }
   }
 
-  const contextText = chunks
+  const contextText = (relevantChunks.length > 0 ? relevantChunks : chunks.slice(0, 5))
     .map(
       (c, i) =>
         `【情報${i + 1}】${c.title}\n${c.chunk}`
     )
     .join("\n\n");
 
-  // 言語別システムプロンプト
+  // 言語別システムプロンプト（より的確な回答を重視）
   const systemPrompts = {
-    ja: `あなたは当社のチーフスタッフオフィサー（最高総務責任者）です。
-お客様からのお問い合わせに、プロフェッショナルかつ親身に対応してください。
+    ja: `あなたは当社の接客担当AIです。お客様のご質問に的確に、簡潔に回答してください。
 
-■あなたの人物像
-- 会社のことを熟知した頼れるエグゼクティブ
-- 温かみがありながらも的確でスマートな対応
-- お客様に寄り添い、最適な情報を提供する
-
-■回答スタイル
-- 敬語を使いつつも、堅すぎない自然な日本語で
-- 「〜ですね」「〜でございます」など丁寧に
-- お客様のニーズを汲み取った提案型の回答
-- 300文字以内で簡潔に、要点を押さえて
-
-■回答の流れ
-1. まず結論や要点を1〜2文で
-2. 補足があれば簡潔に（箇条書き可）
-3. 必要に応じて「他にご質問があればお気軽にどうぞ」等のフォロー
+■回答のルール
+1. 質問に対して直接的に答える（余計な情報は不要）
+2. 150文字以内で簡潔に
+3. 敬語を使いつつ自然な日本語で
+4. 情報が見つかった場合は自信を持って回答
+5. 質問されていないことには触れない
 
 ■禁止事項
-- URLやリンクを回答に含めること
-- 「情報がありません」等の否定的回答
-- 「提供された情報によると」等のAI的な表現
-- 長すぎる回答`,
+- URLやリンクを含めること
+- 「〜によると」「情報では」等のAI的表現
+- 質問と関係ない補足情報
+- 長すぎる回答
+- 「お気軽にどうぞ」等の定型フォローは必要な場合のみ`,
 
-    en: `You are our Chief Staff Officer. Please respond to customer inquiries professionally and warmly.
+    en: `You are our customer service AI. Answer customer questions accurately and concisely.
 
-■ Your Character
-- A reliable executive who knows the company well
-- Warm yet precise and smart responses
-- Provide optimal information tailored to customer needs
-
-■ Response Style
-- Professional but friendly English
-- Use polite expressions naturally
-- Provide solution-oriented responses
-- Keep responses concise, within 300 characters
-
-■ Response Flow
-1. Start with the main point in 1-2 sentences
-2. Add brief supplements if needed (bullet points OK)
-3. Follow up with "Feel free to ask if you have any other questions" as needed
+■ Response Rules
+1. Answer the question directly (no unnecessary information)
+2. Keep it within 150 characters
+3. Professional but friendly English
+4. Answer confidently when information is found
+5. Don't mention things not asked about
 
 ■ Prohibited
-- Including URLs or links in responses
-- Negative responses like "information not found"
-- AI-like expressions such as "according to the provided information"
+- Including URLs or links
+- AI-like phrases such as "according to"
+- Unrelated supplementary information
 - Overly long responses
+- Generic follow-ups unless necessary
 
-IMPORTANT: You MUST respond ENTIRELY in English. Do not use any Japanese or other languages.`,
+IMPORTANT: Respond ONLY in English.`,
 
-    zh: `您是我们的首席行政官。请专业且热情地回复客户咨询。
+    zh: `您是我们的客服AI。请准确、简洁地回答客户问题。
 
-■ 您的人物设定
-- 熟知公司的可靠高管
-- 温暖而又准确、智慧的应对
-- 贴近客户，提供最佳信息
-
-■ 回答风格
-- 专业但友好的中文
-- 自然地使用礼貌用语
-- 提供面向解决方案的回答
-- 保持简洁，300字以内
-
-■ 回答流程
-1. 首先用1-2句话说明要点
-2. 如有需要，简要补充（可用要点）
-3. 必要时跟进"如有其他问题，请随时询问"
+■ 回答规则
+1. 直接回答问题（不需要多余信息）
+2. 保持在150字以内
+3. 专业但友好的中文
+4. 找到信息时自信地回答
+5. 不要提及未被问到的事情
 
 ■ 禁止事项
-- 在回答中包含URL或链接
-- "未找到信息"等否定性回答
-- "根据提供的信息"等AI式表达
+- 包含URL或链接
+- "根据信息"等AI式表达
+- 无关的补充信息
 - 过长的回答
+- 不必要的通用跟进
 
-重要：您必须完全用中文回复。不要使用日语或其他语言。`,
+重要：请只用中文回复。`,
   };
 
   const systemPrompt = systemPrompts[language as keyof typeof systemPrompts] || systemPrompts.ja;
 
   // 言語別ユーザープロンプト
   const userPrompts = {
-    ja: `[サイトから抽出した情報]
+    ja: `[参考情報]
 ${contextText}
 
-[お客様からの質問]
+[質問]
 ${question}
 
-上記の情報を元に、プロの接客AIとして質問に回答してください。`,
+上記の参考情報を元に、質問に直接答えてください。質問されたことだけに簡潔に回答してください。`,
 
-    en: `[Information extracted from the site]
+    en: `[Reference Information]
 ${contextText}
 
-[Customer's question]
+[Question]
 ${question}
 
-Based on the above information, please answer the question as a professional customer service AI. Remember to respond ONLY in English.`,
+Based on the above information, answer the question directly. Only respond to what was asked, concisely.`,
 
-    zh: `[从网站提取的信息]
+    zh: `[参考信息]
 ${contextText}
 
-[客户的问题]
+[问题]
 ${question}
 
-根据上述信息，作为专业的客户服务AI回答问题。请务必只用中文回复。`,
+根据上述信息，直接回答问题。只简洁地回答被问到的内容。`,
   };
 
   const userPrompt = userPrompts[language as keyof typeof userPrompts] || userPrompts.ja;
@@ -326,8 +344,8 @@ ${question}
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    temperature: 0.4,
-    max_tokens: 500,
+    temperature: 0.3,
+    max_tokens: 300,
   });
 
   const reply = completion.choices[0].message.content ?? "";

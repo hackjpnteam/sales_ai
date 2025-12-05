@@ -33,6 +33,9 @@ import {
   Upload,
   Shield,
   HelpCircle,
+  Database,
+  Edit3,
+  PlusCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -77,6 +80,14 @@ type ProgressEvent = {
   companyId?: string;
   agentId?: string;
   themeColor?: string;
+};
+
+type CustomKnowledge = {
+  knowledgeId: string;
+  title: string;
+  content: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 // カラーオプション
@@ -190,6 +201,15 @@ function DashboardContent() {
   // 埋め込みコードヘルプモーダル
   const [showEmbedHelp, setShowEmbedHelp] = useState(false);
 
+  // カスタムナレッジ（Pro機能）
+  const [customKnowledges, setCustomKnowledges] = useState<Record<string, CustomKnowledge[]>>({});
+  const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
+  const [editingKnowledge, setEditingKnowledge] = useState<CustomKnowledge | null>(null);
+  const [knowledgeCompanyId, setKnowledgeCompanyId] = useState<string>("");
+  const [knowledgeTitle, setKnowledgeTitle] = useState("");
+  const [knowledgeContent, setKnowledgeContent] = useState("");
+  const [savingKnowledge, setSavingKnowledge] = useState(false);
+
   const fetchCompanies = useCallback(async () => {
     try {
       const res = await fetch("/api/user/companies");
@@ -250,6 +270,106 @@ function DashboardContent() {
       fetchCompanies();
     }
   }, [status, fetchCompanies]);
+
+  // カスタムナレッジ取得
+  const fetchCustomKnowledge = async (companyId: string) => {
+    try {
+      const res = await fetch(`/api/knowledge?companyId=${companyId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCustomKnowledges(prev => ({ ...prev, [companyId]: data.knowledges || [] }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch knowledge:", error);
+    }
+  };
+
+  // カスタムナレッジ保存
+  const handleSaveKnowledge = async () => {
+    if (!knowledgeCompanyId || !knowledgeTitle.trim() || !knowledgeContent.trim()) return;
+    if (knowledgeContent.length > 3000) {
+      alert("コンテンツは3000文字以内にしてください");
+      return;
+    }
+
+    setSavingKnowledge(true);
+    try {
+      const method = editingKnowledge ? "PUT" : "POST";
+      const body = editingKnowledge
+        ? { companyId: knowledgeCompanyId, knowledgeId: editingKnowledge.knowledgeId, title: knowledgeTitle, content: knowledgeContent }
+        : { companyId: knowledgeCompanyId, title: knowledgeTitle, content: knowledgeContent };
+
+      const res = await fetch("/api/knowledge", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        setShowKnowledgeModal(false);
+        setEditingKnowledge(null);
+        setKnowledgeTitle("");
+        setKnowledgeContent("");
+        await fetchCustomKnowledge(knowledgeCompanyId);
+      } else {
+        const data = await res.json();
+        alert(data.error || "保存に失敗しました");
+      }
+    } catch (error) {
+      console.error("Failed to save knowledge:", error);
+      alert("保存に失敗しました");
+    } finally {
+      setSavingKnowledge(false);
+    }
+  };
+
+  // カスタムナレッジ削除
+  const handleDeleteKnowledge = async (companyId: string, knowledgeId: string) => {
+    if (!confirm("このナレッジを削除しますか？")) return;
+
+    try {
+      const res = await fetch(`/api/knowledge?companyId=${companyId}&knowledgeId=${knowledgeId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        await fetchCustomKnowledge(companyId);
+      } else {
+        alert("削除に失敗しました");
+      }
+    } catch (error) {
+      console.error("Failed to delete knowledge:", error);
+      alert("削除に失敗しました");
+    }
+  };
+
+  // ウェルカムメッセージ保存
+  const handleSaveWelcomeMessage = async (agentId: string) => {
+    setSavingSettings(true);
+    try {
+      const res = await fetch(`/api/agents/${agentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          welcomeMessage: editWelcomeMessage,
+          voiceEnabled: editVoiceEnabled,
+          avatarUrl: editAvatarUrl,
+        }),
+      });
+
+      if (res.ok) {
+        await fetchCompanies();
+        setEditingAgent(null);
+      } else {
+        alert("保存に失敗しました");
+      }
+    } catch (error) {
+      console.error("Failed to save agent settings:", error);
+      alert("保存に失敗しました");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const handleCreateAgent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1170,6 +1290,155 @@ function DashboardContent() {
                       )}
                     </div>
 
+                    {/* ウェルカムメッセージ編集 */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2">
+                          <MessageCircle className="w-4 h-4 text-rose-500" />
+                          ウェルカムメッセージ
+                        </h4>
+                      </div>
+                      {editingAgent === agent.agentId ? (
+                        <div className="space-y-3">
+                          <textarea
+                            value={editWelcomeMessage}
+                            onChange={(e) => setEditWelcomeMessage(e.target.value)}
+                            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-rose-300"
+                            rows={3}
+                            placeholder="チャット開始時に表示するメッセージを入力..."
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleSaveWelcomeMessage(agent.agentId)}
+                              disabled={savingSettings}
+                              className="px-4 py-2 rounded-xl text-sm font-medium text-white flex items-center gap-2 disabled:opacity-50"
+                              style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}
+                            >
+                              {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                              保存
+                            </button>
+                            <button
+                              onClick={() => setEditingAgent(null)}
+                              className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200"
+                            >
+                              キャンセル
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-50 rounded-xl p-4">
+                          <p className="text-sm text-slate-700 mb-3">{agent.welcomeMessage}</p>
+                          <button
+                            onClick={() => {
+                              setEditingAgent(agent.agentId);
+                              setEditWelcomeMessage(agent.welcomeMessage);
+                              setEditVoiceEnabled(agent.voiceEnabled);
+                              setEditAvatarUrl(agent.avatarUrl || "/agent-avatar.png");
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 transition-all"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            編集
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* カスタムナレッジ - Pro機能 */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2">
+                          <Database className="w-4 h-4 text-rose-500" />
+                          カスタムナレッジ
+                          <span className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
+                            {company.plan === "pro" ? "Pro" : <>
+                              <Lock className="w-3 h-3" />
+                              Pro
+                            </>}
+                          </span>
+                        </h4>
+                        {company.plan === "pro" && (
+                          <button
+                            onClick={() => {
+                              setKnowledgeCompanyId(company.companyId);
+                              setEditingKnowledge(null);
+                              setKnowledgeTitle("");
+                              setKnowledgeContent("");
+                              setShowKnowledgeModal(true);
+                              fetchCustomKnowledge(company.companyId);
+                            }}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-purple-500 hover:bg-purple-600 transition-all"
+                          >
+                            <PlusCircle className="w-3 h-3" />
+                            追加
+                          </button>
+                        )}
+                      </div>
+                      {company.plan === "pro" ? (
+                        <div className="space-y-2">
+                          {(customKnowledges[company.companyId] || []).length === 0 ? (
+                            <div className="bg-purple-50 rounded-xl p-4 text-center">
+                              <Database className="w-6 h-6 text-purple-400 mx-auto mb-2" />
+                              <p className="text-sm text-purple-700">
+                                カスタムナレッジを追加すると、AIがその情報を使って回答します
+                              </p>
+                              <p className="text-xs text-purple-500 mt-1">
+                                例: よくある質問、製品情報、会社のポリシーなど
+                              </p>
+                            </div>
+                          ) : (
+                            (customKnowledges[company.companyId] || []).map((k) => (
+                              <div key={k.knowledgeId} className="bg-slate-50 rounded-xl p-3 flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-slate-800 text-sm">{k.title}</p>
+                                  <p className="text-xs text-slate-500 truncate mt-1">{k.content.substring(0, 100)}...</p>
+                                </div>
+                                <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                                  <button
+                                    onClick={() => {
+                                      setKnowledgeCompanyId(company.companyId);
+                                      setEditingKnowledge(k);
+                                      setKnowledgeTitle(k.title);
+                                      setKnowledgeContent(k.content);
+                                      setShowKnowledgeModal(true);
+                                    }}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-200 transition-all"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteKnowledge(company.companyId, k.knowledgeId)}
+                                    className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-all"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                          {/* カスタムナレッジを読み込み */}
+                          {!customKnowledges[company.companyId] && (
+                            <button
+                              onClick={() => fetchCustomKnowledge(company.companyId)}
+                              className="w-full py-2 text-sm text-purple-600 hover:text-purple-700"
+                            >
+                              ナレッジを読み込む
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="bg-slate-100 rounded-xl p-4 text-center">
+                          <Lock className="w-5 h-5 text-slate-400 mx-auto mb-2" />
+                          <p className="text-sm text-slate-600">
+                            ProプランでカスタムナレッジをAIに学習させることができます
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            最大3000文字のテキストを追加可能
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
                     {/* 埋め込みコード */}
                     <div>
                       <div className="flex items-center justify-between mb-3">
@@ -1514,6 +1783,96 @@ function DashboardContent() {
                   <span>端末情報分析</span>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* カスタムナレッジ追加・編集モーダル */}
+      {showKnowledgeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            {/* ヘッダー */}
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <Database className="w-5 h-5 text-purple-500" />
+                  {editingKnowledge ? "ナレッジを編集" : "ナレッジを追加"}
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                  AIが回答に使用する情報を追加
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowKnowledgeModal(false);
+                  setEditingKnowledge(null);
+                  setKnowledgeTitle("");
+                  setKnowledgeContent("");
+                }}
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600" />
+              </button>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="p-4 sm:p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  タイトル
+                </label>
+                <input
+                  type="text"
+                  value={knowledgeTitle}
+                  onChange={(e) => setKnowledgeTitle(e.target.value)}
+                  placeholder="例: 営業時間について"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  内容（最大3000文字）
+                </label>
+                <textarea
+                  value={knowledgeContent}
+                  onChange={(e) => setKnowledgeContent(e.target.value)}
+                  placeholder="例: 当店の営業時間は平日9:00-18:00、土日祝日は10:00-17:00です。年末年始（12/31-1/3）は休業となります。"
+                  rows={8}
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-300"
+                />
+                <p className={`text-xs mt-1 ${knowledgeContent.length > 3000 ? "text-red-500" : "text-slate-400"}`}>
+                  {knowledgeContent.length} / 3000文字
+                </p>
+              </div>
+            </div>
+
+            {/* フッター */}
+            <div className="p-4 sm:p-6 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowKnowledgeModal(false);
+                  setEditingKnowledge(null);
+                  setKnowledgeTitle("");
+                  setKnowledgeContent("");
+                }}
+                className="flex-1 py-3 rounded-xl font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSaveKnowledge}
+                disabled={savingKnowledge || !knowledgeTitle.trim() || !knowledgeContent.trim() || knowledgeContent.length > 3000}
+                className="flex-1 py-3 rounded-xl font-medium text-white disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                style={{ background: "linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)" }}
+              >
+                {savingKnowledge ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                {editingKnowledge ? "更新" : "保存"}
+              </button>
             </div>
           </div>
         </div>
