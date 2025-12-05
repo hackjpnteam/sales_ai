@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/admin";
+// Auth.js v5 - using auth() instead of getServerSession
 import { getCollection } from "@/lib/mongodb";
 import { crawlAndEmbedSite } from "@/lib/crawler";
 import { Agent, DocChunk } from "@/lib/types";
