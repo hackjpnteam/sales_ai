@@ -104,7 +104,7 @@ export default function LogsPage() {
             </div>
             <div>
               <h1 className="text-white font-bold text-xl tracking-tight">会話ログ</h1>
-              <p className="text-white/70 text-xs">Powered by hackjpn ver 2.1</p>
+              <p className="text-white/70 text-xs">Powered by hackjpn ver 2.2</p>
             </div>
           </div>
         </div>

@@ -26,7 +26,7 @@ export default function AuthLayout({
             />
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Saleschat AI</h1>
-          <p className="text-slate-500 text-xs sm:text-sm mt-1">Powered by hackjpn ver 2.1</p>
+          <p className="text-slate-500 text-xs sm:text-sm mt-1">Powered by hackjpn ver 2.2</p>
         </Link>
 
         {children}
