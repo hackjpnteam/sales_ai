@@ -1,17 +1,105 @@
 (function () {
+  // [Analytics] visitorId を localStorage で永続化
+  function getOrCreateVisitorId() {
+    try {
+      var key = 'saleschat_visitor_id';
+      var id = localStorage.getItem(key);
+      if (!id) {
+        id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 'v_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        localStorage.setItem(key, id);
+      }
+      return id;
+    } catch (e) {
+      return 'anon_' + Date.now();
+    }
+  }
+
+  // [Analytics] sessionId を sessionStorage でタブごとに管理
+  function getOrCreateSessionId() {
+    try {
+      var key = 'saleschat_session_id';
+      var id = sessionStorage.getItem(key);
+      if (!id) {
+        id = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        sessionStorage.setItem(key, id);
+      }
+      return id;
+    } catch (e) {
+      return 'sess_' + Date.now();
+    }
+  }
+
+  // [Analytics] デバイスタイプ判定
+  function detectDeviceType() {
+    var ua = navigator.userAgent.toLowerCase();
+    if (/ipad|tablet|playbook|silk|(android(?!.*mobi))/i.test(ua)) {
+      return 'tablet';
+    }
+    if (/mobile|iphone|ipod|android.*mobile|windows phone|blackberry|opera mini|iemobile/i.test(ua)) {
+      return 'mobile';
+    }
+    return 'pc';
+  }
+
+  // [Analytics] トラッキングイベント送信
+  function sendTrackingEvent(event, apiBase, companyId, visitorId, sessionId) {
+    try {
+      var payload = Object.assign({}, event, {
+        companyId: companyId,
+        visitorId: visitorId,
+        sessionId: sessionId,
+        userAgent: navigator.userAgent,
+        url: window.location.href,
+        referrer: document.referrer || null,
+        deviceType: detectDeviceType()
+      });
+
+      fetch(apiBase + '/api/analytics/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify(payload)
+      }).catch(function() {
+        // エラーは握りつぶす（ウィジェット表示を邪魔しない）
+      });
+    } catch (e) {
+      // 無視
+    }
+  }
+
+  // [Analytics] コンバージョントラッキング用グローバル関数
+  var _trackingContext = null;
+  window.saleschatTrackConversion = function(conversionType, conversionValue) {
+    if (_trackingContext) {
+      sendTrackingEvent(
+        {
+          type: 'conversion',
+          conversionType: conversionType || 'custom',
+          conversionValue: typeof conversionValue === 'number' ? conversionValue : undefined
+        },
+        _trackingContext.apiBase,
+        _trackingContext.companyId,
+        _trackingContext.visitorId,
+        _trackingContext.sessionId
+      );
+    }
+  };
+
   // data-company-id を使う実装
   function init() {
-    const scriptTag = document.currentScript;
+    var scriptTag = document.currentScript;
     if (!scriptTag) return;
 
-    const companyId = scriptTag.getAttribute("data-company-id");
-    const agentName =
+    var companyId = scriptTag.getAttribute("data-company-id");
+    var agentName =
       scriptTag.getAttribute("data-agent-name") || "AIコンシェルジュ";
-    const themeColor =
+    var themeColor =
       scriptTag.getAttribute("data-theme-color") || "#D86672";
-    const widgetPosition =
+    var widgetPosition =
       scriptTag.getAttribute("data-widget-position") || "bottom-right";
-    const widgetBase =
+    var widgetBase =
       scriptTag.getAttribute("data-widget-base-url") ||
       window.NEXT_PUBLIC_WIDGET_BASE_URL ||
       "";
@@ -20,6 +108,52 @@
       console.warn("[AI Widget] companyId or widgetBase is missing.");
       return;
     }
+
+    // [Analytics] トラッキング初期化
+    var visitorId = getOrCreateVisitorId();
+    var sessionId = getOrCreateSessionId();
+
+    // APIベースURLを抽出（widget URLから）
+    var apiBase = widgetBase.replace('/widget', '');
+    if (apiBase.endsWith('/')) {
+      apiBase = apiBase.slice(0, -1);
+    }
+
+    // グローバルコンテキストを設定
+    _trackingContext = {
+      companyId: companyId,
+      visitorId: visitorId,
+      sessionId: sessionId,
+      apiBase: apiBase
+    };
+
+    // セッション開始イベント
+    sendTrackingEvent({ type: 'session_start' }, apiBase, companyId, visitorId, sessionId);
+
+    // ページビューイベント
+    sendTrackingEvent({ type: 'page_view' }, apiBase, companyId, visitorId, sessionId);
+
+    // SPA対応：履歴変更を検知
+    var lastUrl = window.location.href;
+    function checkUrlChange() {
+      if (window.location.href !== lastUrl) {
+        lastUrl = window.location.href;
+        sendTrackingEvent({ type: 'page_view' }, apiBase, companyId, visitorId, sessionId);
+      }
+    }
+    // popstateイベント
+    window.addEventListener('popstate', checkUrlChange);
+    // History API のラップ
+    var originalPushState = history.pushState;
+    history.pushState = function() {
+      originalPushState.apply(this, arguments);
+      checkUrlChange();
+    };
+    var originalReplaceState = history.replaceState;
+    history.replaceState = function() {
+      originalReplaceState.apply(this, arguments);
+      checkUrlChange();
+    };
 
     // 位置に応じたスタイル
     const getPositionStyles = (position) => {
@@ -127,9 +261,16 @@
     iframeWrapper.appendChild(iframe);
 
     button.addEventListener("click", function () {
-      const isHidden = iframeWrapper.style.display === "none";
+      var isHidden = iframeWrapper.style.display === "none";
       iframeWrapper.style.display = isHidden ? "block" : "none";
       button.innerText = isHidden ? "✕ 閉じる" : "AI相談";
+
+      // [Analytics] チャット開閉イベント
+      if (isHidden) {
+        sendTrackingEvent({ type: 'chat_open' }, apiBase, companyId, visitorId, sessionId);
+      } else {
+        sendTrackingEvent({ type: 'chat_end' }, apiBase, companyId, visitorId, sessionId);
+      }
     });
 
     document.body.appendChild(button);

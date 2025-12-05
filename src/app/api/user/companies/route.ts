@@ -53,8 +53,38 @@ export async function GET() {
       agents: agentsByCompany[company.companyId] || [],
     }));
 
+    // 共有されたエージェントを取得
+    const sharedAgents = await agentsCol
+      .find({
+        "sharedWith.userId": session.user.id,
+      })
+      .toArray();
+
+    // 共有エージェントの会社情報を取得
+    const sharedCompanyIds = [...new Set(sharedAgents.map(a => a.companyId))];
+    const sharedCompanies = sharedCompanyIds.length > 0
+      ? await companiesCol.find({ companyId: { $in: sharedCompanyIds } }).toArray()
+      : [];
+
+    // 共有エージェントを会社ごとにグループ化
+    const sharedAgentsByCompany = sharedAgents.reduce((acc, agent) => {
+      if (!acc[agent.companyId]) {
+        acc[agent.companyId] = [];
+      }
+      // 共有フラグを追加
+      acc[agent.companyId].push({ ...agent, isShared: true });
+      return acc;
+    }, {} as Record<string, (typeof sharedAgents[0] & { isShared: boolean })[]>);
+
+    const sharedCompaniesWithAgents = sharedCompanies.map((company) => ({
+      ...company,
+      isShared: true,
+      agents: sharedAgentsByCompany[company.companyId] || [],
+    }));
+
     return NextResponse.json({
       companies: companiesWithAgents,
+      sharedCompanies: sharedCompaniesWithAgents,
     });
   } catch (error) {
     console.error("Get user companies error:", error);

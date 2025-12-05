@@ -1,6 +1,6 @@
 import { SessionProvider } from "next-auth/react";
-import { Sparkles } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function DashboardLayout({
   children,
@@ -24,8 +24,14 @@ export default function DashboardLayout({
         >
           <div className="max-w-6xl mx-auto flex items-center justify-between">
             <Link href="/dashboard" className="flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                <Image
+                  src="/logo.png"
+                  alt="Saleschat AI"
+                  width={48}
+                  height={48}
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div>
                 <h1 className="text-white font-bold text-base sm:text-xl tracking-tight">Saleschat AI</h1>

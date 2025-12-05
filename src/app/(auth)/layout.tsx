@@ -1,5 +1,5 @@
-import { Sparkles } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function AuthLayout({
   children,
@@ -16,8 +16,14 @@ export default function AuthLayout({
       <div className="w-full max-w-md">
         {/* Logo */}
         <Link href="/" className="block text-center mb-6 sm:mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl bg-gradient-to-br from-rose-500 to-rose-600 shadow-lg mb-3 sm:mb-4">
-            <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden bg-white shadow-lg mb-3 sm:mb-4">
+            <Image
+              src="/logo.png"
+              alt="Saleschat AI"
+              width={80}
+              height={80}
+              className="w-full h-full object-cover"
+            />
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Saleschat AI</h1>
           <p className="text-slate-500 text-xs sm:text-sm mt-1">Powered by hackjpn ver 2.1</p>

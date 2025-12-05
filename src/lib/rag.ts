@@ -277,7 +277,7 @@ ${linkEvalPrompt}
     const baseSystemPrompt = promptSettings.systemPrompt || 'あなたは丁寧なカスタマーサポートAIです。お客様のご質問に的確に、簡潔に回答してください。';
 
     const knowledgeSection = promptSettings.knowledge
-      ? `\n\n# 会社・サービスに関する情報\n${promptSettings.knowledge}`
+      ? `\n\n# 重要な情報（必ず参照すること）\n${promptSettings.knowledge}\n\n※上記の情報（電話番号、連絡先、指示事項など）は最優先で回答に含めてください。`
       : '';
 
     const styleSection = promptSettings.style
@@ -287,9 +287,9 @@ ${linkEvalPrompt}
     const guardrailsSection = promptSettings.guardrails || DEFAULT_GUARDRAILS;
 
     const languageInstructions = {
-      ja: '\n\n■回答のルール\n- 質問に直接的に答える\n- 150文字以内で簡潔に\n- 敬語を使いつつ自然な日本語で\n- URLやリンクは含めない',
-      en: '\n\n■ Response Rules\n- Answer the question directly\n- Keep it within 150 characters\n- Professional but friendly English\n- Do not include URLs or links\n\nIMPORTANT: Respond ONLY in English.',
-      zh: '\n\n■ 回答规则\n- 直接回答问题\n- 保持在150字以内\n- 专业但友好的中文\n- 不要包含URL或链接\n\n重要：请只用中文回复。',
+      ja: '\n\n■回答のルール\n- 質問に直接的に答える\n- 上記の「重要な情報」に記載された電話番号や連絡先は必ず伝える\n- 200文字以内で簡潔に\n- 敬語を使いつつ自然な日本語で',
+      en: '\n\n■ Response Rules\n- Answer the question directly\n- Always include phone numbers and contact info from "Important Information" above\n- Keep it within 200 characters\n- Professional but friendly English\n\nIMPORTANT: Respond ONLY in English.',
+      zh: '\n\n■ 回答规则\n- 直接回答问题\n- 务必包含上述"重要信息"中的电话号码和联系方式\n- 保持在200字以内\n- 专业但友好的中文\n\n重要：请只用中文回复。',
     };
 
     finalSystemPrompt = `${baseSystemPrompt}${knowledgeSection}${styleSection}\n\n${guardrailsSection}${languageInstructions[language as keyof typeof languageInstructions] || languageInstructions.ja}`;
@@ -352,31 +352,36 @@ IMPORTANT: Respond ONLY in English.`,
     finalSystemPrompt = systemPrompts[language as keyof typeof systemPrompts] || systemPrompts.ja;
   }
 
+  // knowledgeがある場合は追加コンテキストとして含める
+  const knowledgeContext = promptSettings?.knowledge
+    ? `\n\n[管理者からの指示・連絡先情報]\n${promptSettings.knowledge}`
+    : '';
+
   // 言語別ユーザープロンプト
   const userPrompts = {
     ja: `[参考情報]
-${contextText}
+${contextText}${knowledgeContext}
 
 [質問]
 ${question}
 
-上記の参考情報を元に、質問に直接答えてください。質問されたことだけに簡潔に回答してください。`,
+上記の参考情報と管理者からの指示を元に、質問に直接答えてください。連絡先や電話番号が指定されている場合は必ず伝えてください。`,
 
     en: `[Reference Information]
-${contextText}
+${contextText}${knowledgeContext}
 
 [Question]
 ${question}
 
-Based on the above information, answer the question directly. Only respond to what was asked, concisely.`,
+Based on the above information and instructions, answer the question directly. If contact information or phone numbers are specified, be sure to include them.`,
 
     zh: `[参考信息]
-${contextText}
+${contextText}${knowledgeContext}
 
 [问题]
 ${question}
 
-根据上述信息，直接回答问题。只简洁地回答被问到的内容。`,
+根据上述信息和指示，直接回答问题。如果指定了联系方式或电话号码，请务必告知。`,
   };
 
   const userPrompt = userPrompts[language as keyof typeof userPrompts] || userPrompts.ja;

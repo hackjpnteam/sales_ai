@@ -36,10 +36,26 @@ import {
   Database,
   Edit3,
   PlusCircle,
+  Share2,
+  UserPlus,
+  Mail,
+  Send,
 } from "lucide-react";
 import Link from "next/link";
 
 const SUPER_ADMIN_EMAILS = ["tomura@hackjpn.com"];
+
+type SharedUser = {
+  email: string;
+  userId?: string;
+  role: "editor" | "viewer";
+  addedAt: Date;
+};
+
+type QuickButton = {
+  label: string;
+  query: string;
+};
 
 type Agent = {
   agentId: string;
@@ -50,10 +66,15 @@ type Agent = {
   themeColor: string;
   avatarUrl?: string;
   widgetPosition?: "bottom-right" | "bottom-left" | "bottom-center";
+  // クイックボタン（Pro機能）
+  quickButtons?: QuickButton[];
   // プロンプト設定（Pro機能）
   systemPrompt?: string;
   knowledge?: string;
   style?: string;
+  // 共有
+  sharedWith?: SharedUser[];
+  isShared?: boolean;
   createdAt: Date;
 };
 
@@ -76,6 +97,7 @@ type Company = {
   rootUrl: string;
   language: string;
   plan?: "free" | "lite" | "pro";
+  isShared?: boolean;
   createdAt: Date;
   agents: Agent[];
 };
@@ -155,10 +177,22 @@ function DashboardContent() {
   const router = useRouter();
 
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [sharedCompanies, setSharedCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [paymentVerified, setPaymentVerified] = useState(false);
+
+  // 共有機能
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareAgentId, setShareAgentId] = useState<string>("");
+  const [shareEmail, setShareEmail] = useState("");
+  const [sharingAgent, setSharingAgent] = useState(false);
+  const [shareError, setShareError] = useState("");
+  const [shareSuccess, setShareSuccess] = useState("");
+  const [sharedUsers, setSharedUsers] = useState<SharedUser[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<{ invitationId: string; email: string; role: string; status: string }[]>([]);
+  const [loadingSharedUsers, setLoadingSharedUsers] = useState(false);
 
   // 新規作成フォーム
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -234,15 +268,27 @@ function DashboardContent() {
   const [savingPrompt, setSavingPrompt] = useState(false);
   const [loadingPrompt, setLoadingPrompt] = useState(false);
 
+  // クイックボタン編集（Pro機能）
+  const [editingQuickButtons, setEditingQuickButtons] = useState<string | null>(null);
+  const [quickButtonsForm, setQuickButtonsForm] = useState<QuickButton[]>([
+    { label: "", query: "" },
+    { label: "", query: "" },
+    { label: "", query: "" },
+  ]);
+  const [savingQuickButtons, setSavingQuickButtons] = useState(false);
+
   const fetchCompanies = useCallback(async () => {
     try {
       const res = await fetch("/api/user/companies");
       if (res.ok) {
         const data = await res.json();
         setCompanies(data.companies || []);
+        setSharedCompanies(data.sharedCompanies || []);
         // 最初の会社を展開
         if (data.companies?.length > 0) {
           setExpandedCompany(data.companies[0].companyId);
+        } else if (data.sharedCompanies?.length > 0) {
+          setExpandedCompany(data.sharedCompanies[0].companyId);
         }
       }
     } catch (error) {
@@ -405,6 +451,7 @@ function DashboardContent() {
       });
 
       if (res.ok) {
+        await fetchCompanies(); // エージェントデータを再取得
         setShowPromptModal(false);
         alert("プロンプト設定を保存しました");
       } else {
@@ -429,6 +476,136 @@ function DashboardContent() {
     setPromptCompanyPlan(companyPlan);
     setShowPromptModal(true);
     fetchPromptSettings(agentId);
+  };
+
+  // クイックボタン編集開始
+  const startEditingQuickButtons = (agent: Agent) => {
+    const defaultButtons: QuickButton[] = [
+      { label: "会社について", query: "会社について教えてください" },
+      { label: "採用について", query: "採用情報について教えてください" },
+      { label: "サービスについて", query: "提供しているサービスについて教えてください" },
+    ];
+    const buttons = agent.quickButtons && agent.quickButtons.length > 0
+      ? [...agent.quickButtons]
+      : defaultButtons;
+    // 3つに揃える
+    while (buttons.length < 3) {
+      buttons.push({ label: "", query: "" });
+    }
+    setQuickButtonsForm(buttons.slice(0, 3));
+    setEditingQuickButtons(agent.agentId);
+  };
+
+  // クイックボタン保存
+  const handleSaveQuickButtons = async (agentId: string) => {
+    setSavingQuickButtons(true);
+    try {
+      // 空でないボタンのみ保存
+      const validButtons = quickButtonsForm.filter(b => b.label.trim() && b.query.trim());
+
+      const res = await fetch(`/api/agents/${agentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quickButtons: validButtons }),
+      });
+
+      if (res.ok) {
+        await fetchCompanies();
+        setEditingQuickButtons(null);
+      } else {
+        const data = await res.json();
+        alert(data.error || "保存に失敗しました");
+      }
+    } catch (error) {
+      console.error("Failed to save quick buttons:", error);
+      alert("保存に失敗しました");
+    } finally {
+      setSavingQuickButtons(false);
+    }
+  };
+
+  // 共有ユーザー取得
+  const fetchSharedUsers = async (agentId: string) => {
+    setLoadingSharedUsers(true);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/share`);
+      if (res.ok) {
+        const data = await res.json();
+        setSharedUsers(data.sharedWith || []);
+        setPendingInvitations(data.pendingInvitations || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch shared users:", error);
+    } finally {
+      setLoadingSharedUsers(false);
+    }
+  };
+
+  // 共有モーダルを開く
+  const openShareModal = (agentId: string) => {
+    setShareAgentId(agentId);
+    setShareEmail("");
+    setShareError("");
+    setShareSuccess("");
+    setShowShareModal(true);
+    fetchSharedUsers(agentId);
+  };
+
+  // エージェント共有
+  const handleShareAgent = async () => {
+    if (!shareEmail || !shareAgentId) return;
+
+    setSharingAgent(true);
+    setShareError("");
+    setShareSuccess("");
+
+    try {
+      const res = await fetch(`/api/agents/${shareAgentId}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: shareEmail, role: "editor" }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        if (data.shared) {
+          setShareSuccess(`${shareEmail} に共有しました`);
+        } else if (data.needsInvitation) {
+          setShareSuccess(`${shareEmail} に招待を送信しました。ユーザー登録後に共有されます。`);
+        }
+        setShareEmail("");
+        fetchSharedUsers(shareAgentId);
+        fetchCompanies();
+      } else {
+        setShareError(data.error || "共有に失敗しました");
+      }
+    } catch (error) {
+      console.error("Failed to share agent:", error);
+      setShareError("共有に失敗しました");
+    } finally {
+      setSharingAgent(false);
+    }
+  };
+
+  // 共有解除
+  const handleRemoveShare = async (email: string) => {
+    if (!shareAgentId) return;
+
+    try {
+      const res = await fetch(`/api/agents/${shareAgentId}/share`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      if (res.ok) {
+        fetchSharedUsers(shareAgentId);
+        fetchCompanies();
+      }
+    } catch (error) {
+      console.error("Failed to remove share:", error);
+    }
   };
 
   // ウェルカムメッセージ保存
@@ -1378,56 +1555,112 @@ function DashboardContent() {
                       )}
                     </div>
 
-                    {/* ウェルカムメッセージ編集 */}
+                    {/* クイックボタン - Pro機能 */}
                     <div>
                       <div className="flex items-center gap-2 mb-3">
                         <h4 className="font-medium text-slate-700 flex items-center gap-2">
-                          <MessageCircle className="w-4 h-4 text-rose-500" />
-                          ウェルカムメッセージ
+                          <MessageSquare className="w-4 h-4 text-rose-500" />
+                          クイックボタン
                         </h4>
+                        {company.plan !== "pro" ? (
+                          <span className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
+                            <Lock className="w-3 h-3" />
+                            Pro
+                          </span>
+                        ) : (
+                          <span className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
+                            Pro
+                          </span>
+                        )}
                       </div>
-                      {editingAgent === agent.agentId ? (
-                        <div className="space-y-3">
-                          <textarea
-                            value={editWelcomeMessage}
-                            onChange={(e) => setEditWelcomeMessage(e.target.value)}
-                            className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-rose-300"
-                            rows={3}
-                            placeholder="チャット開始時に表示するメッセージを入力..."
-                          />
-                          <div className="flex gap-2">
+                      {company.plan === "pro" ? (
+                        editingQuickButtons === agent.agentId ? (
+                          <div className="space-y-3">
+                            {quickButtonsForm.map((btn, idx) => (
+                              <div key={idx} className="bg-slate-50 rounded-xl p-3 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-medium text-slate-500 w-16">ボタン{idx + 1}</span>
+                                </div>
+                                <input
+                                  type="text"
+                                  placeholder="ラベル（例: 会社について）"
+                                  value={btn.label}
+                                  onChange={(e) => {
+                                    const newButtons = [...quickButtonsForm];
+                                    newButtons[idx].label = e.target.value;
+                                    setQuickButtonsForm(newButtons);
+                                  }}
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="送信メッセージ（例: 会社について教えてください）"
+                                  value={btn.query}
+                                  onChange={(e) => {
+                                    const newButtons = [...quickButtonsForm];
+                                    newButtons[idx].query = e.target.value;
+                                    setQuickButtonsForm(newButtons);
+                                  }}
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+                                />
+                              </div>
+                            ))}
+                            <div className="flex gap-2 pt-2">
+                              <button
+                                onClick={() => handleSaveQuickButtons(agent.agentId)}
+                                disabled={savingQuickButtons}
+                                className="flex-1 py-2 rounded-xl font-medium text-white text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                style={{ background: "linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)" }}
+                              >
+                                {savingQuickButtons ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Save className="w-4 h-4" />
+                                )}
+                                保存
+                              </button>
+                              <button
+                                onClick={() => setEditingQuickButtons(null)}
+                                disabled={savingQuickButtons}
+                                className="px-4 py-2 rounded-xl font-medium text-slate-600 text-sm bg-white border border-slate-200 hover:bg-slate-50 transition-all disabled:opacity-50"
+                              >
+                                キャンセル
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="bg-slate-50 rounded-xl p-3">
+                              {agent.quickButtons && agent.quickButtons.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {agent.quickButtons.map((btn, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="px-3 py-1.5 bg-white rounded-lg text-sm text-slate-700 border border-slate-200"
+                                    >
+                                      {btn.label}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-slate-500">デフォルトのボタンを使用中</p>
+                              )}
+                            </div>
                             <button
-                              onClick={() => handleSaveWelcomeMessage(agent.agentId)}
-                              disabled={savingSettings}
-                              className="px-4 py-2 rounded-xl text-sm font-medium text-white flex items-center gap-2 disabled:opacity-50"
-                              style={{ background: "linear-gradient(135deg, #10B981 0%, #059669 100%)" }}
+                              onClick={() => startEditingQuickButtons(agent)}
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 transition-all"
                             >
-                              {savingSettings ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                              保存
-                            </button>
-                            <button
-                              onClick={() => setEditingAgent(null)}
-                              className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200"
-                            >
-                              キャンセル
+                              <Edit3 className="w-3 h-3" />
+                              編集
                             </button>
                           </div>
-                        </div>
+                        )
                       ) : (
-                        <div className="bg-slate-50 rounded-xl p-4">
-                          <p className="text-sm text-slate-700 mb-3">{agent.welcomeMessage}</p>
-                          <button
-                            onClick={() => {
-                              setEditingAgent(agent.agentId);
-                              setEditWelcomeMessage(agent.welcomeMessage);
-                              setEditVoiceEnabled(agent.voiceEnabled);
-                              setEditAvatarUrl(agent.avatarUrl || "/agent-avatar.png");
-                            }}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 transition-all"
-                          >
-                            <Edit3 className="w-3 h-3" />
-                            編集
-                          </button>
+                        <div className="bg-slate-100 rounded-xl p-4 text-center">
+                          <Lock className="w-5 h-5 text-slate-400 mx-auto mb-2" />
+                          <p className="text-sm text-slate-600">
+                            Proプランでクイックボタンをカスタマイズできます
+                          </p>
                         </div>
                       )}
                     </div>
@@ -1704,25 +1937,65 @@ function DashboardContent() {
                             PRO
                           </span>
                         </h4>
-                        <a
-                          href={`/admin/agents/${agent.agentId}`}
+                        <Link
+                          href={`/dashboard/analytics?companyId=${company.companyId}&companyName=${encodeURIComponent(company.name)}`}
                           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 transition-all"
                         >
                           詳細分析を見る
                           <ExternalLink className="w-4 h-4" />
-                        </a>
+                        </Link>
                       </div>
                     )}
 
-                    {/* プランアップグレードボタン（有料だけどProではない場合） */}
+                    {/* Liteプラン: 分析（制限付き） */}
                     {company.plan === "lite" && (
-                      <div className="pt-4 border-t border-slate-100">
+                      <div>
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
+                          <BarChart3 className="w-4 h-4 text-slate-400" />
+                          分析ダッシュボード
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
+                            制限付き
+                          </span>
+                        </h4>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            href={`/dashboard/analytics?companyId=${company.companyId}&companyName=${encodeURIComponent(company.name)}`}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all"
+                          >
+                            基本分析を見る
+                            <ExternalLink className="w-4 h-4" />
+                          </Link>
+                          <button
+                            onClick={() => {
+                              setSelectedCompanyForPlan(company);
+                              setShowPlanModal(true);
+                            }}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 transition-all"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                            Proで詳細分析
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Freeプラン: 分析（Proアップグレード誘導） */}
+                    {(!company.plan || company.plan === "free") && (
+                      <div className="bg-gradient-to-r from-purple-50 to-rose-50 rounded-xl p-4">
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-2">
+                          <BarChart3 className="w-4 h-4 text-purple-500" />
+                          分析ダッシュボード
+                          <Lock className="w-3 h-3 text-slate-400" />
+                        </h4>
+                        <p className="text-sm text-slate-500 mb-3">
+                          Proプランでチャット経由CVR、質問分析、AI改善提案などの詳細分析が利用可能
+                        </p>
                         <button
                           onClick={() => {
                             setSelectedCompanyForPlan(company);
                             setShowPlanModal(true);
                           }}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 transition-all"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-purple-500 to-rose-500 hover:from-purple-600 hover:to-rose-600 transition-all shadow-sm"
                         >
                           <Sparkles className="w-4 h-4" />
                           Proプランにアップグレード
@@ -1730,31 +2003,168 @@ function DashboardContent() {
                       </div>
                     )}
 
-                    {/* エージェント削除 */}
-                    <div className="pt-4 border-t border-slate-100">
-                      <button
-                        onClick={() => handleDeleteAgent(agent.agentId, company.name)}
-                        disabled={deletingAgent === agent.agentId}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {deletingAgent === agent.agentId ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            削除中...
-                          </>
-                        ) : (
-                          <>
-                            <Trash2 className="w-4 h-4" />
-                            エージェントを削除
-                          </>
-                        )}
-                      </button>
+                    {/* エージェント共有 & 削除 */}
+                    <div className="pt-4 border-t border-slate-100 flex flex-wrap gap-2">
+                      {/* 共有ボタン（自分が所有するエージェントのみ） */}
+                      {!agent.isShared && (
+                        <button
+                          onClick={() => openShareModal(agent.agentId)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-all"
+                        >
+                          <Share2 className="w-4 h-4" />
+                          共有
+                          {agent.sharedWith && agent.sharedWith.length > 0 && (
+                            <span className="ml-1 px-1.5 py-0.5 text-xs bg-blue-200 text-blue-700 rounded-full">
+                              {agent.sharedWith.length}
+                            </span>
+                          )}
+                        </button>
+                      )}
+                      {/* 削除ボタン（自分が所有するエージェントのみ） */}
+                      {!agent.isShared && (
+                        <button
+                          onClick={() => handleDeleteAgent(agent.agentId, company.name)}
+                          disabled={deletingAgent === agent.agentId}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {deletingAgent === agent.agentId ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              削除中...
+                            </>
+                          ) : (
+                            <>
+                              <Trash2 className="w-4 h-4" />
+                              削除
+                            </>
+                          )}
+                        </button>
+                      )}
+                      {/* 共有エージェントの表示 */}
+                      {agent.isShared && (
+                        <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium text-slate-500 bg-slate-100">
+                          <Users className="w-3 h-3" />
+                          共有されています
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
               </div>
             );
           })}
+
+          {/* 共有されたエージェント */}
+          {sharedCompanies.length > 0 && (
+            <div className="mt-8">
+              <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-500" />
+                共有されたエージェント
+              </h2>
+              <div className="space-y-4">
+                {sharedCompanies.map((company) => {
+                  const isExpanded = expandedCompany === company.companyId;
+                  const agent = company.agents[0];
+                  const isPaid = company.plan === "lite" || company.plan === "pro";
+
+                  return (
+                    <div
+                      key={`shared-${company.companyId}`}
+                      className="bg-white rounded-2xl shadow-lg border border-blue-100 overflow-hidden"
+                    >
+                      {/* ヘッダー */}
+                      <button
+                        onClick={() => setExpandedCompany(isExpanded ? null : company.companyId)}
+                        className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-all"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div
+                            className="w-12 h-12 rounded-xl flex items-center justify-center relative"
+                            style={{ backgroundColor: (agent?.themeColor || "#3B82F6") + "20" }}
+                          >
+                            <Globe
+                              className="w-6 h-6"
+                              style={{ color: agent?.themeColor || "#3B82F6" }}
+                            />
+                            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                              <Users className="w-3 h-3 text-white" />
+                            </div>
+                          </div>
+                          <div className="text-left">
+                            <h2 className="font-semibold text-slate-800 flex items-center gap-2">
+                              {company.name || company.rootUrl}
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full">
+                                共有
+                              </span>
+                            </h2>
+                            <p className="text-sm text-slate-500 truncate max-w-[200px] sm:max-w-none">
+                              {company.rootUrl}
+                            </p>
+                          </div>
+                        </div>
+                        {isExpanded ? (
+                          <ChevronUp className="w-5 h-5 text-slate-400" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-slate-400" />
+                        )}
+                      </button>
+
+                      {/* 展開コンテンツ（簡略版） */}
+                      {isExpanded && agent && (
+                        <div className="px-6 pb-6 border-t border-slate-100 pt-4">
+                          <p className="text-sm text-slate-500 mb-4">
+                            このエージェントはあなたと共有されています。閲覧・編集が可能です。
+                          </p>
+
+                          {/* エージェント設定 */}
+                          <div className="grid sm:grid-cols-2 gap-4 mb-6">
+                            <div>
+                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                                エージェント名
+                              </label>
+                              <p className="text-sm text-slate-800">{agent.name}</p>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                                テーマカラー
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="w-6 h-6 rounded-lg border border-slate-200"
+                                  style={{ backgroundColor: agent.themeColor }}
+                                />
+                                <span className="text-sm text-slate-600">
+                                  {agent.themeColor}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* プレビューボタン */}
+                          <button
+                            onClick={() => {
+                              setPreviewAgent({
+                                companyId: agent.companyId,
+                                agentId: agent.agentId,
+                                agentName: agent.name,
+                                themeColor: agent.themeColor,
+                                widgetPosition: agent.widgetPosition || "bottom-right",
+                              });
+                              setShowWidgetPreview(true);
+                            }}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            プレビュー
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2157,6 +2567,178 @@ function DashboardContent() {
                   <Save className="w-4 h-4" />
                 )}
                 保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 共有モーダル */}
+      {showShareModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            {/* ヘッダー */}
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <Share2 className="w-5 h-5 text-blue-500" />
+                  エージェントを共有
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                  他のユーザーと共同編集できます
+                </p>
+              </div>
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5 text-slate-600" />
+              </button>
+            </div>
+
+            {/* メール入力 */}
+            <div className="p-4 sm:p-6 border-b border-slate-100">
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                メールアドレスで招待
+              </label>
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="email"
+                    value={shareEmail}
+                    onChange={(e) => setShareEmail(e.target.value)}
+                    placeholder="example@email.com"
+                    className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleShareAgent();
+                      }
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={handleShareAgent}
+                  disabled={sharingAgent || !shareEmail}
+                  className="px-4 py-2.5 rounded-xl font-medium text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                >
+                  {sharingAgent ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+              {shareError && (
+                <p className="text-sm text-red-600 mt-2">{shareError}</p>
+              )}
+              {shareSuccess && (
+                <p className="text-sm text-green-600 mt-2">{shareSuccess}</p>
+              )}
+            </div>
+
+            {/* 共有ユーザー一覧 */}
+            <div className="p-4 sm:p-6">
+              <h3 className="text-sm font-medium text-slate-700 mb-3">
+                共有中のユーザー
+              </h3>
+              {loadingSharedUsers ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+                </div>
+              ) : sharedUsers.length === 0 && pendingInvitations.length === 0 ? (
+                <div className="text-center py-8 text-slate-500 text-sm">
+                  <Users className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                  まだ共有されていません
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {sharedUsers.map((user) => (
+                    <div
+                      key={user.email}
+                      className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                          <span className="text-sm font-medium text-blue-600">
+                            {user.email.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-slate-700">
+                            {user.email}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {user.role === "editor" ? "編集可能" : "閲覧のみ"}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleRemoveShare(user.email)}
+                        className="text-slate-400 hover:text-red-500 transition-all"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {pendingInvitations.map((inv) => (
+                    <div
+                      key={inv.email}
+                      className="bg-amber-50 rounded-xl px-4 py-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                            <Mail className="w-4 h-4 text-amber-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-slate-700">
+                              {inv.email}
+                            </p>
+                            <p className="text-xs text-amber-600">
+                              招待中（未登録ユーザー）
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveShare(inv.email)}
+                          className="text-slate-400 hover:text-red-500 transition-all"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {/* 招待リンク */}
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={`${typeof window !== 'undefined' ? window.location.origin : ''}/signup?invitation=${inv.invitationId}`}
+                          className="flex-1 text-xs bg-white border border-amber-200 rounded-lg px-2 py-1.5 text-slate-600"
+                        />
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(`${window.location.origin}/signup?invitation=${inv.invitationId}`);
+                            setShareSuccess("招待リンクをコピーしました");
+                            setTimeout(() => setShareSuccess(""), 3000);
+                          }}
+                          className="px-2 py-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg transition-all"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* フッター */}
+            <div className="p-4 sm:p-6 border-t border-slate-100">
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="w-full py-3 rounded-xl font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all"
+              >
+                閉じる
               </button>
             </div>
           </div>

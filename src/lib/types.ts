@@ -31,6 +31,20 @@ export type Company = {
   creatorLocation?: string;
 };
 
+// 共有ユーザー情報
+export type SharedUser = {
+  email: string;
+  userId?: string;         // 登録済みユーザーの場合
+  role: "editor" | "viewer";
+  addedAt: Date;
+};
+
+// クイックボタン
+export type QuickButton = {
+  label: string;           // ボタンに表示するテキスト（例: "会社について"）
+  query: string;           // クリック時に送信するメッセージ
+};
+
 // AIエージェント設定
 export type Agent = {
   _id?: string;
@@ -43,11 +57,29 @@ export type Agent = {
   themeColor: string;
   avatarUrl?: string;
   widgetPosition?: "bottom-right" | "bottom-left" | "bottom-center";
+  // クイックボタン（Pro機能）
+  quickButtons?: QuickButton[];
   // プロンプト設定（Pro機能）
   systemPrompt?: string;    // 役割定義
   knowledge?: string;       // 会社固有のナレッジ
   style?: string;           // 会話スタイル
   guardrails?: string;      // 制約条件（編集不可）
+  // 共有設定
+  sharedWith?: SharedUser[];
+  createdAt: Date;
+};
+
+// 招待
+export type Invitation = {
+  _id?: string;
+  invitationId: string;
+  email: string;
+  agentId: string;
+  companyId: string;
+  invitedBy: string;        // userId of inviter
+  role: "editor" | "viewer";
+  status: "pending" | "accepted" | "expired";
+  expiresAt: Date;
   createdAt: Date;
 };
 
@@ -84,6 +116,101 @@ export type CustomKnowledge = {
   title: string;
   content: string;         // 最大3000文字
   embeddings: number[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+// ==========================================
+// [Analytics] 解析機能用の型定義
+// ==========================================
+
+// イベントタイプ
+export type AnalyticsEventType =
+  | 'page_view'
+  | 'session_start'
+  | 'session_end'
+  | 'chat_open'
+  | 'chat_message_user'
+  | 'chat_message_ai'
+  | 'chat_end'
+  | 'conversion';
+
+// デバイスタイプ
+export type DeviceType = 'pc' | 'mobile' | 'tablet';
+
+// 解析イベント
+export type AnalyticsEvent = {
+  _id?: string;
+  companyId: string;
+  agentId?: string | null;
+  visitorId: string;          // localStorage で永続化
+  sessionId: string;          // sessionStorage でタブごと
+  type: AnalyticsEventType;
+  url: string;
+  referrer?: string;
+  userAgent?: string;
+  deviceType?: DeviceType;
+
+  // チャット関連
+  conversationId?: string;
+  messageRole?: 'user' | 'assistant';
+  messageText?: string;
+
+  // AI解析結果（後からバッチで埋める）
+  aiCategory?: string;        // 質問カテゴリ（料金/解約/導入など）
+  aiSentiment?: string;       // 感情（興味高い/不安など）
+  aiIntentScore?: number;     // 購入意欲スコア（0-100）
+
+  // CV関連
+  conversionType?: string;    // 'signup' | 'purchase' | 'demo_request' など
+  conversionValue?: number;   // 金額
+
+  createdAt: Date;
+};
+
+// 日別集計データ（パフォーマンス向上用）
+export type AnalyticsDailyStat = {
+  _id?: string;
+  companyId: string;
+  date: string;               // YYYY-MM-DD
+
+  // PV / セッション
+  pageViews: number;
+  uniqueVisitors: number;
+  sessions: number;
+
+  // チャット
+  chatOpens: number;
+  chatMessages: number;
+  chatSessions: number;       // チャットを利用したセッション数
+
+  // CV
+  conversions: number;
+  conversionValue: number;
+  chatConversions: number;    // チャット経由のCV
+
+  // ページ別
+  pageStats: {
+    url: string;
+    views: number;
+    chatOpens: number;
+    conversions: number;
+  }[];
+
+  // 質問カテゴリ別
+  categoryStats: {
+    category: string;
+    count: number;
+    conversions: number;
+  }[];
+
+  // デバイス別
+  deviceStats: {
+    pc: number;
+    mobile: number;
+    tablet: number;
+  };
+
   createdAt: Date;
   updatedAt: Date;
 };

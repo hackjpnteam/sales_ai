@@ -31,11 +31,13 @@ export async function GET(
         language: company.language,
       },
       agent: agent ? {
+        agentId: agent.agentId,
         name: agent.name,
         welcomeMessage: agent.welcomeMessage,
         voiceEnabled: agent.voiceEnabled,
         themeColor: agent.themeColor,
         avatarUrl: agent.avatarUrl || "/agent-avatar.png",
+        quickButtons: agent.quickButtons || null,
       } : null,
     });
   } catch (error) {

@@ -129,6 +129,7 @@ const translations = {
 function WidgetContent() {
   const searchParams = useSearchParams();
   const [companyId, setCompanyId] = useState("");
+  const [agentId, setAgentId] = useState("");
   const [language, setLanguage] = useState<Language>("ja");
   const [agentName, setAgentName] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -147,6 +148,7 @@ function WidgetContent() {
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const [trackingSessionId] = useState(() => Math.random().toString(36).substring(2, 15));
   const [trackingEnabled, setTrackingEnabled] = useState(false);
+  const [customQuickButtons, setCustomQuickButtons] = useState<{ label: string; query: string }[] | null>(null);
 
   const t = translations[language];
 
@@ -216,6 +218,14 @@ function WidgetContent() {
             }
             if (data.agent?.name) {
               setAgentName(data.agent.name);
+            }
+            if (data.agent?.agentId) {
+              setAgentId(data.agent.agentId);
+              console.log("[Widget] Set agentId:", data.agent.agentId);
+            }
+            if (data.agent?.quickButtons && data.agent.quickButtons.length > 0) {
+              setCustomQuickButtons(data.agent.quickButtons);
+              console.log("[Widget] Set custom quick buttons:", data.agent.quickButtons);
             }
             // URLパラメータでカラーが指定されていない場合のみ、DBの値を使用
             if (!paramThemeColor && data.agent?.themeColor) {
@@ -405,11 +415,13 @@ function WidgetContent() {
     sendTrackingData("conversation", { message: messageText, role: "user" });
 
     try {
+      console.log("[Widget] Sending chat with agentId:", agentId);
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyId: companyId,
+          agentId: agentId,
           message: messageText,
           sessionId,
           language,
@@ -892,9 +904,9 @@ function WidgetContent() {
           {/* Quick buttons after welcome message */}
           {msg.id === "welcome" && showQuickButtons && (
             <div className="flex flex-wrap gap-2 justify-center mt-4">
-              {t.quickQuestions.map((q, i) => {
+              {(customQuickButtons || t.quickQuestions).map((q, i) => {
                 const icons = [Building2, Users, Briefcase];
-                const Icon = icons[i];
+                const Icon = icons[i % 3];
                 return (
                   <button
                     key={i}
