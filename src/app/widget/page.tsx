@@ -140,6 +140,10 @@ export default function WidgetPage({
                 timestamp: new Date(),
               }]);
             }
+            // エージェント設定から音声有効/無効を読み込む
+            if (typeof data.agent?.voiceEnabled === "boolean") {
+              setVoiceEnabled(data.agent.voiceEnabled);
+            }
           }
         } catch (error) {
           console.error("Failed to fetch company info:", error);
@@ -464,8 +468,8 @@ export default function WidgetPage({
         }}
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white/30">
+            <img src="/agent-avatar.png" alt="AI Agent" className="w-full h-full object-cover" />
           </div>
           <div>
             <h1 className="text-white font-semibold text-lg tracking-tight">{agentName || t.defaultAgentName}</h1>
@@ -494,7 +498,14 @@ export default function WidgetPage({
             ) : null}
             {/* 音声ON/OFFボタン */}
             <button
-              onClick={() => setVoiceEnabled(!voiceEnabled)}
+              onClick={() => {
+                const newValue = !voiceEnabled;
+                setVoiceEnabled(newValue);
+                // 音声をオフにした場合、再生中の音声を停止
+                if (!newValue) {
+                  stopTTS();
+                }
+              }}
               className={`p-2 rounded-full transition-all ${
                 voiceEnabled
                   ? "bg-white/20 text-white"

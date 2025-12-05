@@ -306,14 +306,14 @@ export default function NewAgentPage() {
               />
             </div>
 
-            <div className="flex items-center gap-2 text-sm text-slate-600 mb-4">
-              <div className="animate-pulse text-lg">
+            <div className="flex items-center gap-2 text-sm text-slate-600 mb-4 min-w-0">
+              <div className="animate-pulse text-lg flex-shrink-0">
                 {progress.type === "discovering" && "🔍"}
                 {progress.type === "crawling" && "📄"}
                 {progress.type === "embedding" && "🧠"}
                 {progress.type === "saving" && "💾"}
               </div>
-              <span>{progress.message}</span>
+              <span className="truncate">{progress.message}</span>
             </div>
 
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-pink-100">

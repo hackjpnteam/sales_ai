@@ -295,14 +295,14 @@ export default function Home() {
             </div>
 
             {/* ステータス */}
-            <div className="flex items-center gap-2 text-sm text-slate-600 mb-4">
-              <div className="animate-pulse text-lg">
+            <div className="flex items-center gap-2 text-sm text-slate-600 mb-4 min-w-0">
+              <div className="animate-pulse text-lg flex-shrink-0">
                 {progress.type === "discovering" && "🔍"}
                 {progress.type === "crawling" && "📄"}
                 {progress.type === "embedding" && "🧠"}
                 {progress.type === "saving" && "💾"}
               </div>
-              <span>{progress.message}</span>
+              <span className="truncate">{progress.message}</span>
             </div>
 
             {/* 統計 */}

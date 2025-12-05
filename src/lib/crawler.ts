@@ -96,7 +96,20 @@ export function extractThemeColor(html: string): string {
     return normalizeColor(msAppColor);
   }
 
-  // 3. インラインスタイルから主要な色を抽出
+  // 3. <style>タグ内のCSSから色を抽出（優先度高）
+  $("style").each((_, el) => {
+    const cssText = $(el).html() || "";
+    // 鮮やかな色を優先的に抽出（彩度の高い色）
+    const hexColors = cssText.match(/#[0-9a-fA-F]{6}/g) || [];
+    hexColors.forEach((color) => {
+      const normalized = normalizeColor(color);
+      if (normalized && !isGrayOrWhiteOrBlack(normalized) && isVibrantColor(normalized)) {
+        colorCounts.set(normalized, (colorCounts.get(normalized) || 0) + 3);
+      }
+    });
+  });
+
+  // 4. インラインスタイルから主要な色を抽出
   $("[style]").each((_, el) => {
     const style = $(el).attr("style") || "";
     const colorMatches = style.match(/(?:background-color|background|color)\s*:\s*(#[0-9a-fA-F]{3,6}|rgb\([^)]+\))/gi);
@@ -111,7 +124,7 @@ export function extractThemeColor(html: string): string {
     }
   });
 
-  // 4. CSSクラスから推測（よくあるプライマリーカラー系クラス）
+  // 5. CSSクラスから推測（よくあるプライマリーカラー系クラス）
   const primaryElements = $(".primary, .brand, .accent, [class*='primary'], [class*='brand'], header, nav");
   primaryElements.each((_, el) => {
     const style = $(el).attr("style") || "";
@@ -119,12 +132,12 @@ export function extractThemeColor(html: string): string {
     if (bgMatch) {
       const normalized = normalizeColor(bgMatch[1]);
       if (normalized && !isGrayOrWhiteOrBlack(normalized)) {
-        colorCounts.set(normalized, (colorCounts.get(normalized) || 0) + 5); // 重み付け
+        colorCounts.set(normalized, (colorCounts.get(normalized) || 0) + 5);
       }
     }
   });
 
-  // 5. リンクの色を確認
+  // 6. リンクの色を確認
   $("a").slice(0, 10).each((_, el) => {
     const style = $(el).attr("style") || "";
     const colorMatch = style.match(/color\s*:\s*(#[0-9a-fA-F]{3,6}|rgb\([^)]+\))/i);
@@ -136,7 +149,7 @@ export function extractThemeColor(html: string): string {
     }
   });
 
-  // 6. ボタンの背景色を確認
+  // 7. ボタンの背景色を確認
   $("button, .btn, [class*='button'], input[type='submit']").each((_, el) => {
     const style = $(el).attr("style") || "";
     const bgMatch = style.match(/background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6}|rgb\([^)]+\))/i);
@@ -148,6 +161,22 @@ export function extractThemeColor(html: string): string {
     }
   });
 
+  // 8. HTML全体から鮮やかな色を探す（最後の手段）
+  if (colorCounts.size === 0) {
+    const allHexColors = html.match(/#[0-9a-fA-F]{6}/g) || [];
+    const vibrantColors: string[] = [];
+    allHexColors.forEach((color) => {
+      const normalized = normalizeColor(color);
+      if (normalized && !isGrayOrWhiteOrBlack(normalized) && isVibrantColor(normalized)) {
+        vibrantColors.push(normalized);
+      }
+    });
+    // 最初に見つかった鮮やかな色を使用
+    if (vibrantColors.length > 0) {
+      return vibrantColors[0];
+    }
+  }
+
   // 最も頻度の高い色を選択
   if (colorCounts.size > 0) {
     const sorted = Array.from(colorCounts.entries()).sort((a, b) => b[1] - a[1]);
@@ -156,6 +185,28 @@ export function extractThemeColor(html: string): string {
 
   // デフォルトカラー（ブルー）
   return "#2563eb";
+}
+
+// 鮮やかな色かどうかを判定（彩度が高い色）
+function isVibrantColor(hex: string): boolean {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const diff = max - min;
+
+  // 彩度が低い色は除外
+  if (diff < 50) return false;
+
+  // 明るすぎる色は除外
+  if (r > 230 && g > 230 && b > 230) return false;
+
+  // 暗すぎる色は除外
+  if (r < 30 && g < 30 && b < 30) return false;
+
+  return true;
 }
 
 // 色が有効かどうかを確認
