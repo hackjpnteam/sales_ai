@@ -1,0 +1,1406 @@
+"use client";
+
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { useSearchParams, useRouter } from "next/navigation";
+import {
+  Plus,
+  Globe,
+  Zap,
+  Copy,
+  ExternalLink,
+  Palette,
+  LogOut,
+  Loader2,
+  MessageCircle,
+  Check,
+  Lock,
+  BarChart3,
+  ChevronDown,
+  ChevronUp,
+  X,
+  CreditCard,
+  Sparkles,
+  Users,
+  Smartphone,
+  MapPin,
+  Volume2,
+  VolumeX,
+  MessageSquare,
+  Image,
+  Trash2,
+  Save,
+  Upload,
+  Shield,
+} from "lucide-react";
+import Link from "next/link";
+
+const SUPER_ADMIN_EMAILS = ["tomura@hackjpn.com"];
+
+type Agent = {
+  agentId: string;
+  companyId: string;
+  name: string;
+  welcomeMessage: string;
+  voiceEnabled: boolean;
+  themeColor: string;
+  avatarUrl?: string;
+  createdAt: Date;
+};
+
+type UploadedAvatar = {
+  avatarId: string;
+  name: string;
+  dataUrl: string;
+};
+
+type Company = {
+  companyId: string;
+  name: string;
+  rootUrl: string;
+  language: string;
+  plan?: "free" | "lite" | "pro";
+  createdAt: Date;
+  agents: Agent[];
+};
+
+type ProgressEvent = {
+  type: "discovering" | "crawling" | "embedding" | "saving" | "complete" | "error";
+  currentUrl?: string;
+  currentPage?: number;
+  totalPages?: number;
+  percent?: number;
+  chunksFound?: number;
+  message?: string;
+  companyId?: string;
+  agentId?: string;
+  themeColor?: string;
+};
+
+// カラーオプション
+const colorOptions = [
+  { name: "ローズ", value: "#D86672" },
+  { name: "ブルー", value: "#4F8CFF" },
+  { name: "グリーン", value: "#10B981" },
+  { name: "パープル", value: "#8B5CF6" },
+  { name: "オレンジ", value: "#F59E0B" },
+  { name: "ピンク", value: "#EC4899" },
+];
+
+// プラン情報
+const plans = {
+  lite: {
+    id: "lite",
+    name: "Lite",
+    price: "¥500",
+    period: "/月",
+    features: [
+      "埋め込みコード取得",
+      "チャットカラーカスタマイズ",
+      "基本的なAI応答",
+    ],
+  },
+  pro: {
+    id: "pro",
+    name: "Pro",
+    price: "¥3,000",
+    period: "/月",
+    features: [
+      "埋め込みコード取得",
+      "チャットカラーカスタマイズ",
+      "高度なAI応答",
+      "ユーザー会話履歴トラッキング",
+      "アクセス位置情報トラッキング",
+      "端末情報トラッキング",
+      "年齢層分析",
+      "詳細な分析ダッシュボード",
+    ],
+  },
+};
+
+function DashboardContent() {
+  const { data: session, status } = useSession();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedCompany, setExpandedCompany] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [paymentVerified, setPaymentVerified] = useState(false);
+
+  // 新規作成フォーム
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [rootUrl, setRootUrl] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [progress, setProgress] = useState<ProgressEvent | null>(null);
+
+  // 作成完了後のウィジェット表示
+  const [showWidget, setShowWidget] = useState(false);
+  const [createdAgent, setCreatedAgent] = useState<{
+    companyId: string;
+    agentId: string;
+    agentName: string;
+    themeColor: string;
+  } | null>(null);
+
+  // プラン選択モーダル
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [selectedCompanyForPlan, setSelectedCompanyForPlan] = useState<Company | null>(null);
+  const [processingPlan, setProcessingPlan] = useState<string | null>(null);
+
+  // カラー変更
+  const [updatingColor, setUpdatingColor] = useState<string | null>(null);
+
+  // エージェント設定編集
+  const [editingAgent, setEditingAgent] = useState<string | null>(null);
+  const [editWelcomeMessage, setEditWelcomeMessage] = useState("");
+  const [editVoiceEnabled, setEditVoiceEnabled] = useState(true);
+  const [editAvatarUrl, setEditAvatarUrl] = useState("/agent-avatar.png");
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  // アバター管理
+  const [uploadedAvatars, setUploadedAvatars] = useState<UploadedAvatar[]>([]);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [loadingAvatars, setLoadingAvatars] = useState(false);
+
+  // エージェント削除
+  const [deletingAgent, setDeletingAgent] = useState<string | null>(null);
+
+  const fetchCompanies = useCallback(async () => {
+    try {
+      const res = await fetch("/api/user/companies");
+      if (res.ok) {
+        const data = await res.json();
+        setCompanies(data.companies || []);
+        // 最初の会社を展開
+        if (data.companies?.length > 0) {
+          setExpandedCompany(data.companies[0].companyId);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch companies:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // 決済成功後にプランを確認・更新
+  const verifyPayment = useCallback(async (companyId: string, plan: string) => {
+    try {
+      console.log("[Dashboard] Verifying payment for", companyId, plan);
+      const res = await fetch("/api/stripe/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId, plan }),
+      });
+
+      if (res.ok) {
+        console.log("[Dashboard] Payment verified successfully");
+        // 会社一覧を再取得
+        await fetchCompanies();
+        // URLからクエリパラメータを削除
+        router.replace("/dashboard");
+      } else {
+        console.error("[Dashboard] Payment verification failed");
+      }
+    } catch (error) {
+      console.error("[Dashboard] Payment verification error:", error);
+    }
+  }, [router, fetchCompanies]);
+
+  // 決済成功パラメータをチェック
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const companyId = searchParams.get("companyId");
+    const plan = searchParams.get("plan");
+
+    if (success === "true" && companyId && plan && !paymentVerified) {
+      setPaymentVerified(true);
+      verifyPayment(companyId, plan);
+    }
+  }, [searchParams, paymentVerified, verifyPayment]);
+
+  // 初期データ読み込み
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetchCompanies();
+    }
+  }, [status, fetchCompanies]);
+
+  const handleCreateAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreating(true);
+    setCreateError("");
+    setProgress(null);
+
+    let normalizedUrl = rootUrl.trim();
+    if (!normalizedUrl.match(/^https?:\/\//i)) {
+      normalizedUrl = "https://" + normalizedUrl;
+    }
+
+    const companyName = new URL(normalizedUrl).hostname.replace(/^www\./, "").split(".")[0];
+
+    try {
+      const res = await fetch("/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyName,
+          rootUrl: normalizedUrl,
+        }),
+      });
+
+      if (!res.ok && !res.body) {
+        const data = await res.json();
+        throw new Error(data.error || "エラーが発生しました");
+      }
+
+      // SSEストリームを読み取り
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("ストリームを読み取れませんでした");
+      }
+
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              setProgress(data);
+
+              if (data.type === "complete") {
+                // 成功 - ウィジェット表示
+                setShowCreateForm(false);
+                setRootUrl("");
+                setProgress(null);
+                setCreatedAgent({
+                  companyId: data.companyId,
+                  agentId: data.agentId,
+                  agentName: `${companyName} AI`,
+                  themeColor: data.themeColor || "#D86672",
+                });
+                setShowWidget(true);
+                fetchCompanies();
+              } else if (data.type === "error") {
+                setCreateError(data.message || "エラーが発生しました");
+                setProgress(null);
+              }
+            } catch {
+              // JSON parse error
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "エラーが発生しました");
+      setProgress(null);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Stripeチェックアウトを開始
+  const handleSelectPlan = async (plan: "lite" | "pro") => {
+    if (!selectedCompanyForPlan) return;
+
+    setProcessingPlan(plan);
+
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId: selectedCompanyForPlan.companyId,
+          plan,
+          email: session?.user?.email,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.url) {
+        // Stripeチェックアウトページにリダイレクト
+        window.location.href = data.url;
+      } else {
+        console.error("Checkout error:", data.error);
+        alert("決済ページの作成に失敗しました。もう一度お試しください。");
+      }
+    } catch (error) {
+      console.error("Checkout error:", error);
+      alert("エラーが発生しました。もう一度お試しください。");
+    } finally {
+      setProcessingPlan(null);
+    }
+  };
+
+  // カラー変更ハンドラー
+  const handleColorChange = async (agentId: string, companyId: string, newColor: string) => {
+    setUpdatingColor(agentId);
+
+    try {
+      const res = await fetch("/api/agents/color", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId,
+          themeColor: newColor,
+        }),
+      });
+
+      if (res.ok) {
+        // ローカルの状態を更新
+        setCompanies((prev) =>
+          prev.map((company) =>
+            company.companyId === companyId
+              ? {
+                  ...company,
+                  agents: company.agents.map((agent) =>
+                    agent.agentId === agentId
+                      ? { ...agent, themeColor: newColor }
+                      : agent
+                  ),
+                }
+              : company
+          )
+        );
+
+        // ウィジェットプレビューも更新
+        if (createdAgent?.agentId === agentId) {
+          setCreatedAgent({ ...createdAgent, themeColor: newColor });
+        }
+      } else {
+        const data = await res.json();
+        alert(data.error || "カラーの更新に失敗しました");
+      }
+    } catch (error) {
+      console.error("Color update error:", error);
+      alert("エラーが発生しました");
+    } finally {
+      setUpdatingColor(null);
+    }
+  };
+
+  // アバター一覧を取得
+  const fetchAvatars = async (agentId: string) => {
+    setLoadingAvatars(true);
+    try {
+      const res = await fetch(`/api/avatars?agentId=${agentId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setUploadedAvatars(data.avatars || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch avatars:", error);
+    } finally {
+      setLoadingAvatars(false);
+    }
+  };
+
+  // アバターをアップロード
+  const handleAvatarUpload = async (agentId: string, file: File) => {
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("agentId", agentId);
+      formData.append("name", file.name);
+
+      const res = await fetch("/api/avatars", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUploadedAvatars((prev) => [data.avatar, ...prev]);
+        // アップロードしたアバターを選択
+        setEditAvatarUrl(data.avatar.dataUrl);
+      } else {
+        const data = await res.json();
+        alert(data.error || "アップロードに失敗しました");
+      }
+    } catch (error) {
+      console.error("Avatar upload error:", error);
+      alert("アップロードに失敗しました");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  // アバターを削除
+  const handleDeleteAvatar = async (avatarId: string, dataUrl: string) => {
+    if (!confirm("このアバターを削除しますか？")) return;
+
+    try {
+      const res = await fetch("/api/avatars", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatarId }),
+      });
+
+      if (res.ok) {
+        setUploadedAvatars((prev) => prev.filter((a) => a.avatarId !== avatarId));
+        // 削除したアバターが選択中の場合はデフォルトに戻す
+        if (editAvatarUrl === dataUrl) {
+          setEditAvatarUrl("/agent-avatar.png");
+        }
+      } else {
+        const data = await res.json();
+        alert(data.error || "削除に失敗しました");
+      }
+    } catch (error) {
+      console.error("Avatar delete error:", error);
+      alert("削除に失敗しました");
+    }
+  };
+
+  // エージェントを削除
+  const handleDeleteAgent = async (agentId: string, companyName: string) => {
+    if (!confirm(`「${companyName}」のエージェントを削除しますか？\n\nこの操作は取り消せません。関連するすべてのデータ（会話履歴、埋め込みデータなど）も削除されます。`)) {
+      return;
+    }
+
+    setDeletingAgent(agentId);
+
+    try {
+      const res = await fetch(`/api/agents/${agentId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        // ローカルの状態から削除
+        setCompanies((prev) => prev.filter((c) => c.agents[0]?.agentId !== agentId));
+        // ウィジェットが表示中なら閉じる
+        if (createdAgent?.agentId === agentId) {
+          setShowWidget(false);
+          setCreatedAgent(null);
+        }
+      } else {
+        const data = await res.json();
+        alert(data.error || "削除に失敗しました");
+      }
+    } catch (error) {
+      console.error("Delete agent error:", error);
+      alert("削除に失敗しました");
+    } finally {
+      setDeletingAgent(null);
+    }
+  };
+
+  // エージェント設定編集を開始
+  const startEditingAgent = async (agent: Agent) => {
+    setEditingAgent(agent.agentId);
+    setEditWelcomeMessage(agent.welcomeMessage || "いらっしゃいませ。ご質問があれば何でもお聞きください。");
+    setEditVoiceEnabled(agent.voiceEnabled !== false);
+    setEditAvatarUrl(agent.avatarUrl || "/agent-avatar.png");
+    // アバター一覧を取得
+    await fetchAvatars(agent.agentId);
+  };
+
+  // エージェント設定を保存
+  const saveAgentSettings = async (agentId: string, companyId: string) => {
+    setSavingSettings(true);
+
+    try {
+      const res = await fetch("/api/agents/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId,
+          welcomeMessage: editWelcomeMessage,
+          voiceEnabled: editVoiceEnabled,
+          avatarUrl: editAvatarUrl,
+        }),
+      });
+
+      if (res.ok) {
+        // ローカルの状態を更新
+        setCompanies((prev) =>
+          prev.map((company) =>
+            company.companyId === companyId
+              ? {
+                  ...company,
+                  agents: company.agents.map((agent) =>
+                    agent.agentId === agentId
+                      ? {
+                          ...agent,
+                          welcomeMessage: editWelcomeMessage,
+                          voiceEnabled: editVoiceEnabled,
+                          avatarUrl: editAvatarUrl,
+                        }
+                      : agent
+                  ),
+                }
+              : company
+          )
+        );
+        setEditingAgent(null);
+      } else {
+        const data = await res.json();
+        alert(data.error || "設定の保存に失敗しました");
+      }
+    } catch (error) {
+      console.error("Settings save error:", error);
+      alert("エラーが発生しました");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const getEmbedCode = (company: Company, agent: Agent) => {
+    const widgetBaseUrl = typeof window !== "undefined"
+      ? window.location.origin + "/widget"
+      : "http://localhost:4000/widget";
+
+    return `<script
+  src="${typeof window !== "undefined" ? window.location.origin : "http://localhost:4000"}/widget.js"
+  data-company-id="${company.companyId}"
+  data-agent-name="${agent.name}"
+  data-theme-color="${agent.themeColor}"
+  data-widget-base-url="${widgetBaseUrl}"
+  defer
+></script>`;
+  };
+
+  const handleCopy = (companyId: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(companyId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const getPlanBadge = (plan?: string) => {
+    switch (plan) {
+      case "pro":
+        return (
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+            PRO
+          </span>
+        );
+      case "lite":
+        return (
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+            LITE
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+            FREE
+          </span>
+        );
+    }
+  };
+
+  if (status === "loading" || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-rose-500 mx-auto mb-4" />
+          <p className="text-slate-600">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* ユーザー情報 */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">
+            ようこそ、{session?.user?.name || session?.user?.email?.split("@")[0]}さん
+          </h2>
+          <p className="text-slate-600 text-sm mt-1">
+            {session?.user?.email}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {session?.user?.email && SUPER_ADMIN_EMAILS.includes(session.user.email.toLowerCase()) && (
+            <Link
+              href="/superadmin"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-medium hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg"
+            >
+              <Shield className="w-4 h-4" />
+              Super Admin
+            </Link>
+          )}
+          <button
+            onClick={() => signOut({ callbackUrl: "/" })}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm hover:bg-slate-50 transition-all"
+          >
+            <LogOut className="w-4 h-4" />
+            ログアウト
+          </button>
+        </div>
+      </div>
+
+      {/* 新規作成ボタン */}
+      <div className="mb-6">
+        {!showCreateForm ? (
+          <button
+            onClick={() => setShowCreateForm(true)}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white shadow-lg hover:shadow-xl transition-all"
+            style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
+          >
+            <Plus className="w-5 h-5" />
+            新しいエージェントを作成
+          </button>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-6">
+            <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+              <Globe className="w-5 h-5 text-rose-500" />
+              新規エージェント作成
+            </h3>
+            <form onSubmit={handleCreateAgent} className="space-y-4">
+              <div>
+                <input
+                  type="text"
+                  value={rootUrl}
+                  onChange={(e) => setRootUrl(e.target.value)}
+                  placeholder="example.com または https://example.com"
+                  className="w-full border border-rose-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300"
+                  required
+                  disabled={creating}
+                />
+              </div>
+
+              {/* 進捗表示 */}
+              {progress && (
+                <div className="bg-rose-50 rounded-xl p-4 border border-rose-100">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="relative">
+                      <Loader2 className="w-6 h-6 text-rose-500 animate-spin" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-slate-800">
+                        {progress.message || "処理中..."}
+                      </p>
+                      {progress.currentUrl && (
+                        <p className="text-xs text-slate-500 truncate max-w-md">
+                          {progress.currentUrl}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* プログレスバー */}
+                  <div className="w-full bg-rose-200 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-rose-500 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${progress.percent || 0}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-2 text-xs text-slate-500">
+                    <span>
+                      {progress.currentPage || 0} / {progress.totalPages || 30} ページ
+                    </span>
+                    <span>{progress.percent || 0}%</span>
+                  </div>
+                </div>
+              )}
+
+              {createError && (
+                <p className="text-red-600 text-sm">{createError}</p>
+              )}
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="flex-1 py-3 rounded-xl font-semibold text-white shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
+                >
+                  {creating ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      作成中...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-5 h-5" />
+                      作成
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    setRootUrl("");
+                    setCreateError("");
+                    setProgress(null);
+                  }}
+                  disabled={creating}
+                  className="px-6 py-3 rounded-xl font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all disabled:opacity-50"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </div>
+
+      {/* 会社リスト */}
+      {companies.length === 0 && !showCreateForm ? (
+        <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-12 text-center">
+          <MessageCircle className="w-12 h-12 text-rose-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-slate-800 mb-2">
+            まだエージェントがありません
+          </h3>
+          <p className="text-slate-600 text-sm">
+            上のボタンから新しいエージェントを作成しましょう
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {companies.map((company) => {
+            const isExpanded = expandedCompany === company.companyId;
+            const agent = company.agents[0];
+            const isPaid = company.plan === "lite" || company.plan === "pro";
+
+            return (
+              <div
+                key={company.companyId}
+                className="bg-white rounded-2xl shadow-lg border border-rose-100 overflow-hidden"
+              >
+                {/* ヘッダー */}
+                <button
+                  onClick={() => setExpandedCompany(isExpanded ? null : company.companyId)}
+                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-all"
+                >
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="w-12 h-12 rounded-xl flex items-center justify-center"
+                      style={{ backgroundColor: agent?.themeColor + "20" }}
+                    >
+                      <Globe className="w-6 h-6" style={{ color: agent?.themeColor }} />
+                    </div>
+                    <div className="text-left">
+                      <h3 className="font-semibold text-slate-800">{company.name}</h3>
+                      <p className="text-sm text-slate-500">{company.rootUrl}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {getPlanBadge(company.plan)}
+                    {isExpanded ? (
+                      <ChevronUp className="w-5 h-5 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-slate-400" />
+                    )}
+                  </div>
+                </button>
+
+                {/* 展開コンテンツ */}
+                {isExpanded && agent && (
+                  <div className="px-6 pb-6 space-y-6 border-t border-slate-100 pt-6">
+                    {/* 基本設定（無料） */}
+                    <div className="bg-slate-50 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4 text-rose-500" />
+                          基本設定
+                        </h4>
+                        <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                          無料
+                        </span>
+                      </div>
+
+                      {editingAgent === agent.agentId ? (
+                        <div className="space-y-4">
+                          {/* アバター選択 */}
+                          <div>
+                            <label className="block text-sm text-slate-600 mb-2 flex items-center gap-2">
+                              <Image className="w-4 h-4" />
+                              アイコン画像
+                            </label>
+
+                            {/* アバター選択エリア */}
+                            <div className="flex flex-wrap gap-3 items-start">
+                              {/* デフォルトアバター */}
+                              <button
+                                type="button"
+                                onClick={() => setEditAvatarUrl("/agent-avatar.png")}
+                                className={`relative w-14 h-14 rounded-full overflow-hidden border-2 transition-all flex-shrink-0 ${
+                                  editAvatarUrl === "/agent-avatar.png"
+                                    ? "border-rose-500 ring-2 ring-rose-200"
+                                    : "border-slate-200 hover:border-slate-300"
+                                }`}
+                                title="デフォルト"
+                              >
+                                <img
+                                  src="/agent-avatar.png"
+                                  alt="Default"
+                                  className="w-full h-full object-cover"
+                                />
+                              </button>
+
+                              {/* アップロード済みアバター */}
+                              {loadingAvatars ? (
+                                <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
+                                  <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                                </div>
+                              ) : (
+                                uploadedAvatars.map((avatar) => (
+                                  <div key={avatar.avatarId} className="relative group">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditAvatarUrl(avatar.dataUrl)}
+                                      className={`w-14 h-14 rounded-full overflow-hidden border-2 transition-all ${
+                                        editAvatarUrl === avatar.dataUrl
+                                          ? "border-rose-500 ring-2 ring-rose-200"
+                                          : "border-slate-200 hover:border-slate-300"
+                                      }`}
+                                      title={avatar.name}
+                                    >
+                                      <img
+                                        src={avatar.dataUrl}
+                                        alt={avatar.name}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    </button>
+                                    {/* 削除ボタン */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteAvatar(avatar.avatarId, avatar.dataUrl)}
+                                      className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                                      title="削除"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))
+                              )}
+
+                              {/* アップロードボタン */}
+                              <label
+                                className={`w-14 h-14 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center cursor-pointer hover:border-rose-400 hover:bg-rose-50 transition-all ${
+                                  uploadingAvatar ? "opacity-50 cursor-not-allowed" : ""
+                                }`}
+                                title="画像をアップロード"
+                              >
+                                {uploadingAvatar ? (
+                                  <Loader2 className="w-5 h-5 animate-spin text-rose-500" />
+                                ) : (
+                                  <Upload className="w-5 h-5 text-slate-400" />
+                                )}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  disabled={uploadingAvatar}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      handleAvatarUpload(agent.agentId, file);
+                                    }
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                            </div>
+
+                            <p className="text-xs text-slate-500 mt-2">
+                              画像をアップロードするか、デフォルトを選択してください（1MB以下）
+                            </p>
+                          </div>
+
+                          {/* 挨拶メッセージ */}
+                          <div>
+                            <label className="block text-sm text-slate-600 mb-2">
+                              最初の挨拶メッセージ
+                            </label>
+                            <textarea
+                              value={editWelcomeMessage}
+                              onChange={(e) => setEditWelcomeMessage(e.target.value)}
+                              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 resize-none"
+                              rows={3}
+                              placeholder="いらっしゃいませ。ご質問があれば何でもお聞きください。"
+                            />
+                          </div>
+
+                          {/* 音声モード */}
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm text-slate-600 flex items-center gap-2">
+                              {editVoiceEnabled ? (
+                                <Volume2 className="w-4 h-4 text-rose-500" />
+                              ) : (
+                                <VolumeX className="w-4 h-4 text-slate-400" />
+                              )}
+                              音声モード
+                            </label>
+                            <button
+                              onClick={() => setEditVoiceEnabled(!editVoiceEnabled)}
+                              className={`relative w-12 h-6 rounded-full transition-all ${
+                                editVoiceEnabled ? "bg-rose-500" : "bg-slate-300"
+                              }`}
+                            >
+                              <div
+                                className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                                  editVoiceEnabled ? "left-7" : "left-1"
+                                }`}
+                              />
+                            </button>
+                          </div>
+
+                          {/* 保存・キャンセルボタン */}
+                          <div className="flex gap-2 pt-2">
+                            <button
+                              onClick={() => saveAgentSettings(agent.agentId, company.companyId)}
+                              disabled={savingSettings}
+                              className="flex-1 py-2 rounded-xl font-medium text-white text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                              style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
+                            >
+                              {savingSettings ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Save className="w-4 h-4" />
+                              )}
+                              保存
+                            </button>
+                            <button
+                              onClick={() => setEditingAgent(null)}
+                              disabled={savingSettings}
+                              className="px-4 py-2 rounded-xl font-medium text-slate-600 text-sm bg-white border border-slate-200 hover:bg-slate-50 transition-all disabled:opacity-50"
+                            >
+                              キャンセル
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {/* 現在の設定を表示 */}
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200">
+                              <img
+                                src={agent.avatarUrl || "/agent-avatar.png"}
+                                alt="Agent avatar"
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.src = "/agent-avatar.png";
+                                }}
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm text-slate-700 line-clamp-2">
+                                {agent.welcomeMessage || "いらっしゃいませ。ご質問があれば何でもお聞きください。"}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {agent.voiceEnabled !== false ? (
+                                <Volume2 className="w-4 h-4 text-rose-500" />
+                              ) : (
+                                <VolumeX className="w-4 h-4 text-slate-400" />
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => startEditingAgent(agent)}
+                            className="w-full py-2 rounded-xl font-medium text-rose-600 text-sm border border-rose-200 hover:bg-rose-50 transition-all"
+                          >
+                            設定を編集
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* カラー選択 */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2">
+                          <Palette className="w-4 h-4 text-rose-500" />
+                          チャットカラー
+                        </h4>
+                        <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                          無料
+                        </span>
+                        {updatingColor === agent.agentId && (
+                          <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        {colorOptions.map((color) => (
+                          <button
+                            key={color.value}
+                            onClick={() => handleColorChange(agent.agentId, company.companyId, color.value)}
+                            disabled={updatingColor === agent.agentId}
+                            className={`w-8 h-8 rounded-lg transition-all ${
+                              agent.themeColor === color.value
+                                ? "ring-2 ring-offset-2 scale-110"
+                                : ""
+                            } hover:scale-105 cursor-pointer ${
+                              updatingColor === agent.agentId ? "opacity-50" : ""
+                            }`}
+                            style={{
+                              backgroundColor: color.value,
+                              // @ts-expect-error - CSS custom property for Tailwind ring color
+                              "--tw-ring-color": color.value,
+                            }}
+                            title={color.name}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-2">
+                        カラーをクリックして変更できます
+                      </p>
+                    </div>
+
+                    {/* 埋め込みコード */}
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2">
+                          <Copy className="w-4 h-4 text-rose-500" />
+                          埋め込みコード
+                        </h4>
+                        {!isPaid && (
+                          <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
+                            <Lock className="w-3 h-3" />
+                            有料
+                          </span>
+                        )}
+                      </div>
+                      {isPaid ? (
+                        <>
+                          <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl text-xs overflow-x-auto whitespace-pre-wrap">
+                            {getEmbedCode(company, agent)}
+                          </pre>
+                          <button
+                            onClick={() => handleCopy(company.companyId, getEmbedCode(company, agent))}
+                            className="mt-3 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all flex items-center gap-2"
+                            style={{
+                              background: copiedId === company.companyId
+                                ? "linear-gradient(135deg, #10B981 0%, #059669 100%)"
+                                : "linear-gradient(135deg, #D86672 0%, #D86672 100%)",
+                            }}
+                          >
+                            {copiedId === company.companyId ? (
+                              <>
+                                <Check className="w-4 h-4" />
+                                コピーしました！
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-4 h-4" />
+                                コードをコピー
+                              </>
+                            )}
+                          </button>
+                        </>
+                      ) : (
+                        <div className="bg-slate-100 rounded-xl p-4 text-center">
+                          <Lock className="w-6 h-6 text-slate-400 mx-auto mb-2" />
+                          <p className="text-sm text-slate-600">
+                            有料プランで埋め込みコードを取得できます
+                          </p>
+                          <button
+                            onClick={() => {
+                              setSelectedCompanyForPlan(company);
+                              setShowPlanModal(true);
+                            }}
+                            className="inline-flex items-center gap-2 mt-3 px-6 py-3 rounded-xl text-sm font-semibold text-white shadow-lg hover:shadow-xl transition-all"
+                            style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
+                          >
+                            <Lock className="w-4 h-4" />
+                            プランを選んでアンロック
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* プレビュー */}
+                    <div>
+                      <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
+                        <ExternalLink className="w-4 h-4 text-rose-500" />
+                        プレビュー
+                      </h4>
+                      <button
+                        onClick={() => {
+                          setCreatedAgent({
+                            companyId: company.companyId,
+                            agentId: agent.agentId,
+                            agentName: agent.name,
+                            themeColor: agent.themeColor,
+                          });
+                          setShowWidget(true);
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all hover:shadow-lg"
+                        style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
+                      >
+                        チャットを試す
+                        <MessageCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Proプラン: 分析 */}
+                    {company.plan === "pro" && (
+                      <div>
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
+                          <BarChart3 className="w-4 h-4 text-rose-500" />
+                          分析ダッシュボード
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                            PRO
+                          </span>
+                        </h4>
+                        <a
+                          href={`/admin/agents/${agent.agentId}`}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 transition-all"
+                        >
+                          詳細分析を見る
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      </div>
+                    )}
+
+                    {/* プランアップグレードボタン（有料だけどProではない場合） */}
+                    {company.plan === "lite" && (
+                      <div className="pt-4 border-t border-slate-100">
+                        <button
+                          onClick={() => {
+                            setSelectedCompanyForPlan(company);
+                            setShowPlanModal(true);
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 transition-all"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          Proプランにアップグレード
+                        </button>
+                      </div>
+                    )}
+
+                    {/* エージェント削除 */}
+                    <div className="pt-4 border-t border-slate-100">
+                      <button
+                        onClick={() => handleDeleteAgent(agent.agentId, company.name)}
+                        disabled={deletingAgent === agent.agentId}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {deletingAgent === agent.agentId ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            削除中...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-4 h-4" />
+                            エージェントを削除
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 右下のチャットウィジェット */}
+      {showWidget && createdAgent && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <div className="relative">
+            {/* 閉じるボタン */}
+            <button
+              onClick={() => setShowWidget(false)}
+              className="absolute -top-2 -right-2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-100 transition-all z-10 border border-slate-200"
+            >
+              <X className="w-4 h-4 text-slate-600" />
+            </button>
+
+            {/* ウィジェットiframe */}
+            <div
+              className="rounded-2xl overflow-hidden shadow-2xl border-2"
+              style={{ borderColor: createdAgent.themeColor }}
+            >
+              <iframe
+                key={`widget-${createdAgent.agentId}-${createdAgent.themeColor}`}
+                src={`/widget?companyId=${createdAgent.companyId}&agentName=${encodeURIComponent(createdAgent.agentName)}&themeColor=${encodeURIComponent(createdAgent.themeColor)}`}
+                width="380"
+                height="600"
+                className="bg-white"
+                title="Chat Widget"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* プラン選択モーダル */}
+      {showPlanModal && selectedCompanyForPlan && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            {/* ヘッダー */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">プランを選択</h2>
+                <p className="text-sm text-slate-600 mt-1">
+                  {selectedCompanyForPlan.name} の機能をアンロック
+                </p>
+              </div>
+              <button
+                onClick={() => setShowPlanModal(false)}
+                className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all"
+              >
+                <X className="w-5 h-5 text-slate-600" />
+              </button>
+            </div>
+
+            {/* プラン一覧 */}
+            <div className="p-6 grid md:grid-cols-2 gap-6">
+              {/* Liteプラン */}
+              <div className="rounded-2xl border-2 border-blue-200 p-6 hover:border-blue-400 transition-all">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                    <CreditCard className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">{plans.lite.name}</h3>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {plans.lite.price}
+                      <span className="text-sm font-normal text-slate-500">{plans.lite.period}</span>
+                    </p>
+                  </div>
+                </div>
+                <ul className="space-y-2 mb-6">
+                  {plans.lite.features.map((feature, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm text-slate-700">
+                      <Check className="w-4 h-4 text-blue-500" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => handleSelectPlan("lite")}
+                  disabled={processingPlan !== null || selectedCompanyForPlan.plan === "lite"}
+                  className="w-full py-3 rounded-xl font-semibold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: "linear-gradient(135deg, #4F8CFF 0%, #3B82F6 100%)" }}
+                >
+                  {processingPlan === "lite" ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      処理中...
+                    </>
+                  ) : selectedCompanyForPlan.plan === "lite" ? (
+                    <>
+                      <Check className="w-5 h-5" />
+                      現在のプラン
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-5 h-5" />
+                      Liteプランを選択
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Proプラン */}
+              <div className="rounded-2xl border-2 border-purple-300 p-6 hover:border-purple-400 transition-all relative overflow-hidden">
+                <div className="absolute top-4 right-4">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700">
+                    おすすめ
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                    <Sparkles className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">{plans.pro.name}</h3>
+                    <p className="text-2xl font-bold text-purple-600">
+                      {plans.pro.price}
+                      <span className="text-sm font-normal text-slate-500">{plans.pro.period}</span>
+                    </p>
+                  </div>
+                </div>
+                <ul className="space-y-2 mb-6">
+                  {plans.pro.features.map((feature, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm text-slate-700">
+                      <Check className="w-4 h-4 text-purple-500" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => handleSelectPlan("pro")}
+                  disabled={processingPlan !== null || selectedCompanyForPlan.plan === "pro"}
+                  className="w-full py-3 rounded-xl font-semibold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: "linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)" }}
+                >
+                  {processingPlan === "pro" ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      処理中...
+                    </>
+                  ) : selectedCompanyForPlan.plan === "pro" ? (
+                    <>
+                      <Check className="w-5 h-5" />
+                      現在のプラン
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5" />
+                      Proプランを選択
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* 機能比較 */}
+            <div className="p-6 bg-slate-50 border-t border-slate-100">
+              <h4 className="font-semibold text-slate-800 mb-4">Proプランの追加機能</h4>
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="flex items-center gap-3 text-sm text-slate-700">
+                  <Users className="w-5 h-5 text-purple-500" />
+                  <span>会話履歴トラッキング</span>
+                </div>
+                <div className="flex items-center gap-3 text-sm text-slate-700">
+                  <MapPin className="w-5 h-5 text-purple-500" />
+                  <span>位置情報分析</span>
+                </div>
+                <div className="flex items-center gap-3 text-sm text-slate-700">
+                  <Smartphone className="w-5 h-5 text-purple-500" />
+                  <span>端末情報分析</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Loading component
+function DashboardLoading() {
+  return (
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="text-center">
+        <Loader2 className="w-8 h-8 animate-spin text-rose-500 mx-auto mb-4" />
+        <p className="text-slate-600">読み込み中...</p>
+      </div>
+    </div>
+  );
+}
+
+// Default export with Suspense wrapper
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardLoading />}>
+      <DashboardContent />
+    </Suspense>
+  );
+}

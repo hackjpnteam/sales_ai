@@ -1,3 +1,16 @@
+// ユーザー（認証用）
+export type User = {
+  _id?: string;
+  userId: string;
+  email: string;
+  passwordHash: string;
+  name?: string;
+  companyIds: string[];      // 所有するcompanyId配列
+  stripeCustomerId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 // 会社情報
 export type Company = {
   _id?: string;
@@ -5,6 +18,12 @@ export type Company = {
   name: string;
   rootUrl: string;
   language: "ja" | "en";
+  userId?: string;           // 所有者のuserId
+  plan?: "free" | "lite" | "pro";
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  planStartedAt?: Date;
+  planEndedAt?: Date;
   createdAt: Date;
 };
 

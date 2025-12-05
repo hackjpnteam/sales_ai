@@ -109,16 +109,22 @@ export type RelatedLink = {
 export async function answerWithRAG(params: {
   companyId: string;
   question: string;
+  language?: string;
 }) {
-  const { companyId, question } = params;
+  const { companyId, question, language = "ja" } = params;
   const chunks = await findRelevantChunks(companyId, question);
   const openai = getOpenAI();
 
   console.log(`[RAG] Retrieved ${chunks.length} chunks for question: "${question}"`);
 
   if (chunks.length === 0) {
+    const noInfoMessages = {
+      ja: "申し訳ございません。お探しの情報が見つかりませんでした。別のご質問をお試しください。",
+      en: "I apologize, but I couldn't find the information you're looking for. Please try a different question.",
+      zh: "抱歉，我找不到您要查找的信息。请尝试其他问题。",
+    };
     return {
-      reply: "申し訳ございません。お探しの情報が見つかりませんでした。別のご質問をお試しください。",
+      reply: noInfoMessages[language as keyof typeof noInfoMessages] || noInfoMessages.ja,
       sourceChunks: [],
       relatedLinks: [],
     };
@@ -203,8 +209,9 @@ export async function answerWithRAG(params: {
     )
     .join("\n\n");
 
-  // チーフスタッフオフィサーとしてのプロンプト
-  const systemPrompt = `あなたは当社のチーフスタッフオフィサー（最高総務責任者）です。
+  // 言語別システムプロンプト
+  const systemPrompts = {
+    ja: `あなたは当社のチーフスタッフオフィサー（最高総務責任者）です。
 お客様からのお問い合わせに、プロフェッショナルかつ親身に対応してください。
 
 ■あなたの人物像
@@ -227,15 +234,91 @@ export async function answerWithRAG(params: {
 - URLやリンクを回答に含めること
 - 「情報がありません」等の否定的回答
 - 「提供された情報によると」等のAI的な表現
-- 長すぎる回答`;
+- 長すぎる回答`,
 
-  const userPrompt = `[サイトから抽出した情報]
+    en: `You are our Chief Staff Officer. Please respond to customer inquiries professionally and warmly.
+
+■ Your Character
+- A reliable executive who knows the company well
+- Warm yet precise and smart responses
+- Provide optimal information tailored to customer needs
+
+■ Response Style
+- Professional but friendly English
+- Use polite expressions naturally
+- Provide solution-oriented responses
+- Keep responses concise, within 300 characters
+
+■ Response Flow
+1. Start with the main point in 1-2 sentences
+2. Add brief supplements if needed (bullet points OK)
+3. Follow up with "Feel free to ask if you have any other questions" as needed
+
+■ Prohibited
+- Including URLs or links in responses
+- Negative responses like "information not found"
+- AI-like expressions such as "according to the provided information"
+- Overly long responses
+
+IMPORTANT: You MUST respond ENTIRELY in English. Do not use any Japanese or other languages.`,
+
+    zh: `您是我们的首席行政官。请专业且热情地回复客户咨询。
+
+■ 您的人物设定
+- 熟知公司的可靠高管
+- 温暖而又准确、智慧的应对
+- 贴近客户，提供最佳信息
+
+■ 回答风格
+- 专业但友好的中文
+- 自然地使用礼貌用语
+- 提供面向解决方案的回答
+- 保持简洁，300字以内
+
+■ 回答流程
+1. 首先用1-2句话说明要点
+2. 如有需要，简要补充（可用要点）
+3. 必要时跟进"如有其他问题，请随时询问"
+
+■ 禁止事项
+- 在回答中包含URL或链接
+- "未找到信息"等否定性回答
+- "根据提供的信息"等AI式表达
+- 过长的回答
+
+重要：您必须完全用中文回复。不要使用日语或其他语言。`,
+  };
+
+  const systemPrompt = systemPrompts[language as keyof typeof systemPrompts] || systemPrompts.ja;
+
+  // 言語別ユーザープロンプト
+  const userPrompts = {
+    ja: `[サイトから抽出した情報]
 ${contextText}
 
 [お客様からの質問]
 ${question}
 
-上記の情報を元に、プロの接客AIとして質問に回答してください。`;
+上記の情報を元に、プロの接客AIとして質問に回答してください。`,
+
+    en: `[Information extracted from the site]
+${contextText}
+
+[Customer's question]
+${question}
+
+Based on the above information, please answer the question as a professional customer service AI. Remember to respond ONLY in English.`,
+
+    zh: `[从网站提取的信息]
+${contextText}
+
+[客户的问题]
+${question}
+
+根据上述信息，作为专业的客户服务AI回答问题。请务必只用中文回复。`,
+  };
+
+  const userPrompt = userPrompts[language as keyof typeof userPrompts] || userPrompts.ja;
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",

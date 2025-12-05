@@ -151,7 +151,7 @@ export default function AgentDetailPage({
           <Bot className="w-16 h-16 text-pink-300 mx-auto mb-4" />
           <p className="text-slate-500">エージェントが見つかりません</p>
           <Link
-            href="/admin"
+            href="/dashboard"
             className="mt-4 inline-flex items-center gap-2 text-pink-500 hover:text-pink-600"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -178,7 +178,7 @@ export default function AgentDetailPage({
       >
         <div className="max-w-6xl mx-auto flex items-center gap-4">
           <Link
-            href="/admin"
+            href="/dashboard"
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/20 backdrop-blur-sm text-white text-sm font-medium hover:bg-white/30 transition-all"
           >
             <ArrowLeft className="w-4 h-4" />

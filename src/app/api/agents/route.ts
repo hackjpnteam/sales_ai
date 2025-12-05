@@ -1,10 +1,15 @@
 import { NextRequest } from "next/server";
 import { getCollection } from "@/lib/mongodb";
-import { Agent, Company } from "@/lib/types";
+import { Agent, Company, User } from "@/lib/types";
 import { crawlAndEmbedSiteWithProgress, validateAndNormalizeUrl } from "@/lib/crawler";
+import { auth } from "@/lib/auth";
 import { randomUUID } from "crypto";
 
 export async function POST(req: NextRequest) {
+  // Get authenticated user (optional - agent creation works without auth too)
+  const session = await auth();
+  const userId = session?.user?.id;
+
   const body = await req.json();
   const {
     companyName,
@@ -49,6 +54,8 @@ export async function POST(req: NextRequest) {
     name: companyName,
     rootUrl,
     language,
+    userId, // Link to user if authenticated
+    plan: "free",
     createdAt: now,
   };
 
@@ -106,6 +113,15 @@ export async function POST(req: NextRequest) {
             { $set: { themeColor: result.themeColor } }
           );
           finalThemeColor = result.themeColor;
+        }
+
+        // Link company to user if authenticated
+        if (userId) {
+          const usersCol = await getCollection<User>("users");
+          await usersCol.updateOne(
+            { userId },
+            { $addToSet: { companyIds: companyId } }
+          );
         }
 
         // 完了イベント

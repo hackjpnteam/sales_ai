@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Building2, Users, Briefcase, ExternalLink, Play, Square } from "lucide-react";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Building2, Users, Briefcase, ExternalLink, Play, Square, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 type RelatedLink = {
@@ -19,13 +20,38 @@ type Message = {
   links?: RelatedLink[];
 };
 
-type Language = "ja" | "en";
+type Language = "ja" | "en" | "zh";
+
+// Color scheme
+const colors = {
+  primary: "#D86672",      // メインレッド
+  background: "#F1E8F0",   // ライトピンクグレー
+  text: "#2B2B2B",         // テキスト黒
+};
+
+// Loading component for Suspense fallback
+function WidgetLoading() {
+  return (
+    <div className="h-screen w-screen flex flex-col items-center justify-center"
+      style={{
+        background: `linear-gradient(180deg, ${colors.background} 0%, #E8DDE7 50%, #DFD4DE 100%)`,
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <div className="w-3 h-3 rounded-full animate-bounce" style={{ backgroundColor: colors.primary, animationDelay: "0ms" }} />
+        <div className="w-3 h-3 rounded-full animate-bounce" style={{ backgroundColor: colors.primary, animationDelay: "150ms" }} />
+        <div className="w-3 h-3 rounded-full animate-bounce" style={{ backgroundColor: colors.primary, animationDelay: "300ms" }} />
+      </div>
+      <p className="mt-4 text-sm" style={{ color: colors.primary }}>読み込み中...</p>
+    </div>
+  );
+}
 
 // Translations
 const translations = {
   ja: {
     defaultAgentName: "AI コンシェルジュ",
-    welcomeMessage: "こんにちは！何についてお聞きになりたいですか？",
+    welcomeMessage: "いらっしゃいませ。ご質問があれば何でもお聞きください。",
     subtitle: "24時間対応のAIアシスタント",
     stop: "停止",
     play: "再生",
@@ -50,7 +76,7 @@ const translations = {
   },
   en: {
     defaultAgentName: "AI Concierge",
-    welcomeMessage: "Hello! What would you like to know about?",
+    welcomeMessage: "Welcome! Please feel free to ask me anything.",
     subtitle: "24/7 AI Assistant",
     stop: "Stop",
     play: "Play",
@@ -73,19 +99,42 @@ const translations = {
       { label: "Services", query: "Tell me about your services" },
     ],
   },
+  zh: {
+    defaultAgentName: "AI 礼宾服务",
+    welcomeMessage: "欢迎光临！如有任何问题，请随时提问。",
+    subtitle: "24小时AI助手",
+    stop: "停止",
+    play: "播放",
+    voiceOn: "语音开",
+    voiceOff: "语音关",
+    recognizingVoice: "正在识别语音...",
+    recording: "录音中... 点击停止",
+    inputPlaceholder: "输入消息...",
+    poweredBy: "由AI驱动 • 24小时服务",
+    voiceResponseOn: "🎧 语音回复开",
+    voiceResponseOff: "🔇 语音回复关",
+    errorResponse: "抱歉，无法获取回复。",
+    errorGeneral: "发生错误，请重试。",
+    micPermissionError: "未允许访问麦克风。",
+    holdToSpeak: "长按说话",
+    relatedLinks: "相关链接",
+    quickQuestions: [
+      { label: "关于公司", query: "请告诉我关于公司的信息" },
+      { label: "招聘信息", query: "请告诉我关于招聘的信息" },
+      { label: "服务内容", query: "请告诉我关于服务的信息" },
+    ],
+  },
 };
 
-export default function WidgetPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ companyId?: string; agentName?: string }>;
-}) {
+function WidgetContent() {
+  const searchParams = useSearchParams();
   const [companyId, setCompanyId] = useState("");
   const [language, setLanguage] = useState<Language>("ja");
   const [agentName, setAgentName] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [themeColor, setThemeColor] = useState("#FF6FB1");
+  const [themeColor, setThemeColor] = useState(colors.primary);
+  const [avatarUrl, setAvatarUrl] = useState("/agent-avatar.png");
   const [messages, setMessages] = useState<Message[]>([]);
   const [showQuickButtons, setShowQuickButtons] = useState(true);
   const [input, setInput] = useState("");
@@ -95,8 +144,20 @@ export default function WidgetPage({
   const [lastReply, setLastReply] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
+  const [trackingSessionId] = useState(() => Math.random().toString(36).substring(2, 15));
+  const [trackingEnabled, setTrackingEnabled] = useState(false);
 
   const t = translations[language];
+
+  // Language options
+  const languageOptions = [
+    { code: "ja" as Language, flag: "🇯🇵", label: "日本語" },
+    { code: "en" as Language, flag: "🇺🇸", label: "English" },
+    { code: "zh" as Language, flag: "🇨🇳", label: "中文" },
+  ];
+
+  const currentLanguage = languageOptions.find(l => l.code === language) || languageOptions[0];
 
   // 色からグラデーションを生成
   const generateGradient = (baseColor: string) => {
@@ -120,12 +181,26 @@ export default function WidgetPage({
     return `linear-gradient(135deg, ${baseColor} 0%, ${darker} 50%, ${lighter} 100%)`;
   };
 
-  // Next.js 15では searchParams は Promise - useEffect内で処理
+  // Next.js useSearchParams を使用
   useEffect(() => {
-    searchParams.then(async (params) => {
-      const cid = params.companyId || "";
-      console.log("[Widget] Company ID from params:", cid);
+    const initializeWidget = async () => {
+      console.log("[Widget] useEffect triggered - reading searchParams");
+      const cid = searchParams.get("companyId") || "";
+      const paramAgentName = searchParams.get("agentName") || "";
+      const paramThemeColor = searchParams.get("themeColor") || "";
+      console.log("[Widget] Company ID from params:", cid, "Agent Name:", paramAgentName, "Theme Color:", paramThemeColor);
+
+      if (!cid) {
+        console.error("[Widget] ERROR: No companyId provided in URL params!");
+      }
+
       setCompanyId(cid);
+
+      // URLパラメータでカラーが指定されている場合は優先して使用
+      if (paramThemeColor) {
+        console.log("[Widget] Setting theme color from URL param:", paramThemeColor);
+        setThemeColor(paramThemeColor);
+      }
 
       if (cid) {
         // Fetch company and agent info to get language setting
@@ -142,8 +217,9 @@ export default function WidgetPage({
             if (data.agent?.name) {
               setAgentName(data.agent.name);
             }
-            if (data.agent?.themeColor) {
-              console.log("[Widget] Setting theme color:", data.agent.themeColor);
+            // URLパラメータでカラーが指定されていない場合のみ、DBの値を使用
+            if (!paramThemeColor && data.agent?.themeColor) {
+              console.log("[Widget] Setting theme color from DB:", data.agent.themeColor);
               setThemeColor(data.agent.themeColor);
             }
             if (data.agent?.welcomeMessage) {
@@ -158,6 +234,14 @@ export default function WidgetPage({
             if (typeof data.agent?.voiceEnabled === "boolean") {
               setVoiceEnabled(data.agent.voiceEnabled);
             }
+            // アバターURLを設定
+            if (data.agent?.avatarUrl) {
+              setAvatarUrl(data.agent.avatarUrl);
+            }
+            // Proプランの場合はトラッキングを有効化
+            if (data.company?.plan === "pro") {
+              setTrackingEnabled(true);
+            }
           } else {
             console.error("[Widget] API error:", await res.text());
           }
@@ -166,12 +250,14 @@ export default function WidgetPage({
         }
       }
 
-      if (params.agentName) {
-        setAgentName(params.agentName);
+      if (paramAgentName) {
+        setAgentName(paramAgentName);
       }
 
       setIsInitialized(true);
-    });
+    };
+
+    initializeWidget();
   }, [searchParams]);
 
   // Set default agent name based on language after initialization
@@ -193,12 +279,83 @@ export default function WidgetPage({
     }
   }, [isInitialized, t.welcomeMessage, messages.length]);
 
+  // Update welcome message when language changes
+  useEffect(() => {
+    if (isInitialized && messages.length > 0) {
+      setMessages(prevMessages =>
+        prevMessages.map(msg =>
+          msg.id === "welcome"
+            ? { ...msg, content: t.welcomeMessage }
+            : msg
+        )
+      );
+    }
+  }, [language, t.welcomeMessage]);
+
   // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const trackingInitialized = useRef(false);
 
+  // トラッキング関数
+  const sendTrackingData = async (type: string, data: Record<string, unknown>) => {
+    if (!trackingEnabled || !companyId) return;
+    try {
+      await fetch("/api/tracking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId,
+          sessionId: trackingSessionId,
+          type,
+          ...data,
+        }),
+      });
+    } catch (error) {
+      console.error("[Widget] Tracking error:", error);
+    }
+  };
+
+  // デバイス情報を取得
+  const getDeviceInfo = () => {
+    const ua = navigator.userAgent;
+    let deviceType: "mobile" | "tablet" | "desktop" = "desktop";
+    if (/Mobi|Android/i.test(ua)) {
+      deviceType = /Tablet|iPad/i.test(ua) ? "tablet" : "mobile";
+    }
+    let os = "Unknown";
+    if (/Windows/i.test(ua)) os = "Windows";
+    else if (/Mac/i.test(ua)) os = "macOS";
+    else if (/Linux/i.test(ua)) os = "Linux";
+    else if (/Android/i.test(ua)) os = "Android";
+    else if (/iOS|iPhone|iPad/i.test(ua)) os = "iOS";
+    let browser = "Unknown";
+    if (/Chrome/i.test(ua)) browser = "Chrome";
+    else if (/Firefox/i.test(ua)) browser = "Firefox";
+    else if (/Safari/i.test(ua)) browser = "Safari";
+    else if (/Edge/i.test(ua)) browser = "Edge";
+    return { type: deviceType, os, browser };
+  };
+
+  // トラッキング初期化
+  useEffect(() => {
+    if (!trackingEnabled || !companyId || trackingInitialized.current) return;
+    trackingInitialized.current = true;
+
+    const initTracking = async () => {
+      const device = getDeviceInfo();
+      await sendTrackingData("init", {
+        userAgent: navigator.userAgent,
+        device,
+        language,
+        referrer: document.referrer,
+        pageUrl: window.location.href,
+      });
+    };
+    initTracking();
+  }, [trackingEnabled, companyId]);
 
   // 自動スクロール
   useEffect(() => {
@@ -219,8 +376,19 @@ export default function WidgetPage({
     const messageText = text || input.trim();
     if (!messageText) return;
 
-    // companyIdがない場合はデモモードとして動作
-    const effectiveCompanyId = companyId || "demo";
+    // 初期化が完了していない場合は送信しない
+    if (!isInitialized) {
+      console.log("[Widget] sendMessage blocked - not initialized yet");
+      return;
+    }
+
+    // companyIdを必ず使用（空の場合はエラー）
+    if (!companyId) {
+      console.error("[Widget] sendMessage blocked - companyId is empty");
+      return;
+    }
+
+    console.log("[Widget] sendMessage - companyId:", companyId);
 
     setShowQuickButtons(false);
     setInput("");
@@ -233,14 +401,18 @@ export default function WidgetPage({
     setMessages((prev) => [...prev, userMessage]);
     setLoading(true);
 
+    // ユーザーメッセージをトラッキング
+    sendTrackingData("conversation", { message: messageText, role: "user" });
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          companyId: effectiveCompanyId,
+          companyId: companyId,
           message: messageText,
           sessionId,
+          language,
         }),
       });
 
@@ -266,6 +438,9 @@ export default function WidgetPage({
       // 最後の回答を保存（再生用）
       setLastReply(reply);
 
+      // アシスタントの返答をトラッキング
+      sendTrackingData("conversation", { message: reply, role: "assistant" });
+
       // 関連リンクがあれば、別のメッセージとして追加
       if (relatedLinks.length > 0) {
         const linksMessage: Message = {
@@ -279,10 +454,7 @@ export default function WidgetPage({
         setMessages((prev) => [...prev, linksMessage]);
       }
 
-      // TTS再生
-      if (voiceEnabled) {
-        await playTTS(reply);
-      }
+      // 自動再生は行わない - 再生ボタンを押したときのみ再生
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -300,6 +472,20 @@ export default function WidgetPage({
 
   // TTS再生
   const playTTS = async (text: string) => {
+    // 既に再生中の場合は停止してから新しい音声を再生
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+
+    // 既に再生中フラグがある場合は何もしない（連打防止）
+    if (isPlaying) {
+      return;
+    }
+
+    setIsPlaying(true);
+
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
@@ -312,16 +498,23 @@ export default function WidgetPage({
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
         audioRef.current = audio;
-        setIsPlaying(true);
         audio.play();
         audio.onended = () => {
           setIsPlaying(false);
           audioRef.current = null;
           URL.revokeObjectURL(url);
         };
+        audio.onerror = () => {
+          setIsPlaying(false);
+          audioRef.current = null;
+          URL.revokeObjectURL(url);
+        };
+      } else {
+        setIsPlaying(false);
       }
     } catch (error) {
       console.error("TTS error:", error);
+      setIsPlaying(false);
     }
   };
 
@@ -453,43 +646,80 @@ export default function WidgetPage({
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden"
       style={{
-        background: "linear-gradient(180deg, #fff7fb 0%, #ffe9f4 50%, #ffd6eb 100%)",
+        background: `linear-gradient(180deg, ${colors.background} 0%, #E8DDE7 50%, #DFD4DE 100%)`,
       }}
     >
       {/* Header */}
       <div
-        className="flex-shrink-0 px-5 py-4"
+        className="flex-shrink-0 px-4 py-3"
         style={{
           background: generateGradient(themeColor),
         }}
       >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white/30">
-            <img src="/agent-avatar.png" alt="AI Agent" className="w-full h-full object-cover" />
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-white/30 flex-shrink-0">
+            <img
+              src={avatarUrl}
+              alt="AI Agent"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.currentTarget.src = "/agent-avatar.png";
+              }}
+            />
           </div>
-          <div>
-            <h1 className="text-white font-semibold text-lg tracking-tight">{agentName || t.defaultAgentName}</h1>
-            <p className="text-white/80 text-xs">{t.subtitle}</p>
-          </div>
-          <div className="ml-auto flex items-center gap-1">
+          <h1 className="text-white font-semibold text-base tracking-tight flex-1 truncate">
+            {agentName ? `${agentName} コンシェルジュ` : t.defaultAgentName}
+          </h1>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {/* 言語選択ドロップダウン */}
+            <div className="relative">
+              <button
+                onClick={() => setLanguageMenuOpen(!languageMenuOpen)}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-white/20 text-white text-sm hover:bg-white/30 transition-all"
+              >
+                <span className="text-base">{currentLanguage.flag}</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${languageMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {languageMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setLanguageMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-lg shadow-lg overflow-hidden min-w-[100px]">
+                    {languageOptions.map((option) => (
+                      <button
+                        key={option.code}
+                        onClick={() => {
+                          setLanguage(option.code);
+                          setLanguageMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-100 transition-all ${
+                          language === option.code ? 'bg-slate-50 font-medium' : ''
+                        }`}
+                        style={{ color: colors.text }}
+                      >
+                        <span className="text-base">{option.flag}</span>
+                        <span>{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
             {/* 再生/停止ボタン */}
             {isPlaying ? (
               <button
                 onClick={stopTTS}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-red-500/80 text-white text-xs font-medium hover:bg-red-500 transition-all"
+                className="p-2 rounded-lg bg-red-500/80 text-white hover:bg-red-500 transition-all"
                 title={t.stop}
               >
-                <Square className="w-3.5 h-3.5" />
-                <span>{t.stop}</span>
+                <Square className="w-4 h-4" />
               </button>
             ) : lastReply ? (
               <button
                 onClick={() => playTTS(lastReply)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/20 text-white text-xs font-medium hover:bg-white/30 transition-all"
+                className="p-2 rounded-lg bg-white/20 text-white hover:bg-white/30 transition-all"
                 title={t.play}
               >
-                <Play className="w-3.5 h-3.5" />
-                <span>{t.play}</span>
+                <Play className="w-4 h-4" />
               </button>
             ) : null}
             {/* 音声ON/OFFボタン */}
@@ -497,12 +727,11 @@ export default function WidgetPage({
               onClick={() => {
                 const newValue = !voiceEnabled;
                 setVoiceEnabled(newValue);
-                // 音声をオフにした場合、再生中の音声を停止
                 if (!newValue) {
                   stopTTS();
                 }
               }}
-              className={`p-2 rounded-full transition-all ${
+              className={`p-2 rounded-lg transition-all ${
                 voiceEnabled
                   ? "bg-white/20 text-white"
                   : "bg-white/10 text-white/60"
@@ -513,7 +742,6 @@ export default function WidgetPage({
             </button>
           </div>
         </div>
-
       </div>
 
       {/* Message area */}
@@ -525,8 +753,8 @@ export default function WidgetPage({
             <div className="flex justify-start">
               <div className="max-w-[85%]">
                 <div className="flex items-end gap-2">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white border border-pink-200 shadow-sm flex items-center justify-center">
-                    <ExternalLink className="w-4 h-4 text-pink-500" />
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center" style={{ border: `1px solid ${colors.primary}30` }}>
+                    <ExternalLink className="w-4 h-4" style={{ color: colors.primary }} />
                   </div>
                   <div className="flex-1">
                     <p className="text-xs text-slate-500 mb-2 ml-1">{msg.content}</p>
@@ -540,7 +768,8 @@ export default function WidgetPage({
                             href={link.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="block bg-white rounded-xl border border-pink-100 shadow-sm hover:shadow-md hover:border-pink-300 transition-all overflow-hidden"
+                            className="block bg-white rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden"
+                            style={{ border: `1px solid ${colors.primary}20` }}
                           >
                             <div className="flex gap-3 p-3">
                               <div className="flex-shrink-0 w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
@@ -553,7 +782,7 @@ export default function WidgetPage({
                                     e.currentTarget.nextElementSibling?.classList.remove('hidden');
                                   }}
                                 />
-                                <ExternalLink className="w-5 h-5 text-pink-500 hidden" />
+                                <ExternalLink className="w-5 h-5 hidden" style={{ color: colors.primary }} />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-slate-700 line-clamp-1">{link.title}</p>
@@ -611,21 +840,24 @@ export default function WidgetPage({
                   className={`px-4 py-3 rounded-2xl ${
                     msg.role === "user"
                       ? "rounded-br-md text-white shadow-lg"
-                      : "rounded-bl-md bg-white text-slate-700 border border-pink-100 shadow-sm"
+                      : "rounded-bl-md bg-white shadow-sm"
                   }`}
                   style={
                     msg.role === "user"
                       ? {
                           background: generateGradient(themeColor),
                         }
-                      : {}
+                      : {
+                          border: `1px solid ${colors.primary}20`,
+                          color: colors.text,
+                        }
                   }
                 >
-                  <div className="text-sm leading-relaxed prose prose-sm prose-slate max-w-none prose-a:text-pink-500 prose-a:underline hover:prose-a:text-pink-600 prose-headings:text-slate-800 prose-headings:font-semibold prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0">
+                  <div className="text-sm leading-relaxed prose prose-sm max-w-none prose-a:underline prose-headings:font-semibold prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0" style={{ color: colors.text }}>
                     <ReactMarkdown
                       components={{
                         a: ({ href, children }) => (
-                          <a href={href} target="_blank" rel="noopener noreferrer" className="text-pink-500 underline hover:text-pink-600">
+                          <a href={href} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: colors.primary }}>
                             {children}
                           </a>
                         ),
@@ -656,7 +888,7 @@ export default function WidgetPage({
                   <button
                     key={i}
                     onClick={() => handleQuickQuestion(q.query)}
-                    disabled={loading}
+                    disabled={loading || !isInitialized || !companyId}
                     className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl border text-sm text-slate-700 transition-all shadow-sm disabled:opacity-50"
                     style={{ borderColor: `${themeColor}40` }}
                   >
@@ -705,10 +937,10 @@ export default function WidgetPage({
 
       {/* Input area */}
       <div className="flex-shrink-0 px-4 pb-4 pt-2">
-        <div className="bg-white rounded-2xl shadow-lg border border-pink-100 p-3">
+        <div className="bg-white rounded-2xl shadow-lg p-3" style={{ border: `1px solid ${colors.primary}20` }}>
           {/* Recording indicator */}
           {isRecording && (
-            <div className="flex items-center justify-center gap-2 mb-3 py-2 bg-pink-50 rounded-xl">
+            <div className="flex items-center justify-center gap-2 mb-3 py-2 rounded-xl" style={{ backgroundColor: `${colors.primary}10` }}>
               <div className="flex items-center gap-1">
                 <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                 <div className="w-3 h-3 rounded-full bg-red-400 animate-pulse" style={{ animationDelay: "100ms" }} />
@@ -758,23 +990,23 @@ export default function WidgetPage({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={t.inputPlaceholder}
+                placeholder={!isInitialized ? "読み込み中..." : !companyId ? "エラー: 設定が見つかりません" : t.inputPlaceholder}
                 rows={1}
-                disabled={isRecording || isTranscribing || loading}
-                className="w-full px-4 py-3 pr-12 rounded-xl bg-slate-50 text-slate-700 placeholder-slate-400 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-pink-300 focus:bg-white transition-all disabled:opacity-50"
-                style={{ minHeight: "48px", maxHeight: "120px" }}
+                disabled={isRecording || isTranscribing || loading || !isInitialized || !companyId}
+                className="w-full px-4 py-3 pr-12 rounded-xl bg-slate-50 placeholder-slate-400 text-sm resize-none focus:outline-none focus:ring-2 focus:bg-white transition-all disabled:opacity-50"
+                style={{ color: colors.text, minHeight: "48px", maxHeight: "120px" }}
               />
               {/* Send button */}
               <button
                 onClick={() => sendMessage()}
-                disabled={loading || !input.trim() || isRecording || isTranscribing}
+                disabled={loading || !input.trim() || isRecording || isTranscribing || !isInitialized || !companyId}
                 className={`absolute right-2 bottom-2 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                  input.trim() && !loading
+                  input.trim() && !loading && isInitialized && companyId
                     ? "text-white shadow-md hover:shadow-lg hover:scale-105"
                     : "bg-slate-200 text-slate-400 cursor-not-allowed"
                 }`}
                 style={
-                  input.trim() && !loading
+                  input.trim() && !loading && isInitialized && companyId
                     ? { background: generateGradient(themeColor) }
                     : {}
                 }
@@ -796,5 +1028,14 @@ export default function WidgetPage({
         </div>
       </div>
     </div>
+  );
+}
+
+// Default export with Suspense wrapper for useSearchParams
+export default function WidgetPage() {
+  return (
+    <Suspense fallback={<WidgetLoading />}>
+      <WidgetContent />
+    </Suspense>
   );
 }

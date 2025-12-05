@@ -5,7 +5,7 @@ import { ChatLog } from "@/lib/types";
 import { v4 as uuidv4 } from "uuid";
 
 export async function POST(req: NextRequest) {
-  const { companyId, agentId, message, sessionId: existingSessionId } = await req.json();
+  const { companyId, agentId, message, sessionId: existingSessionId, language } = await req.json();
 
   if (!companyId || !message) {
     return NextResponse.json(
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   });
 
   // RAGで回答を生成
-  const { reply, relatedLinks } = await answerWithRAG({ companyId, question: message });
+  const { reply, relatedLinks } = await answerWithRAG({ companyId, question: message, language: language || "ja" });
 
   // アシスタントメッセージを保存
   await chatLogsCol.insertOne({

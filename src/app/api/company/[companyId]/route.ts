@@ -35,6 +35,7 @@ export async function GET(
         welcomeMessage: agent.welcomeMessage,
         voiceEnabled: agent.voiceEnabled,
         themeColor: agent.themeColor,
+        avatarUrl: agent.avatarUrl || "/agent-avatar.png",
       } : null,
     });
   } catch (error) {
