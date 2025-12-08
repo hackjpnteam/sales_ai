@@ -15,7 +15,7 @@ export default function Footer() {
             />
             <div>
               <p className="text-sm font-medium text-slate-700">Saleschat AI</p>
-              <p className="text-xs text-slate-400">2024 hackjpn.inc</p>
+              <p className="text-xs text-slate-400">2025 hackjpn.inc</p>
             </div>
           </div>
           <nav className="flex flex-wrap items-center justify-center gap-4 text-sm text-slate-500">
