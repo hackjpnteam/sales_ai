@@ -1146,7 +1146,7 @@ export default function Home() {
               />
               <div>
                 <p className="text-sm font-medium text-slate-700">Saleschat AI</p>
-                <p className="text-xs text-slate-400">© 2024 hackjpn Inc.</p>
+                <p className="text-xs text-slate-400">2024 hackjpn.inc</p>
               </div>
             </div>
 
