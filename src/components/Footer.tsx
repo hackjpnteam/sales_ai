@@ -48,7 +48,7 @@ export default function Footer() {
           </nav>
         </div>
         <p className="text-center text-xs text-slate-400 mt-3">
-          Powered by <a href="https://hackjpn.com" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600 transition-colors">hackjpn</a> ver 2.5
+          Powered by <a href="https://hackjpn.com" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600 transition-colors">hackjpn</a> ver 2.5.1
         </p>
       </div>
     </footer>
