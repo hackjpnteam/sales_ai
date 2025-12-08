@@ -424,6 +424,173 @@ export default function Home() {
         {/* ===== LP セクション ===== */}
         {!result && !loading && (
           <>
+            {/* 利用用途 */}
+            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
+              <div className="text-center mb-6">
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">こんな用途に最適</h3>
+                <p className="text-slate-600 text-sm">あらゆる業種・業態でご活用いただけます</p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-rose-100 flex items-center justify-center">
+                    <ShoppingCart className="w-6 h-6 text-rose-600" />
+                  </div>
+                  <p className="font-medium text-slate-800 text-sm">ECサイト</p>
+                  <p className="text-xs text-slate-500 mt-1">商品案内・注文サポート</p>
+                </div>
+                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-blue-100 flex items-center justify-center">
+                    <Building2 className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <p className="font-medium text-slate-800 text-sm">企業サイト</p>
+                  <p className="text-xs text-slate-500 mt-1">会社・サービス案内</p>
+                </div>
+                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <Briefcase className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <p className="font-medium text-slate-800 text-sm">採用サイト</p>
+                  <p className="text-xs text-slate-500 mt-1">求人・応募サポート</p>
+                </div>
+                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-purple-100 flex items-center justify-center">
+                    <GraduationCap className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <p className="font-medium text-slate-800 text-sm">教育機関</p>
+                  <p className="text-xs text-slate-500 mt-1">入学案内・FAQ</p>
+                </div>
+                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-pink-100 flex items-center justify-center">
+                    <Heart className="w-6 h-6 text-pink-600" />
+                  </div>
+                  <p className="font-medium text-slate-800 text-sm">医療・福祉</p>
+                  <p className="text-xs text-slate-500 mt-1">予約・診療案内</p>
+                </div>
+                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-amber-100 flex items-center justify-center">
+                    <Headphones className="w-6 h-6 text-amber-600" />
+                  </div>
+                  <p className="font-medium text-slate-800 text-sm">カスタマーサポート</p>
+                  <p className="text-xs text-slate-500 mt-1">問い合わせ対応</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 機能紹介 */}
+            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
+              <div className="text-center mb-6">
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">充実の機能</h3>
+                <p className="text-slate-600 text-sm">あなたのビジネスを24時間サポート</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex items-start gap-3 p-4 bg-rose-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-rose-500 flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-1">AI自動学習</h4>
+                    <p className="text-slate-600 text-xs sm:text-sm">URLを入力するだけでサイト内容を自動で学習し、最適な回答を生成</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
+                    <Clock className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-1">24時間365日対応</h4>
+                    <p className="text-slate-600 text-xs sm:text-sm">深夜・休日でも即座に顧客対応。機会損失をゼロに</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-emerald-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                    <TrendingUp className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-1">CV率向上</h4>
+                    <p className="text-slate-600 text-xs sm:text-sm">訪問者の疑問を即座に解消し、コンバージョンに導く</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-purple-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center flex-shrink-0">
+                    <BarChart3 className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-1">詳細分析</h4>
+                    <p className="text-slate-600 text-xs sm:text-sm">会話ログ・デバイス情報・行動分析でマーケティング強化</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
+                    <Palette className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-1">カスタマイズ</h4>
+                    <p className="text-slate-600 text-xs sm:text-sm">ブランドカラー・配置位置を自由に設定可能</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-cyan-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-cyan-500 flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-1">セキュリティ</h4>
+                    <p className="text-slate-600 text-xs sm:text-sm">SSL暗号化通信・安全なデータ管理で安心運用</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 導入プロセス */}
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-8 mb-6 sm:mb-8 text-white shadow-xl">
+              <div className="text-center mb-6">
+                <h3 className="text-xl sm:text-2xl font-bold mb-2">かんたん3ステップで導入</h3>
+                <p className="text-slate-300 text-sm">たった5分で設置完了</p>
+              </div>
+              <div className="space-y-4 sm:space-y-0 sm:flex sm:items-start sm:gap-4">
+                <div className="flex-1 relative">
+                  <div className="flex sm:flex-col items-center sm:text-center gap-4 sm:gap-2">
+                    <div className="w-12 h-12 rounded-full bg-rose-500 flex items-center justify-center text-xl font-bold flex-shrink-0">
+                      1
+                    </div>
+                    <div className="flex-1 sm:flex-none">
+                      <h4 className="font-semibold mb-1">URLを入力</h4>
+                      <p className="text-slate-300 text-xs sm:text-sm">あなたのサイトURLを入力するだけ</p>
+                    </div>
+                  </div>
+                  <div className="hidden sm:block absolute top-6 left-full w-full h-0.5 bg-gradient-to-r from-rose-500 to-blue-500" style={{ width: "calc(100% - 48px)", left: "calc(50% + 24px)" }} />
+                </div>
+                <div className="flex-1 relative">
+                  <div className="flex sm:flex-col items-center sm:text-center gap-4 sm:gap-2">
+                    <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-xl font-bold flex-shrink-0">
+                      2
+                    </div>
+                    <div className="flex-1 sm:flex-none">
+                      <h4 className="font-semibold mb-1">AIが自動学習</h4>
+                      <p className="text-slate-300 text-xs sm:text-sm">サイト内容を解析して学習完了</p>
+                    </div>
+                  </div>
+                  <div className="hidden sm:block absolute top-6 left-full w-full h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500" style={{ width: "calc(100% - 48px)", left: "calc(50% + 24px)" }} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex sm:flex-col items-center sm:text-center gap-4 sm:gap-2">
+                    <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-xl font-bold flex-shrink-0">
+                      3
+                    </div>
+                    <div className="flex-1 sm:flex-none">
+                      <h4 className="font-semibold mb-1">コードを貼るだけ</h4>
+                      <p className="text-slate-300 text-xs sm:text-sm">HTMLタグをサイトに設置して完了</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 text-center">
+                <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full text-sm">
+                  <Rocket className="w-4 h-4" />
+                  プログラミング知識不要！
+                </div>
+              </div>
+            </div>
+
             {/* 業界最安値アピール */}
             <div
               className="rounded-2xl sm:rounded-3xl p-5 sm:p-8 mb-6 sm:mb-8 text-white shadow-xl"
@@ -542,173 +709,6 @@ export default function Home() {
                 <span className="bg-white/20 px-3 py-1 rounded-full text-xs sm:text-sm">契約縛りなし</span>
                 <span className="bg-white/20 px-3 py-1 rounded-full text-xs sm:text-sm">即日利用開始</span>
                 <span className="bg-emerald-400/30 px-3 py-1 rounded-full text-xs sm:text-sm">お試し無料</span>
-              </div>
-            </div>
-
-            {/* 機能紹介 */}
-            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
-              <div className="text-center mb-6">
-                <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">充実の機能</h3>
-                <p className="text-slate-600 text-sm">あなたのビジネスを24時間サポート</p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex items-start gap-3 p-4 bg-rose-50 rounded-xl">
-                  <div className="w-10 h-10 rounded-lg bg-rose-500 flex items-center justify-center flex-shrink-0">
-                    <Bot className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-800 mb-1">AI自動学習</h4>
-                    <p className="text-slate-600 text-xs sm:text-sm">URLを入力するだけでサイト内容を自動で学習し、最適な回答を生成</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl">
-                  <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
-                    <Clock className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-800 mb-1">24時間365日対応</h4>
-                    <p className="text-slate-600 text-xs sm:text-sm">深夜・休日でも即座に顧客対応。機会損失をゼロに</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 bg-emerald-50 rounded-xl">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center flex-shrink-0">
-                    <TrendingUp className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-800 mb-1">CV率向上</h4>
-                    <p className="text-slate-600 text-xs sm:text-sm">訪問者の疑問を即座に解消し、コンバージョンに導く</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 bg-purple-50 rounded-xl">
-                  <div className="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center flex-shrink-0">
-                    <BarChart3 className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-800 mb-1">詳細分析</h4>
-                    <p className="text-slate-600 text-xs sm:text-sm">会話ログ・デバイス情報・行動分析でマーケティング強化</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-xl">
-                  <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
-                    <Palette className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-800 mb-1">カスタマイズ</h4>
-                    <p className="text-slate-600 text-xs sm:text-sm">ブランドカラー・配置位置を自由に設定可能</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-4 bg-cyan-50 rounded-xl">
-                  <div className="w-10 h-10 rounded-lg bg-cyan-500 flex items-center justify-center flex-shrink-0">
-                    <Shield className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-800 mb-1">セキュリティ</h4>
-                    <p className="text-slate-600 text-xs sm:text-sm">SSL暗号化通信・安全なデータ管理で安心運用</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* 利用用途 */}
-            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
-              <div className="text-center mb-6">
-                <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">こんな用途に最適</h3>
-                <p className="text-slate-600 text-sm">あらゆる業種・業態でご活用いただけます</p>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
-                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-rose-100 flex items-center justify-center">
-                    <ShoppingCart className="w-6 h-6 text-rose-600" />
-                  </div>
-                  <p className="font-medium text-slate-800 text-sm">ECサイト</p>
-                  <p className="text-xs text-slate-500 mt-1">商品案内・注文サポート</p>
-                </div>
-                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
-                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-blue-100 flex items-center justify-center">
-                    <Building2 className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <p className="font-medium text-slate-800 text-sm">企業サイト</p>
-                  <p className="text-xs text-slate-500 mt-1">会社・サービス案内</p>
-                </div>
-                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
-                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-emerald-100 flex items-center justify-center">
-                    <Briefcase className="w-6 h-6 text-emerald-600" />
-                  </div>
-                  <p className="font-medium text-slate-800 text-sm">採用サイト</p>
-                  <p className="text-xs text-slate-500 mt-1">求人・応募サポート</p>
-                </div>
-                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
-                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-purple-100 flex items-center justify-center">
-                    <GraduationCap className="w-6 h-6 text-purple-600" />
-                  </div>
-                  <p className="font-medium text-slate-800 text-sm">教育機関</p>
-                  <p className="text-xs text-slate-500 mt-1">入学案内・FAQ</p>
-                </div>
-                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
-                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-pink-100 flex items-center justify-center">
-                    <Heart className="w-6 h-6 text-pink-600" />
-                  </div>
-                  <p className="font-medium text-slate-800 text-sm">医療・福祉</p>
-                  <p className="text-xs text-slate-500 mt-1">予約・診療案内</p>
-                </div>
-                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
-                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-amber-100 flex items-center justify-center">
-                    <Headphones className="w-6 h-6 text-amber-600" />
-                  </div>
-                  <p className="font-medium text-slate-800 text-sm">カスタマーサポート</p>
-                  <p className="text-xs text-slate-500 mt-1">問い合わせ対応</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 導入プロセス */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-8 mb-6 sm:mb-8 text-white shadow-xl">
-              <div className="text-center mb-6">
-                <h3 className="text-xl sm:text-2xl font-bold mb-2">かんたん3ステップで導入</h3>
-                <p className="text-slate-300 text-sm">たった5分で設置完了</p>
-              </div>
-              <div className="space-y-4 sm:space-y-0 sm:flex sm:items-start sm:gap-4">
-                <div className="flex-1 relative">
-                  <div className="flex sm:flex-col items-center sm:text-center gap-4 sm:gap-2">
-                    <div className="w-12 h-12 rounded-full bg-rose-500 flex items-center justify-center text-xl font-bold flex-shrink-0">
-                      1
-                    </div>
-                    <div className="flex-1 sm:flex-none">
-                      <h4 className="font-semibold mb-1">URLを入力</h4>
-                      <p className="text-slate-300 text-xs sm:text-sm">あなたのサイトURLを入力するだけ</p>
-                    </div>
-                  </div>
-                  <div className="hidden sm:block absolute top-6 left-full w-full h-0.5 bg-gradient-to-r from-rose-500 to-blue-500" style={{ width: "calc(100% - 48px)", left: "calc(50% + 24px)" }} />
-                </div>
-                <div className="flex-1 relative">
-                  <div className="flex sm:flex-col items-center sm:text-center gap-4 sm:gap-2">
-                    <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-xl font-bold flex-shrink-0">
-                      2
-                    </div>
-                    <div className="flex-1 sm:flex-none">
-                      <h4 className="font-semibold mb-1">AIが自動学習</h4>
-                      <p className="text-slate-300 text-xs sm:text-sm">サイト内容を解析して学習完了</p>
-                    </div>
-                  </div>
-                  <div className="hidden sm:block absolute top-6 left-full w-full h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500" style={{ width: "calc(100% - 48px)", left: "calc(50% + 24px)" }} />
-                </div>
-                <div className="flex-1">
-                  <div className="flex sm:flex-col items-center sm:text-center gap-4 sm:gap-2">
-                    <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-xl font-bold flex-shrink-0">
-                      3
-                    </div>
-                    <div className="flex-1 sm:flex-none">
-                      <h4 className="font-semibold mb-1">コードを貼るだけ</h4>
-                      <p className="text-slate-300 text-xs sm:text-sm">HTMLタグをサイトに設置して完了</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-6 text-center">
-                <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full text-sm">
-                  <Rocket className="w-4 h-4" />
-                  プログラミング知識不要！
-                </div>
               </div>
             </div>
 
@@ -1276,41 +1276,72 @@ export default function Home() {
         </div>
       )}
 
-      {/* ウィジェットデモ（右下に表示）- 常に表示 */}
+      {/* ウィジェット表示 */}
       <>
-        {/* デモバッジ - resultがある場合のみ表示 */}
+        {/* デモバッジ - resultがある場合のみ表示（右下） */}
         {result && (
           <div className="fixed bottom-20 sm:bottom-24 right-4 sm:right-6 z-40 bg-rose-500 text-white text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-lg animate-bounce">
             埋め込むとこうなります
           </div>
         )}
 
-        {/* ウィジェットポップアップ */}
-        {widgetOpen && (
+        {/* ユーザー作成後のウィジェット（右下） */}
+        {result && widgetOpen && (
           <div className="fixed bottom-20 sm:bottom-24 right-2 sm:right-6 left-2 sm:left-auto z-50 sm:w-[380px] h-[70vh] sm:h-[600px] max-h-[600px] rounded-2xl shadow-2xl overflow-hidden border border-rose-200">
             <iframe
-              key={`widget-${widgetKey}-${result?.companyId || "demo"}-${selectedColor}`}
-              src={`/widget?companyId=${result?.companyId || DEMO_COMPANY_ID}&agentName=${encodeURIComponent((result ? companyName : "hackjpn") + " AI")}&themeColor=${encodeURIComponent(selectedColor)}`}
+              key={`widget-${widgetKey}-${result.companyId}-${selectedColor}`}
+              src={`/widget?companyId=${result.companyId}&agentName=${encodeURIComponent(companyName + " AI")}&themeColor=${encodeURIComponent(selectedColor)}`}
               className="w-full h-full"
               title="Chat Widget"
             />
           </div>
         )}
 
-        {/* フローティングボタン */}
-        <button
-          onClick={() => setWidgetOpen(!widgetOpen)}
-          className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110"
-          style={{
-            background: `linear-gradient(135deg, ${result ? selectedColor : colors.primary} 0%, ${result ? selectedColor : colors.primary} 100%)`,
-          }}
-        >
-          {widgetOpen ? (
-            <X className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-          ) : (
-            <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-          )}
-        </button>
+        {/* ユーザー作成後のフローティングボタン（右下） */}
+        {result && (
+          <button
+            onClick={() => setWidgetOpen(!widgetOpen)}
+            className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110"
+            style={{
+              background: `linear-gradient(135deg, ${selectedColor} 0%, ${selectedColor} 100%)`,
+            }}
+          >
+            {widgetOpen ? (
+              <X className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+            ) : (
+              <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+            )}
+          </button>
+        )}
+
+        {/* デモ用 hackjpn AI ウィジェット（左下）- resultがない場合のみ */}
+        {!result && widgetOpen && (
+          <div className="fixed bottom-20 sm:bottom-24 left-2 sm:left-6 right-2 sm:right-auto z-50 sm:w-[380px] h-[70vh] sm:h-[600px] max-h-[600px] rounded-2xl shadow-2xl overflow-hidden border border-rose-200">
+            <iframe
+              key={`widget-demo-hackjpn`}
+              src="https://saleschat.me/widget?companyId=e2c748ed-b950-4774-8591-06836b2e430c&agentName=hackjpn%20AI&themeColor=%23D86672"
+              className="w-full h-full"
+              title="hackjpn AI Chat Widget"
+            />
+          </div>
+        )}
+
+        {/* デモ用フローティングボタン（左下）- resultがない場合のみ */}
+        {!result && (
+          <button
+            onClick={() => setWidgetOpen(!widgetOpen)}
+            className="fixed bottom-4 sm:bottom-6 left-4 sm:left-6 z-50 w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110"
+            style={{
+              background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primary} 100%)`,
+            }}
+          >
+            {widgetOpen ? (
+              <X className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+            ) : (
+              <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+            )}
+          </button>
+        )}
       </>
     </div>
   );
