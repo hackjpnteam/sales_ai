@@ -276,48 +276,85 @@ ${linkEvalPrompt}
   let filteredChunks = relevantChunks.length > 0 ? relevantChunks : chunks.slice(0, 5);
 
   if (isLeadershipQuestion) {
-    // 外部サイトの情報（他社の社長の記事など）を除外
-    // チャンク内に「◯◯氏が」「◯◯氏は」のようなパターンがあり、
-    // かつ会社の公式情報（CEO of、代表取締役など）でない場合は除外
+    // 外部情報（他社の社長・投資先・支援先・株主の情報など）を除外
+    // これらは自社の代表者情報ではないため、代表者に関する質問では使用しない
     const externalPatterns = [
       /【.*?】/,  // 【■ ... 】のような記事見出し
       /氏が目指す/,
       /氏が語る/,
       /氏は「/,
+      /支援先/,  // 支援先企業の記事
+      /投資先/,  // 投資先企業の記事
+      /株主/,    // 株主リスト（他社CEOが含まれる可能性）
+      /ポートフォリオ/,  // 投資先一覧
+      /創業者の.*氏/,  // 「創業者の◯◯氏」は他社の創業者の可能性が高い
+      /スタートアップ.*創業者/,  // 他社スタートアップの創業者
+      /ベンチャー.*創業者/,
+      /IVS.*優勝/,  // ピッチコンテスト記事
+      /ピッチ.*コンテスト/,
+      /アドバンスコンポジット/,  // 具体的な他社名
     ];
 
-    // 公式情報と思われるパターン
+    // 自社の公式代表者情報と思われるパターン
+    // 注意: 「創業者」単体ではなく、会社概要ページ等の文脈で使用されている場合のみ
     const officialPatterns = [
-      /CEO of/i,
-      /代表取締役/,
-      /創業者/,
-      /Founder/i,
-      /Family/,  // hackjpnのFamilyページなど
+      /当社.*代表/,
+      /弊社.*代表/,
+      /会社概要/,
+      /Company.*Info/i,
+      /About.*Us/i,
+      /経営陣/,
+      /役員紹介/,
+      /代表取締役社長/,  // より具体的なパターン
     ];
 
     filteredChunks = filteredChunks.filter(chunk => {
-      // 公式情報パターンがあればOK
-      if (officialPatterns.some(pattern => pattern.test(chunk.chunk) || pattern.test(chunk.title))) {
-        return true;
-      }
-      // 外部パターンがあれば除外
-      if (externalPatterns.some(pattern => pattern.test(chunk.chunk))) {
-        console.log(`[RAG] Filtering out external content: ${chunk.title}`);
+      const chunkText = chunk.chunk || '';
+      const titleText = chunk.title || '';
+      const urlText = chunk.url || '';
+
+      // URLが支援先/投資先記事っぽい場合は除外
+      if (urlText.includes('news') && (chunkText.includes('支援先') || chunkText.includes('投資先'))) {
+        console.log(`[RAG] Filtering out portfolio company news: ${titleText} - ${urlText}`);
         return false;
       }
+
+      // 外部パターンがあれば除外（公式パターンがあっても除外）
+      if (externalPatterns.some(pattern => pattern.test(chunkText))) {
+        console.log(`[RAG] Filtering out external content: ${titleText}`);
+        return false;
+      }
+
+      // 公式情報パターンがあればOK
+      if (officialPatterns.some(pattern => pattern.test(chunkText) || pattern.test(titleText))) {
+        return true;
+      }
+
+      // 氏 + 人名パターンがあるが公式パターンがない場合は除外
+      // （他社の人物の可能性が高い）
+      if (/[ァ-ヶー一-龠]+\s*(氏|さん)/.test(chunkText) &&
+          !officialPatterns.some(pattern => pattern.test(chunkText))) {
+        console.log(`[RAG] Filtering out potential external person mention: ${titleText}`);
+        return false;
+      }
+
       return true;
     });
 
-    // フィルタリング後、元のチャンクが残っていない場合は公式パターンのみを使用
+    // フィルタリング後、チャンクが残っていない場合
+    // → 代表者情報がないと判断し、空配列のままにする（AIに「情報がない」と回答させる）
     if (filteredChunks.length === 0) {
-      filteredChunks = (relevantChunks.length > 0 ? relevantChunks : chunks.slice(0, 5))
-        .filter(chunk => officialPatterns.some(pattern => pattern.test(chunk.chunk) || pattern.test(chunk.title)));
+      console.log(`[RAG] Leadership question: No valid chunks found after filtering. AI should respond with "information not available".`);
     }
 
     console.log(`[RAG] Leadership question detected, filtered to ${filteredChunks.length} chunks`);
   }
 
-  const selectedChunks = filteredChunks.length > 0 ? filteredChunks : chunks.slice(0, 3);
+  // 代表者に関する質問で、フィルタリング後にチャンクがない場合は、
+  // フォールバックせずに空のままにする（外部情報を誤って使用しないため）
+  const selectedChunks = isLeadershipQuestion
+    ? filteredChunks
+    : (filteredChunks.length > 0 ? filteredChunks : chunks.slice(0, 3));
 
   // デバッグ: 取得されたチャンクの内容をログ出力
   console.log(`[RAG] Selected ${selectedChunks.length} chunks for context:`);
@@ -469,30 +506,35 @@ IMPORTANT: Respond ONLY in English.`,
     : '';
 
   // 言語別ユーザープロンプト
+  // 参考情報がない場合の注意書きを追加
+  const noInfoWarning = selectedChunks.length === 0
+    ? '\n\n【重要】参考情報が見つかりませんでした。この質問に対して架空の情報を生成せず、「その情報は把握しておりません」と回答してください。'
+    : '';
+
   const userPrompts = {
     ja: `[参考情報]
-${contextText}${knowledgeContext}
+${contextText || '（該当する情報が見つかりませんでした）'}${knowledgeContext}${noInfoWarning}
 
 [質問]
 ${question}
 
-上記の参考情報と管理者からの指示を元に、質問に直接答えてください。連絡先や電話番号が指定されている場合は必ず伝えてください。`,
+上記の参考情報と管理者からの指示を元に、質問に直接答えてください。参考情報に記載がない人名や具体的な情報は絶対に作り出さないでください。連絡先や電話番号が指定されている場合は必ず伝えてください。`,
 
     en: `[Reference Information]
-${contextText}${knowledgeContext}
+${contextText || '(No relevant information found)'}${knowledgeContext}${noInfoWarning}
 
 [Question]
 ${question}
 
-Based on the above information and instructions, answer the question directly. If contact information or phone numbers are specified, be sure to include them.`,
+Based on the above information and instructions, answer the question directly. NEVER fabricate names or specific information not in the reference. If contact information or phone numbers are specified, be sure to include them.`,
 
     zh: `[参考信息]
-${contextText}${knowledgeContext}
+${contextText || '（未找到相关信息）'}${knowledgeContext}${noInfoWarning}
 
 [问题]
 ${question}
 
-根据上述信息和指示，直接回答问题。如果指定了联系方式或电话号码，请务必告知。`,
+根据上述信息和指示，直接回答问题。绝对不要编造参考信息中没有的人名或具体信息。如果指定了联系方式或电话号码，请务必告知。`,
   };
 
   const userPrompt = userPrompts[language as keyof typeof userPrompts] || userPrompts.ja;
