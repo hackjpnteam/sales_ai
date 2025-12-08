@@ -22,6 +22,7 @@ import {
   AlertCircle,
   CheckCircle,
 } from "lucide-react";
+import Footer from "@/components/Footer";
 
 type Company = {
   companyId: string;
@@ -326,7 +327,7 @@ export default function SuperAdminPage() {
                   <Crown className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300" />
                   Super Admin
                 </h1>
-                <p className="text-white/70 text-[10px] sm:text-xs">Powered by hackjpn ver 2.2</p>
+                <p className="text-white/70 text-[10px] sm:text-xs">Powered by hackjpn</p>
               </div>
             </div>
           </div>
@@ -780,6 +781,7 @@ export default function SuperAdminPage() {
           </div>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

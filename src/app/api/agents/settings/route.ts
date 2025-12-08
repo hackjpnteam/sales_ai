@@ -10,7 +10,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { agentId, welcomeMessage, voiceEnabled, avatarUrl, widgetPosition } = await req.json();
+    const { agentId, name, welcomeMessage, voiceEnabled, avatarUrl, widgetPosition } = await req.json();
 
     if (!agentId) {
       return NextResponse.json(
@@ -40,6 +40,10 @@ export async function PUT(req: NextRequest) {
       updatedAt: new Date(),
     };
 
+    if (name !== undefined && name.trim()) {
+      updateFields.name = name.trim();
+    }
+
     if (welcomeMessage !== undefined) {
       updateFields.welcomeMessage = welcomeMessage;
     }
@@ -52,7 +56,7 @@ export async function PUT(req: NextRequest) {
       updateFields.avatarUrl = avatarUrl;
     }
 
-    if (widgetPosition !== undefined && ["bottom-right", "bottom-left", "bottom-center"].includes(widgetPosition)) {
+    if (widgetPosition !== undefined && ["bottom-right", "bottom-left", "bottom-center", "middle-right", "middle-left"].includes(widgetPosition)) {
       updateFields.widgetPosition = widgetPosition;
     }
 
@@ -64,6 +68,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      name: updateFields.name,
       welcomeMessage: updateFields.welcomeMessage,
       voiceEnabled: updateFields.voiceEnabled,
       avatarUrl: updateFields.avatarUrl,

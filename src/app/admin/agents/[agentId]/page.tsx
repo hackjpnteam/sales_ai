@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { use } from "react";
 import { Sparkles, ArrowLeft, Bot, MessageSquare, Users, BarChart3, Volume2, HelpCircle, User } from "lucide-react";
+import Footer from "@/components/Footer";
 
 type Agent = {
   _id: string;
@@ -195,7 +196,7 @@ export default function AgentDetailPage({
             </div>
             <div>
               <h1 className="text-white font-bold text-xl tracking-tight">{agent.name}</h1>
-              <p className="text-white/70 text-xs">Powered by hackjpn ver 2.2</p>
+              <p className="text-white/70 text-xs">Powered by hackjpn</p>
             </div>
           </div>
         </div>
@@ -430,6 +431,7 @@ export default function AgentDetailPage({
           </div>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

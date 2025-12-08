@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Building2, Users, Briefcase, ExternalLink, Play, Square, ChevronDown } from "lucide-react";
+import { Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Building2, Users, Briefcase, MessageCircle, HelpCircle, ExternalLink, Play, Square, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 type RelatedLink = {
@@ -140,7 +140,7 @@ function WidgetContent() {
   const [showQuickButtons, setShowQuickButtons] = useState(true);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [lastReply, setLastReply] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -149,6 +149,7 @@ function WidgetContent() {
   const [trackingSessionId] = useState(() => Math.random().toString(36).substring(2, 15));
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [customQuickButtons, setCustomQuickButtons] = useState<{ label: string; query: string }[] | null>(null);
+  const [isPro, setIsPro] = useState(false);
 
   const t = translations[language];
 
@@ -240,16 +241,23 @@ function WidgetContent() {
                 timestamp: new Date(),
               }]);
             }
-            // エージェント設定から音声有効/無効を読み込む
-            if (typeof data.agent?.voiceEnabled === "boolean") {
+            // Proプランかどうかを設定
+            const isProPlan = data.company?.plan === "pro";
+            setIsPro(isProPlan);
+
+            // エージェント設定から音声有効/無効を読み込む（Proプラン限定）
+            if (isProPlan && typeof data.agent?.voiceEnabled === "boolean") {
               setVoiceEnabled(data.agent.voiceEnabled);
+            } else {
+              // Proプラン以外は音声機能を無効化
+              setVoiceEnabled(false);
             }
             // アバターURLを設定
             if (data.agent?.avatarUrl) {
               setAvatarUrl(data.agent.avatarUrl);
             }
             // Proプランの場合はトラッキングを有効化
-            if (data.company?.plan === "pro") {
+            if (isProPlan) {
               setTrackingEnabled(true);
             }
           } else {
@@ -585,7 +593,7 @@ function WidgetContent() {
         }
 
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        console.log("[Recording] Blob size:", audioBlob.size, "bytes");
+        console.log("[Recording] Blob size:", audioBlob.size, "bytes, mimeType:", mimeType);
 
         // 音声データが小さすぎる場合はスキップ
         if (audioBlob.size < 1000) {
@@ -593,10 +601,14 @@ function WidgetContent() {
           return;
         }
 
+        // MIMEタイプに応じた拡張子を決定
+        const fileExtension = mimeType.includes("webm") ? "webm" : mimeType.includes("mp4") ? "mp4" : "wav";
+        const fileName = `recording.${fileExtension}`;
+
         setIsTranscribing(true);
         try {
           const formData = new FormData();
-          formData.append("audio", audioBlob, "recording.webm");
+          formData.append("audio", audioBlob, fileName);
           formData.append("language", language); // 言語設定を送信
 
           const res = await fetch("/api/stt", {
@@ -735,24 +747,26 @@ function WidgetContent() {
                 <Play className="w-4 h-4" />
               </button>
             ) : null}
-            {/* 音声ON/OFFボタン */}
-            <button
-              onClick={() => {
-                const newValue = !voiceEnabled;
-                setVoiceEnabled(newValue);
-                if (!newValue) {
-                  stopTTS();
-                }
-              }}
-              className={`p-2 rounded-lg transition-all ${
-                voiceEnabled
-                  ? "bg-white/20 text-white"
-                  : "bg-white/10 text-white/60"
-              }`}
-              title={voiceEnabled ? t.voiceOn : t.voiceOff}
-            >
-              {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </button>
+            {/* 音声ON/OFFボタン（Proプラン限定） */}
+            {isPro && (
+              <button
+                onClick={() => {
+                  const newValue = !voiceEnabled;
+                  setVoiceEnabled(newValue);
+                  if (!newValue) {
+                    stopTTS();
+                  }
+                }}
+                className={`p-2 rounded-lg transition-all ${
+                  voiceEnabled
+                    ? "bg-white/20 text-white"
+                    : "bg-white/10 text-white/60"
+                }`}
+                title={voiceEnabled ? t.voiceOn : t.voiceOff}
+              >
+                {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -904,9 +918,9 @@ function WidgetContent() {
           {/* Quick buttons after welcome message */}
           {msg.id === "welcome" && showQuickButtons && (
             <div className="flex flex-wrap gap-2 justify-center mt-4">
-              {(customQuickButtons || t.quickQuestions).map((q, i) => {
-                const icons = [Building2, Users, Briefcase];
-                const Icon = icons[i % 3];
+              {(customQuickButtons || t.quickQuestions).slice(0, 5).map((q, i) => {
+                const icons = [Building2, Users, Briefcase, MessageCircle, HelpCircle];
+                const Icon = icons[i % 5];
                 return (
                   <button
                     key={i}
@@ -976,36 +990,38 @@ function WidgetContent() {
           )}
 
           <div className="flex items-end gap-2">
-            {/* Mic button */}
-            <button
-              onMouseDown={startRecording}
-              onMouseUp={stopRecording}
-              onMouseLeave={stopRecording}
-              onTouchStart={startRecording}
-              onTouchEnd={stopRecording}
-              disabled={loading || isTranscribing}
-              className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                isRecording
-                  ? "bg-red-500 text-white shadow-lg scale-110"
-                  : isTranscribing
-                  ? "bg-yellow-100 text-yellow-600"
-                  : "hover:scale-105"
-              } ${(loading || isTranscribing) && !isRecording ? "opacity-50 cursor-not-allowed" : ""}`}
-              style={
-                !isRecording && !isTranscribing
-                  ? { backgroundColor: `${themeColor}15`, color: themeColor }
-                  : {}
-              }
-              title={t.holdToSpeak}
-            >
-              {isTranscribing ? (
-                <div className="w-5 h-5 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin" />
-              ) : isRecording ? (
-                <MicOff className="w-5 h-5" />
-              ) : (
-                <Mic className="w-5 h-5" />
-              )}
-            </button>
+            {/* Mic button（Proプラン限定） */}
+            {isPro && (
+              <button
+                onMouseDown={startRecording}
+                onMouseUp={stopRecording}
+                onMouseLeave={stopRecording}
+                onTouchStart={startRecording}
+                onTouchEnd={stopRecording}
+                disabled={loading || isTranscribing}
+                className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                  isRecording
+                    ? "bg-red-500 text-white shadow-lg scale-110"
+                    : isTranscribing
+                    ? "bg-yellow-100 text-yellow-600"
+                    : "hover:scale-105"
+                } ${(loading || isTranscribing) && !isRecording ? "opacity-50 cursor-not-allowed" : ""}`}
+                style={
+                  !isRecording && !isTranscribing
+                    ? { backgroundColor: `${themeColor}15`, color: themeColor }
+                    : {}
+                }
+                title={t.holdToSpeak}
+              >
+                {isTranscribing ? (
+                  <div className="w-5 h-5 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin" />
+                ) : isRecording ? (
+                  <MicOff className="w-5 h-5" />
+                ) : (
+                  <Mic className="w-5 h-5" />
+                )}
+              </button>
+            )}
 
             {/* Text input */}
             <div className="flex-1 relative">
@@ -1040,13 +1056,15 @@ function WidgetContent() {
           </div>
 
           {/* Footer */}
-          <div className="mt-3 flex items-center justify-between">
-            <p className="text-[10px] text-slate-400">
-              {t.poweredBy}
-            </p>
-            <p className="text-[10px] text-slate-400">
-              {voiceEnabled ? t.voiceResponseOn : t.voiceResponseOff}
-            </p>
+          <div className="mt-3 flex items-center justify-center">
+            <a
+              href="https://hackjpn.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              Powered by hackjpn
+            </a>
           </div>
         </div>
       </div>

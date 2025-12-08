@@ -65,7 +65,7 @@ type Agent = {
   voiceEnabled: boolean;
   themeColor: string;
   avatarUrl?: string;
-  widgetPosition?: "bottom-right" | "bottom-left" | "bottom-center";
+  widgetPosition?: "bottom-right" | "bottom-left" | "bottom-center" | "middle-right" | "middle-left";
   // クイックボタン（Pro機能）
   quickButtons?: QuickButton[];
   // プロンプト設定（Pro機能）
@@ -131,13 +131,19 @@ const colorOptions = [
   { name: "パープル", value: "#8B5CF6" },
   { name: "オレンジ", value: "#F59E0B" },
   { name: "ピンク", value: "#EC4899" },
+  { name: "ホワイト", value: "#FFFFFF" },
+  { name: "ブラック", value: "#1A1A1A" },
+  { name: "ゴールド", value: "#D4AF37" },
+  { name: "シルバー", value: "#A8A9AD" },
 ];
 
 // 位置オプション
 const positionOptions = [
-  { name: "右下", value: "bottom-right" },
-  { name: "左下", value: "bottom-left" },
-  { name: "中央下", value: "bottom-center" },
+  { name: "右下", value: "bottom-right", icon: "↘" },
+  { name: "左下", value: "bottom-left", icon: "↙" },
+  { name: "中央下", value: "bottom-center", icon: "↓" },
+  { name: "右中央", value: "middle-right", icon: "→" },
+  { name: "左中央", value: "middle-left", icon: "←" },
 ] as const;
 
 // プラン情報
@@ -208,6 +214,7 @@ function DashboardContent() {
     agentId: string;
     agentName: string;
     themeColor: string;
+    widgetPosition: string;
   } | null>(null);
 
   // ウィジェットプレビュー（実際の埋め込み形式）
@@ -230,6 +237,7 @@ function DashboardContent() {
 
   // エージェント設定編集
   const [editingAgent, setEditingAgent] = useState<string | null>(null);
+  const [editAgentName, setEditAgentName] = useState("");
   const [editWelcomeMessage, setEditWelcomeMessage] = useState("");
   const [editVoiceEnabled, setEditVoiceEnabled] = useState(true);
   const [editAvatarUrl, setEditAvatarUrl] = useState("/agent-avatar.png");
@@ -274,29 +282,32 @@ function DashboardContent() {
     { label: "", query: "" },
     { label: "", query: "" },
     { label: "", query: "" },
+    { label: "", query: "" },
+    { label: "", query: "" },
   ]);
   const [savingQuickButtons, setSavingQuickButtons] = useState(false);
 
-  const fetchCompanies = useCallback(async () => {
+  const [hasFetched, setHasFetched] = useState(false);
+
+  const fetchCompanies = useCallback(async (force = false) => {
+    // 既にフェッチ済みで強制でなければスキップ（StrictMode対策）
+    if (hasFetched && !force) return;
+
     try {
       const res = await fetch("/api/user/companies");
       if (res.ok) {
         const data = await res.json();
         setCompanies(data.companies || []);
         setSharedCompanies(data.sharedCompanies || []);
-        // 最初の会社を展開
-        if (data.companies?.length > 0) {
-          setExpandedCompany(data.companies[0].companyId);
-        } else if (data.sharedCompanies?.length > 0) {
-          setExpandedCompany(data.sharedCompanies[0].companyId);
-        }
+        // 初期状態では全て閉じた状態にする
+        setHasFetched(true);
       }
     } catch (error) {
       console.error("Failed to fetch companies:", error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [hasFetched]);
 
   // 決済成功後にプランを確認・更新
   const verifyPayment = useCallback(async (companyId: string, plan: string) => {
@@ -311,7 +322,7 @@ function DashboardContent() {
       if (res.ok) {
         console.log("[Dashboard] Payment verified successfully");
         // 会社一覧を再取得
-        await fetchCompanies();
+        await fetchCompanies(true);
         // URLからクエリパラメータを削除
         router.replace("/dashboard");
       } else {
@@ -451,7 +462,7 @@ function DashboardContent() {
       });
 
       if (res.ok) {
-        await fetchCompanies(); // エージェントデータを再取得
+        await fetchCompanies(true); // エージェントデータを再取得
         setShowPromptModal(false);
         alert("プロンプト設定を保存しました");
       } else {
@@ -488,11 +499,11 @@ function DashboardContent() {
     const buttons = agent.quickButtons && agent.quickButtons.length > 0
       ? [...agent.quickButtons]
       : defaultButtons;
-    // 3つに揃える
-    while (buttons.length < 3) {
+    // 5つに揃える
+    while (buttons.length < 5) {
       buttons.push({ label: "", query: "" });
     }
-    setQuickButtonsForm(buttons.slice(0, 3));
+    setQuickButtonsForm(buttons.slice(0, 5));
     setEditingQuickButtons(agent.agentId);
   };
 
@@ -510,7 +521,7 @@ function DashboardContent() {
       });
 
       if (res.ok) {
-        await fetchCompanies();
+        await fetchCompanies(true);
         setEditingQuickButtons(null);
       } else {
         const data = await res.json();
@@ -623,7 +634,7 @@ function DashboardContent() {
       });
 
       if (res.ok) {
-        await fetchCompanies();
+        await fetchCompanies(true);
         setEditingAgent(null);
       } else {
         alert("保存に失敗しました");
@@ -698,6 +709,7 @@ function DashboardContent() {
                   agentId: data.agentId,
                   agentName: `${companyName} AI`,
                   themeColor: data.themeColor || "#D86672",
+                  widgetPosition: "bottom-right",
                 });
                 setShowWidget(true);
                 fetchCompanies();
@@ -801,7 +813,7 @@ function DashboardContent() {
   };
 
   // 位置変更ハンドラー
-  const handlePositionChange = async (agentId: string, companyId: string, newPosition: "bottom-right" | "bottom-left" | "bottom-center") => {
+  const handlePositionChange = async (agentId: string, companyId: string, newPosition: "bottom-right" | "bottom-left" | "bottom-center" | "middle-right" | "middle-left") => {
     setUpdatingColor(agentId); // 同じローディング状態を共有
 
     try {
@@ -830,6 +842,11 @@ function DashboardContent() {
               : company
           )
         );
+
+        // チャットプレビューの位置も更新
+        if (createdAgent?.agentId === agentId) {
+          setCreatedAgent({ ...createdAgent, widgetPosition: newPosition });
+        }
       } else {
         const data = await res.json();
         alert(data.error || "位置の更新に失敗しました");
@@ -952,6 +969,7 @@ function DashboardContent() {
   // エージェント設定編集を開始
   const startEditingAgent = async (agent: Agent) => {
     setEditingAgent(agent.agentId);
+    setEditAgentName(agent.name || "AI");
     setEditWelcomeMessage(agent.welcomeMessage || "いらっしゃいませ。ご質問があれば何でもお聞きください。");
     setEditVoiceEnabled(agent.voiceEnabled !== false);
     setEditAvatarUrl(agent.avatarUrl || "/agent-avatar.png");
@@ -963,14 +981,19 @@ function DashboardContent() {
   const saveAgentSettings = async (agentId: string, companyId: string) => {
     setSavingSettings(true);
 
+    // Proプラン以外は音声機能を無効にする
+    const company = companies.find(c => c.companyId === companyId);
+    const voiceEnabledValue = company?.plan === "pro" ? editVoiceEnabled : false;
+
     try {
       const res = await fetch("/api/agents/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           agentId,
+          name: editAgentName,
           welcomeMessage: editWelcomeMessage,
-          voiceEnabled: editVoiceEnabled,
+          voiceEnabled: voiceEnabledValue,
           avatarUrl: editAvatarUrl,
         }),
       });
@@ -978,22 +1001,23 @@ function DashboardContent() {
       if (res.ok) {
         // ローカルの状態を更新
         setCompanies((prev) =>
-          prev.map((company) =>
-            company.companyId === companyId
+          prev.map((c) =>
+            c.companyId === companyId
               ? {
-                  ...company,
-                  agents: company.agents.map((agent) =>
+                  ...c,
+                  agents: c.agents.map((agent) =>
                     agent.agentId === agentId
                       ? {
                           ...agent,
+                          name: editAgentName,
                           welcomeMessage: editWelcomeMessage,
-                          voiceEnabled: editVoiceEnabled,
+                          voiceEnabled: voiceEnabledValue,
                           avatarUrl: editAvatarUrl,
                         }
                       : agent
                   ),
                 }
-              : company
+              : c
           )
         );
         setEditingAgent(null);
@@ -1370,6 +1394,23 @@ function DashboardContent() {
                             </p>
                           </div>
 
+                          {/* チャットタイトル（エージェント名） */}
+                          <div>
+                            <label className="block text-sm text-slate-600 mb-2">
+                              チャットタイトル
+                            </label>
+                            <input
+                              type="text"
+                              value={editAgentName}
+                              onChange={(e) => setEditAgentName(e.target.value)}
+                              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300"
+                              placeholder="AI コンシェルジュ"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                              チャットウィジェットに表示される名前です
+                            </p>
+                          </div>
+
                           {/* 挨拶メッセージ */}
                           <div>
                             <label className="block text-sm text-slate-600 mb-2">
@@ -1384,28 +1425,43 @@ function DashboardContent() {
                             />
                           </div>
 
-                          {/* 音声モード */}
+                          {/* 音声モード（Proプラン限定） */}
                           <div className="flex items-center justify-between">
                             <label className="text-sm text-slate-600 flex items-center gap-2">
-                              {editVoiceEnabled ? (
-                                <Volume2 className="w-4 h-4 text-rose-500" />
+                              {company.plan === "pro" ? (
+                                editVoiceEnabled ? (
+                                  <Volume2 className="w-4 h-4 text-rose-500" />
+                                ) : (
+                                  <VolumeX className="w-4 h-4 text-slate-400" />
+                                )
                               ) : (
-                                <VolumeX className="w-4 h-4 text-slate-400" />
+                                <Lock className="w-4 h-4 text-slate-400" />
                               )}
                               音声モード
+                              {company.plan !== "pro" && (
+                                <span className="text-xs bg-gradient-to-r from-amber-400 to-orange-500 text-white px-2 py-0.5 rounded-full">
+                                  Pro
+                                </span>
+                              )}
                             </label>
-                            <button
-                              onClick={() => setEditVoiceEnabled(!editVoiceEnabled)}
-                              className={`relative w-12 h-6 rounded-full transition-all ${
-                                editVoiceEnabled ? "bg-rose-500" : "bg-slate-300"
-                              }`}
-                            >
-                              <div
-                                className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
-                                  editVoiceEnabled ? "left-7" : "left-1"
+                            {company.plan === "pro" ? (
+                              <button
+                                onClick={() => setEditVoiceEnabled(!editVoiceEnabled)}
+                                className={`relative w-12 h-6 rounded-full transition-all ${
+                                  editVoiceEnabled ? "bg-rose-500" : "bg-slate-300"
                                 }`}
-                              />
-                            </button>
+                              >
+                                <div
+                                  className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                                    editVoiceEnabled ? "left-7" : "left-1"
+                                  }`}
+                                />
+                              </button>
+                            ) : (
+                              <div className="relative w-12 h-6 rounded-full bg-slate-200 cursor-not-allowed">
+                                <div className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full" />
+                              </div>
+                            )}
                           </div>
 
                           {/* 保存・キャンセルボタン */}
@@ -1469,6 +1525,49 @@ function DashboardContent() {
                       )}
                     </div>
 
+                    {/* プレビュー（基本設定の直下） */}
+                    <div className="bg-gradient-to-r from-rose-50 to-pink-50 rounded-xl p-4">
+                      <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
+                        <ExternalLink className="w-4 h-4 text-rose-500" />
+                        プレビュー
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => {
+                            setCreatedAgent({
+                              companyId: company.companyId,
+                              agentId: agent.agentId,
+                              agentName: agent.name,
+                              themeColor: agent.themeColor,
+                              widgetPosition: agent.widgetPosition || "bottom-right",
+                            });
+                            setShowWidget(true);
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all hover:shadow-lg"
+                          style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          チャットを試す
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPreviewAgent({
+                              companyId: company.companyId,
+                              agentId: agent.agentId,
+                              agentName: agent.name,
+                              themeColor: agent.themeColor,
+                              widgetPosition: agent.widgetPosition || "bottom-right",
+                            });
+                            setShowWidgetPreview(true);
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-all border border-slate-200"
+                        >
+                          <Globe className="w-4 h-4" />
+                          ウィジェットで試す
+                        </button>
+                      </div>
+                    </div>
+
                     {/* カラー選択 */}
                     <div>
                       <div className="flex items-center justify-between mb-3">
@@ -1483,7 +1582,7 @@ function DashboardContent() {
                           <Loader2 className="w-4 h-4 animate-spin text-rose-500" />
                         )}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
                         {colorOptions.map((color) => (
                           <button
                             key={color.value}
@@ -1495,6 +1594,8 @@ function DashboardContent() {
                                 : ""
                             } hover:scale-105 cursor-pointer ${
                               updatingColor === agent.agentId ? "opacity-50" : ""
+                            } ${
+                              color.value === "#FFFFFF" ? "border border-slate-300" : ""
                             }`}
                             style={{
                               backgroundColor: color.value,
@@ -1510,157 +1611,129 @@ function DashboardContent() {
                       </p>
                     </div>
 
-                    {/* ウィジェット位置 - Pro会員のみ */}
+                    {/* ウィジェット位置 - Lite以上で利用可能 */}
                     <div>
                       <div className="flex items-center gap-2 mb-3">
                         <h4 className="font-medium text-slate-700 flex items-center gap-2">
                           <MapPin className="w-4 h-4 text-rose-500" />
                           表示位置
                         </h4>
-                        {company.plan !== "pro" ? (
-                          <span className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
-                            <Lock className="w-3 h-3" />
-                            Pro
-                          </span>
-                        ) : (
-                          <span className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
-                            Pro
-                          </span>
-                        )}
+                        <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                          無料
+                        </span>
                       </div>
-                      {company.plan === "pro" ? (
-                        <div className="flex gap-2">
-                          {positionOptions.map((pos) => (
-                            <button
-                              key={pos.value}
-                              onClick={() => handlePositionChange(agent.agentId, company.companyId, pos.value)}
-                              disabled={updatingColor === agent.agentId}
-                              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                                (agent.widgetPosition || "bottom-right") === pos.value
-                                  ? "bg-purple-500 text-white shadow-md"
-                                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                              } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
-                            >
-                              {pos.name}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="bg-slate-100 rounded-xl p-4 text-center">
-                          <Lock className="w-5 h-5 text-slate-400 mx-auto mb-2" />
-                          <p className="text-sm text-slate-600">
-                            Proプランで表示位置を変更できます
-                          </p>
-                        </div>
-                      )}
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                        {positionOptions.map((pos) => (
+                          <button
+                            key={pos.value}
+                            onClick={() => handlePositionChange(agent.agentId, company.companyId, pos.value)}
+                            disabled={updatingColor === agent.agentId}
+                            className={`flex flex-col items-center justify-center px-2 py-2 sm:px-3 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                              (agent.widgetPosition || "bottom-right") === pos.value
+                                ? "bg-rose-500 text-white shadow-md"
+                                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                            } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                          >
+                            <span className="text-base sm:text-lg mb-0.5">{pos.icon}</span>
+                            <span className="whitespace-nowrap">{pos.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-slate-500 mt-2">
+                        ※ 中央配置はモバイルでは下部に表示されます
+                      </p>
                     </div>
 
-                    {/* クイックボタン - Pro機能 */}
+                    {/* クイックボタン - Lite以上で利用可能 */}
                     <div>
                       <div className="flex items-center gap-2 mb-3">
                         <h4 className="font-medium text-slate-700 flex items-center gap-2">
                           <MessageSquare className="w-4 h-4 text-rose-500" />
                           クイックボタン
                         </h4>
-                        {company.plan !== "pro" ? (
-                          <span className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
-                            <Lock className="w-3 h-3" />
-                            Pro
-                          </span>
-                        ) : (
-                          <span className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
-                            Pro
-                          </span>
-                        )}
+                        <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                          無料
+                        </span>
                       </div>
-                      {company.plan === "pro" ? (
-                        editingQuickButtons === agent.agentId ? (
-                          <div className="space-y-3">
-                            {quickButtonsForm.map((btn, idx) => (
-                              <div key={idx} className="bg-slate-50 rounded-xl p-3 space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-medium text-slate-500 w-16">ボタン{idx + 1}</span>
-                                </div>
-                                <input
-                                  type="text"
-                                  placeholder="ラベル（例: 会社について）"
-                                  value={btn.label}
-                                  onChange={(e) => {
-                                    const newButtons = [...quickButtonsForm];
-                                    newButtons[idx].label = e.target.value;
-                                    setQuickButtonsForm(newButtons);
-                                  }}
-                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
-                                />
-                                <input
-                                  type="text"
-                                  placeholder="送信メッセージ（例: 会社について教えてください）"
-                                  value={btn.query}
-                                  onChange={(e) => {
-                                    const newButtons = [...quickButtonsForm];
-                                    newButtons[idx].query = e.target.value;
-                                    setQuickButtonsForm(newButtons);
-                                  }}
-                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
-                                />
+                      {editingQuickButtons === agent.agentId ? (
+                        <div className="space-y-3">
+                          {quickButtonsForm.map((btn, idx) => (
+                            <div key={idx} className="bg-slate-50 rounded-xl p-3 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-slate-500 w-16">ボタン{idx + 1}</span>
                               </div>
-                            ))}
-                            <div className="flex gap-2 pt-2">
-                              <button
-                                onClick={() => handleSaveQuickButtons(agent.agentId)}
-                                disabled={savingQuickButtons}
-                                className="flex-1 py-2 rounded-xl font-medium text-white text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                                style={{ background: "linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)" }}
-                              >
-                                {savingQuickButtons ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Save className="w-4 h-4" />
-                                )}
-                                保存
-                              </button>
-                              <button
-                                onClick={() => setEditingQuickButtons(null)}
-                                disabled={savingQuickButtons}
-                                className="px-4 py-2 rounded-xl font-medium text-slate-600 text-sm bg-white border border-slate-200 hover:bg-slate-50 transition-all disabled:opacity-50"
-                              >
-                                キャンセル
-                              </button>
+                              <input
+                                type="text"
+                                placeholder="ラベル（例: 会社について）"
+                                value={btn.label}
+                                onChange={(e) => {
+                                  const newButtons = [...quickButtonsForm];
+                                  newButtons[idx].label = e.target.value;
+                                  setQuickButtonsForm(newButtons);
+                                }}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+                              />
+                              <input
+                                type="text"
+                                placeholder="送信メッセージ（例: 会社について教えてください）"
+                                value={btn.query}
+                                onChange={(e) => {
+                                  const newButtons = [...quickButtonsForm];
+                                  newButtons[idx].query = e.target.value;
+                                  setQuickButtonsForm(newButtons);
+                                }}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+                              />
                             </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            <div className="bg-slate-50 rounded-xl p-3">
-                              {agent.quickButtons && agent.quickButtons.length > 0 ? (
-                                <div className="flex flex-wrap gap-2">
-                                  {agent.quickButtons.map((btn, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="px-3 py-1.5 bg-white rounded-lg text-sm text-slate-700 border border-slate-200"
-                                    >
-                                      {btn.label}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-sm text-slate-500">デフォルトのボタンを使用中</p>
-                              )}
-                            </div>
+                          ))}
+                          <div className="flex gap-2 pt-2">
                             <button
-                              onClick={() => startEditingQuickButtons(agent)}
-                              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 transition-all"
+                              onClick={() => handleSaveQuickButtons(agent.agentId)}
+                              disabled={savingQuickButtons}
+                              className="flex-1 py-2 rounded-xl font-medium text-white text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                              style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
                             >
-                              <Edit3 className="w-3 h-3" />
-                              編集
+                              {savingQuickButtons ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Save className="w-4 h-4" />
+                              )}
+                              保存
+                            </button>
+                            <button
+                              onClick={() => setEditingQuickButtons(null)}
+                              disabled={savingQuickButtons}
+                              className="px-4 py-2 rounded-xl font-medium text-slate-600 text-sm bg-white border border-slate-200 hover:bg-slate-50 transition-all disabled:opacity-50"
+                            >
+                              キャンセル
                             </button>
                           </div>
-                        )
+                        </div>
                       ) : (
-                        <div className="bg-slate-100 rounded-xl p-4 text-center">
-                          <Lock className="w-5 h-5 text-slate-400 mx-auto mb-2" />
-                          <p className="text-sm text-slate-600">
-                            Proプランでクイックボタンをカスタマイズできます
-                          </p>
+                        <div className="space-y-2">
+                          <div className="bg-slate-50 rounded-xl p-3">
+                            {agent.quickButtons && agent.quickButtons.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {agent.quickButtons.map((btn, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="px-3 py-1.5 bg-white rounded-lg text-sm text-slate-700 border border-slate-200"
+                                  >
+                                    {btn.label}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-slate-500">デフォルトのボタンを使用中</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => startEditingQuickButtons(agent)}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 transition-all"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            編集
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1883,48 +1956,6 @@ function DashboardContent() {
                           </button>
                         </div>
                       )}
-                    </div>
-
-                    {/* プレビュー */}
-                    <div>
-                      <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
-                        <ExternalLink className="w-4 h-4 text-rose-500" />
-                        プレビュー
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => {
-                            setCreatedAgent({
-                              companyId: company.companyId,
-                              agentId: agent.agentId,
-                              agentName: agent.name,
-                              themeColor: agent.themeColor,
-                            });
-                            setShowWidget(true);
-                          }}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all hover:shadow-lg"
-                          style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                          チャットを試す
-                        </button>
-                        <button
-                          onClick={() => {
-                            setPreviewAgent({
-                              companyId: company.companyId,
-                              agentId: agent.agentId,
-                              agentName: agent.name,
-                              themeColor: agent.themeColor,
-                              widgetPosition: agent.widgetPosition || "bottom-right",
-                            });
-                            setShowWidgetPreview(true);
-                          }}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all"
-                        >
-                          <Globe className="w-4 h-4" />
-                          ウィジェットで試す
-                        </button>
-                      </div>
                     </div>
 
                     {/* Proプラン: 分析 */}
@@ -2168,14 +2199,30 @@ function DashboardContent() {
         </div>
       )}
 
-      {/* 右下のチャットウィジェット */}
+      {/* チャットウィジェット（位置に応じて配置） */}
       {showWidget && createdAgent && (
-        <div className="fixed bottom-6 right-6 z-50">
+        <div
+          className={`fixed z-50 ${
+            createdAgent.widgetPosition === "bottom-left"
+              ? "bottom-6 left-6"
+              : createdAgent.widgetPosition === "bottom-center"
+              ? "bottom-6 left-1/2 -translate-x-1/2"
+              : createdAgent.widgetPosition === "middle-left"
+              ? "top-1/2 -translate-y-1/2 left-6"
+              : createdAgent.widgetPosition === "middle-right"
+              ? "top-1/2 -translate-y-1/2 right-6"
+              : "bottom-6 right-6"
+          }`}
+        >
           <div className="relative">
             {/* 閉じるボタン */}
             <button
               onClick={() => setShowWidget(false)}
-              className="absolute -top-2 -right-2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-100 transition-all z-10 border border-slate-200"
+              className={`absolute -top-2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-100 transition-all z-10 border border-slate-200 ${
+                createdAgent.widgetPosition === "bottom-left" || createdAgent.widgetPosition === "middle-left"
+                  ? "-left-2"
+                  : "-right-2"
+              }`}
             >
               <X className="w-4 h-4 text-slate-600" />
             </button>
@@ -2190,7 +2237,7 @@ function DashboardContent() {
                 src={`/widget?companyId=${createdAgent.companyId}&agentName=${encodeURIComponent(createdAgent.agentName)}&themeColor=${encodeURIComponent(createdAgent.themeColor)}`}
                 width="380"
                 height="600"
-                className="bg-white"
+                className="bg-white max-h-[80vh]"
                 title="Chat Widget"
               />
             </div>

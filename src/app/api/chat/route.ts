@@ -20,6 +20,23 @@ export async function POST(req: NextRequest) {
   // 会話ログコレクションを取得
   const chatLogsCol = await getCollection<ChatLog>("chat_logs");
 
+  // 既存のセッションがある場合、直近の会話履歴を取得（最大6件 = 3往復）
+  let conversationHistory: { role: "user" | "assistant"; content: string }[] = [];
+  if (existingSessionId) {
+    const recentLogs = await chatLogsCol
+      .find({ sessionId, companyId })
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .toArray();
+
+    conversationHistory = recentLogs
+      .reverse()
+      .map((log) => ({
+        role: log.role as "user" | "assistant",
+        content: log.content,
+      }));
+  }
+
   // ユーザーメッセージを保存
   await chatLogsCol.insertOne({
     companyId,
@@ -45,12 +62,13 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // RAGで回答を生成
+  // RAGで回答を生成（会話履歴を渡す）
   const { reply, relatedLinks } = await answerWithRAG({
     companyId,
     question: message,
     language: language || "ja",
     promptSettings,
+    conversationHistory,
   });
 
   // アシスタントメッセージを保存

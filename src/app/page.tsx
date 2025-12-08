@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Sparkles, Globe, Zap, ArrowRight, Copy, ExternalLink, MessageCircle, X, Lock, CreditCard, Palette, Check, BarChart3, Users, Smartphone, MapPin, MessageSquare, LogIn, UserPlus } from "lucide-react";
+import { Sparkles, Globe, Zap, ArrowRight, Copy, ExternalLink, MessageCircle, X, Lock, CreditCard, Palette, Check, BarChart3, Users, Smartphone, MapPin, MessageSquare, LogIn, UserPlus, Bot, Clock, Shield, TrendingUp, Building2, ShoppingCart, Briefcase, GraduationCap, Heart, Headphones, ChevronRight, BadgePercent, Rocket, FileText } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
@@ -58,6 +58,7 @@ export default function Home() {
   const [checkingPlan, setCheckingPlan] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<"lite" | "pro">("lite");
+  const [expandedPlan, setExpandedPlan] = useState<"lite" | "pro" | null>(null);
   const [selectedColor, setSelectedColor] = useState(colorOptions[0].value);
   const [email, setEmail] = useState("");
   const [trackingData, setTrackingData] = useState<{
@@ -267,7 +268,7 @@ export default function Home() {
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-screen flex flex-col"
       style={{
         background: `linear-gradient(180deg, ${colors.background} 0%, #E8DDE7 50%, #DFD4DE 100%)`,
       }}
@@ -292,9 +293,38 @@ export default function Home() {
             </div>
             <div>
               <h1 className="text-white font-bold text-base sm:text-xl tracking-tight">Saleschat AI</h1>
-              <p className="text-white/70 text-[10px] sm:text-xs">Powered by hackjpn ver 2.2</p>
+              <p className="text-white/70 text-[10px] sm:text-xs">Powered by hackjpn</p>
             </div>
           </div>
+          {/* 中央リンク */}
+          <nav className="hidden md:flex items-center gap-4 text-white/80 text-sm">
+            <a
+              href="https://hackjpn.com/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white transition-colors"
+            >
+              利用規約
+            </a>
+            <span className="text-white/40">|</span>
+            <a
+              href="https://hackjpn.com/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white transition-colors"
+            >
+              情報の取り扱い
+            </a>
+            <span className="text-white/40">|</span>
+            <a
+              href="https://hackjpn.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-white transition-colors"
+            >
+              運営会社
+            </a>
+          </nav>
           <div className="flex items-center gap-2 sm:gap-3">
             {status === "loading" ? (
               <div className="w-16 sm:w-20 h-8 sm:h-9 bg-white/20 rounded-xl animate-pulse" />
@@ -331,7 +361,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-8 sm:py-12">
+      <main className="flex-1 max-w-2xl mx-auto px-4 py-8 sm:py-12">
         {/* イントロ */}
         <div className="text-center mb-6 sm:mb-10">
           <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2 sm:mb-3">
@@ -390,6 +420,315 @@ export default function Home() {
             </button>
           </form>
         </div>
+
+        {/* ===== LP セクション ===== */}
+        {!result && !loading && (
+          <>
+            {/* 業界最安値アピール */}
+            <div
+              className="rounded-2xl sm:rounded-3xl p-5 sm:p-8 mb-6 sm:mb-8 text-white shadow-xl"
+              style={{ background: `linear-gradient(135deg, ${colors.primary} 0%, #B85561 100%)` }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                    <BadgePercent className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl sm:text-2xl font-bold">業界最安値に挑戦</h3>
+                    <p className="text-white/80 text-sm">他社比較で最大90%OFF</p>
+                  </div>
+                </div>
+                <div className="bg-emerald-400 text-emerald-900 px-3 py-1.5 rounded-full text-xs sm:text-sm font-bold animate-pulse">
+                  お試し無料
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                {/* Lite プラン */}
+                <button
+                  onClick={() => setExpandedPlan(expandedPlan === "lite" ? null : "lite")}
+                  className={`bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center transition-all hover:bg-white/20 cursor-pointer ${
+                    expandedPlan === "lite" ? "ring-2 ring-white" : ""
+                  }`}
+                >
+                  <p className="text-3xl sm:text-4xl font-bold">¥500</p>
+                  <p className="text-white/70 text-xs sm:text-sm">Lite プラン/月額</p>
+                  <p className="text-white/50 text-[10px] mt-1">クリックして詳細</p>
+                </button>
+                {/* Pro プラン */}
+                <button
+                  onClick={() => setExpandedPlan(expandedPlan === "pro" ? null : "pro")}
+                  className={`bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center transition-all hover:bg-white/20 cursor-pointer ${
+                    expandedPlan === "pro" ? "ring-2 ring-white" : ""
+                  }`}
+                >
+                  <p className="text-3xl sm:text-4xl font-bold">¥3,000</p>
+                  <p className="text-white/70 text-xs sm:text-sm">Pro プラン/月額</p>
+                  <p className="text-white/50 text-[10px] mt-1">クリックして詳細</p>
+                </button>
+              </div>
+
+              {/* プラン詳細表示 */}
+              {expandedPlan && (
+                <div className="bg-white/15 backdrop-blur-sm rounded-xl p-4 mb-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  {expandedPlan === "lite" ? (
+                    <div>
+                      <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
+                        <Zap className="w-5 h-5" />
+                        Lite プラン - ¥500/月
+                      </h4>
+                      <ul className="space-y-1.5 text-sm text-white/90">
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />
+                          埋め込みコード取得
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />
+                          チャットカラーカスタマイズ
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />
+                          基本的なAI応答
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />
+                          ウィジェット位置設定
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />
+                          クイックボタン設定
+                        </li>
+                      </ul>
+                    </div>
+                  ) : (
+                    <div>
+                      <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5" />
+                        Pro プラン - ¥3,000/月
+                      </h4>
+                      <ul className="space-y-1.5 text-sm text-white/90">
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />
+                          Liteプランの全機能
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />
+                          会話履歴トラッキング
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />
+                          位置・端末情報分析
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />
+                          詳細アナリティクスダッシュボード
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />
+                          音声認識機能（STT）
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />
+                          音声読み上げ機能（TTS）
+                        </li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2 justify-center">
+                <span className="bg-white/20 px-3 py-1 rounded-full text-xs sm:text-sm">初期費用 ¥0</span>
+                <span className="bg-white/20 px-3 py-1 rounded-full text-xs sm:text-sm">契約縛りなし</span>
+                <span className="bg-white/20 px-3 py-1 rounded-full text-xs sm:text-sm">即日利用開始</span>
+                <span className="bg-emerald-400/30 px-3 py-1 rounded-full text-xs sm:text-sm">お試し無料</span>
+              </div>
+            </div>
+
+            {/* 機能紹介 */}
+            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
+              <div className="text-center mb-6">
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">充実の機能</h3>
+                <p className="text-slate-600 text-sm">あなたのビジネスを24時間サポート</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex items-start gap-3 p-4 bg-rose-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-rose-500 flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-1">AI自動学習</h4>
+                    <p className="text-slate-600 text-xs sm:text-sm">URLを入力するだけでサイト内容を自動で学習し、最適な回答を生成</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
+                    <Clock className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-1">24時間365日対応</h4>
+                    <p className="text-slate-600 text-xs sm:text-sm">深夜・休日でも即座に顧客対応。機会損失をゼロに</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-emerald-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                    <TrendingUp className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-1">CV率向上</h4>
+                    <p className="text-slate-600 text-xs sm:text-sm">訪問者の疑問を即座に解消し、コンバージョンに導く</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-purple-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center flex-shrink-0">
+                    <BarChart3 className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-1">詳細分析</h4>
+                    <p className="text-slate-600 text-xs sm:text-sm">会話ログ・デバイス情報・行動分析でマーケティング強化</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
+                    <Palette className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-1">カスタマイズ</h4>
+                    <p className="text-slate-600 text-xs sm:text-sm">ブランドカラー・配置位置を自由に設定可能</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 p-4 bg-cyan-50 rounded-xl">
+                  <div className="w-10 h-10 rounded-lg bg-cyan-500 flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 mb-1">セキュリティ</h4>
+                    <p className="text-slate-600 text-xs sm:text-sm">SSL暗号化通信・安全なデータ管理で安心運用</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 利用用途 */}
+            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
+              <div className="text-center mb-6">
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">こんな用途に最適</h3>
+                <p className="text-slate-600 text-sm">あらゆる業種・業態でご活用いただけます</p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-rose-100 flex items-center justify-center">
+                    <ShoppingCart className="w-6 h-6 text-rose-600" />
+                  </div>
+                  <p className="font-medium text-slate-800 text-sm">ECサイト</p>
+                  <p className="text-xs text-slate-500 mt-1">商品案内・注文サポート</p>
+                </div>
+                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-blue-100 flex items-center justify-center">
+                    <Building2 className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <p className="font-medium text-slate-800 text-sm">企業サイト</p>
+                  <p className="text-xs text-slate-500 mt-1">会社・サービス案内</p>
+                </div>
+                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <Briefcase className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <p className="font-medium text-slate-800 text-sm">採用サイト</p>
+                  <p className="text-xs text-slate-500 mt-1">求人・応募サポート</p>
+                </div>
+                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-purple-100 flex items-center justify-center">
+                    <GraduationCap className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <p className="font-medium text-slate-800 text-sm">教育機関</p>
+                  <p className="text-xs text-slate-500 mt-1">入学案内・FAQ</p>
+                </div>
+                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-pink-100 flex items-center justify-center">
+                    <Heart className="w-6 h-6 text-pink-600" />
+                  </div>
+                  <p className="font-medium text-slate-800 text-sm">医療・福祉</p>
+                  <p className="text-xs text-slate-500 mt-1">予約・診療案内</p>
+                </div>
+                <div className="text-center p-4 border border-slate-100 rounded-xl hover:border-rose-200 hover:bg-rose-50/50 transition-all">
+                  <div className="w-12 h-12 mx-auto mb-2 rounded-full bg-amber-100 flex items-center justify-center">
+                    <Headphones className="w-6 h-6 text-amber-600" />
+                  </div>
+                  <p className="font-medium text-slate-800 text-sm">カスタマーサポート</p>
+                  <p className="text-xs text-slate-500 mt-1">問い合わせ対応</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 導入プロセス */}
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-8 mb-6 sm:mb-8 text-white shadow-xl">
+              <div className="text-center mb-6">
+                <h3 className="text-xl sm:text-2xl font-bold mb-2">かんたん3ステップで導入</h3>
+                <p className="text-slate-300 text-sm">たった5分で設置完了</p>
+              </div>
+              <div className="space-y-4 sm:space-y-0 sm:flex sm:items-start sm:gap-4">
+                <div className="flex-1 relative">
+                  <div className="flex sm:flex-col items-center sm:text-center gap-4 sm:gap-2">
+                    <div className="w-12 h-12 rounded-full bg-rose-500 flex items-center justify-center text-xl font-bold flex-shrink-0">
+                      1
+                    </div>
+                    <div className="flex-1 sm:flex-none">
+                      <h4 className="font-semibold mb-1">URLを入力</h4>
+                      <p className="text-slate-300 text-xs sm:text-sm">あなたのサイトURLを入力するだけ</p>
+                    </div>
+                  </div>
+                  <div className="hidden sm:block absolute top-6 left-full w-full h-0.5 bg-gradient-to-r from-rose-500 to-blue-500" style={{ width: "calc(100% - 48px)", left: "calc(50% + 24px)" }} />
+                </div>
+                <div className="flex-1 relative">
+                  <div className="flex sm:flex-col items-center sm:text-center gap-4 sm:gap-2">
+                    <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-xl font-bold flex-shrink-0">
+                      2
+                    </div>
+                    <div className="flex-1 sm:flex-none">
+                      <h4 className="font-semibold mb-1">AIが自動学習</h4>
+                      <p className="text-slate-300 text-xs sm:text-sm">サイト内容を解析して学習完了</p>
+                    </div>
+                  </div>
+                  <div className="hidden sm:block absolute top-6 left-full w-full h-0.5 bg-gradient-to-r from-blue-500 to-emerald-500" style={{ width: "calc(100% - 48px)", left: "calc(50% + 24px)" }} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex sm:flex-col items-center sm:text-center gap-4 sm:gap-2">
+                    <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center text-xl font-bold flex-shrink-0">
+                      3
+                    </div>
+                    <div className="flex-1 sm:flex-none">
+                      <h4 className="font-semibold mb-1">コードを貼るだけ</h4>
+                      <p className="text-slate-300 text-xs sm:text-sm">HTMLタグをサイトに設置して完了</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 text-center">
+                <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full text-sm">
+                  <Rocket className="w-4 h-4" />
+                  プログラミング知識不要！
+                </div>
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div className="text-center mb-6 sm:mb-8">
+              <p className="text-slate-600 text-sm mb-3">まずは無料でお試しください</p>
+              <button
+                onClick={() => document.querySelector("input")?.focus()}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white shadow-lg hover:shadow-xl transition-all"
+                style={{
+                  background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primary} 100%)`,
+                }}
+              >
+                <Zap className="w-5 h-5" />
+                今すぐエージェントを作成
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </>
+        )}
 
         {/* 進捗表示 */}
         {loading && progress && (
@@ -793,8 +1132,78 @@ export default function Home() {
       </main>
 
       {/* フッター */}
-      <footer className="text-center py-8 text-sm text-slate-400">
-        <p>Powered by hackjpn ver 2.0</p>
+      <footer className="border-t border-slate-200 py-4 px-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            {/* ロゴ・コピーライト */}
+            <div className="flex items-center gap-2">
+              <Image
+                src="/logo.png"
+                alt="Saleschat AI"
+                width={32}
+                height={32}
+                className="rounded-full"
+              />
+              <div>
+                <p className="text-sm font-medium text-slate-700">Saleschat AI</p>
+                <p className="text-xs text-slate-400">© 2024 hackjpn Inc.</p>
+              </div>
+            </div>
+
+            {/* ナビゲーションリンク */}
+            <nav className="flex flex-wrap items-center justify-center gap-4 text-sm text-slate-500">
+              <a
+                href="https://hackjpn.com/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-slate-700 transition-colors"
+              >
+                利用規約
+              </a>
+              <span className="text-slate-300">|</span>
+              <a
+                href="https://hackjpn.com/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-slate-700 transition-colors"
+              >
+                情報の取り扱い
+              </a>
+              <span className="text-slate-300">|</span>
+              <a
+                href="https://hackjpn.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-slate-700 transition-colors"
+              >
+                運営会社
+              </a>
+              {!session && (
+                <>
+                  <span className="text-slate-300">|</span>
+                  <Link
+                    href="/login"
+                    className="hover:text-slate-700 transition-colors"
+                  >
+                    ログイン
+                  </Link>
+                  <span className="text-slate-300">|</span>
+                  <Link
+                    href="/signup"
+                    className="hover:text-slate-700 transition-colors"
+                  >
+                    新規登録
+                  </Link>
+                </>
+              )}
+            </nav>
+          </div>
+
+          {/* Powered by */}
+          <p className="text-center text-xs text-slate-400 mt-3">
+            Powered by <a href="https://hackjpn.com" target="_blank" rel="noopener noreferrer" className="hover:text-slate-600 transition-colors">hackjpn</a> ver 2.5
+          </p>
+        </div>
       </footer>
 
       {/* アップグレードモーダル */}

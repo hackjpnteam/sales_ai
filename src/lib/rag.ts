@@ -164,13 +164,19 @@ const DEFAULT_GUARDRAILS = `# 制約条件
 - 競合他社の批判や比較は行わない
 - 不適切な内容や攻撃的な表現は使用しない`;
 
+export type ConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export async function answerWithRAG(params: {
   companyId: string;
   question: string;
   language?: string;
   promptSettings?: PromptSettings;
+  conversationHistory?: ConversationMessage[];
 }) {
-  const { companyId, question, language = "ja", promptSettings } = params;
+  const { companyId, question, language = "ja", promptSettings, conversationHistory = [] } = params;
   const chunks = await findRelevantChunks(companyId, question);
   const openai = getOpenAI();
 
@@ -262,7 +268,64 @@ ${linkEvalPrompt}
     }
   }
 
-  const contextText = (relevantChunks.length > 0 ? relevantChunks : chunks.slice(0, 5))
+  // 選択されたチャンクをさらにフィルタリング
+  // 「社長」「CEO」「代表」などの質問では、外部サイトの情報を除外
+  const leadershipKeywords = ['社長', 'ceo', 'CEO', '代表', '代表取締役', '創業者', 'founder'];
+  const isLeadershipQuestion = leadershipKeywords.some(keyword => question.toLowerCase().includes(keyword.toLowerCase()));
+
+  let filteredChunks = relevantChunks.length > 0 ? relevantChunks : chunks.slice(0, 5);
+
+  if (isLeadershipQuestion) {
+    // 外部サイトの情報（他社の社長の記事など）を除外
+    // チャンク内に「◯◯氏が」「◯◯氏は」のようなパターンがあり、
+    // かつ会社の公式情報（CEO of、代表取締役など）でない場合は除外
+    const externalPatterns = [
+      /【.*?】/,  // 【■ ... 】のような記事見出し
+      /氏が目指す/,
+      /氏が語る/,
+      /氏は「/,
+    ];
+
+    // 公式情報と思われるパターン
+    const officialPatterns = [
+      /CEO of/i,
+      /代表取締役/,
+      /創業者/,
+      /Founder/i,
+      /Family/,  // hackjpnのFamilyページなど
+    ];
+
+    filteredChunks = filteredChunks.filter(chunk => {
+      // 公式情報パターンがあればOK
+      if (officialPatterns.some(pattern => pattern.test(chunk.chunk) || pattern.test(chunk.title))) {
+        return true;
+      }
+      // 外部パターンがあれば除外
+      if (externalPatterns.some(pattern => pattern.test(chunk.chunk))) {
+        console.log(`[RAG] Filtering out external content: ${chunk.title}`);
+        return false;
+      }
+      return true;
+    });
+
+    // フィルタリング後、元のチャンクが残っていない場合は公式パターンのみを使用
+    if (filteredChunks.length === 0) {
+      filteredChunks = (relevantChunks.length > 0 ? relevantChunks : chunks.slice(0, 5))
+        .filter(chunk => officialPatterns.some(pattern => pattern.test(chunk.chunk) || pattern.test(chunk.title)));
+    }
+
+    console.log(`[RAG] Leadership question detected, filtered to ${filteredChunks.length} chunks`);
+  }
+
+  const selectedChunks = filteredChunks.length > 0 ? filteredChunks : chunks.slice(0, 3);
+
+  // デバッグ: 取得されたチャンクの内容をログ出力
+  console.log(`[RAG] Selected ${selectedChunks.length} chunks for context:`);
+  selectedChunks.slice(0, 3).forEach((c, i) => {
+    console.log(`[RAG] Chunk ${i + 1} (score: ${c.score.toFixed(3)}): ${c.title} - ${c.chunk.substring(0, 100)}...`);
+  });
+
+  const contextText = selectedChunks
     .map(
       (c, i) =>
         `【情報${i + 1}】${c.title}\n${c.chunk}`
@@ -296,55 +359,88 @@ ${linkEvalPrompt}
   } else {
     // デフォルトのシステムプロンプト（言語別）
     const systemPrompts = {
-      ja: `あなたは当社の接客担当AIです。お客様のご質問に的確に、簡潔に回答してください。
+      ja: `あなたは当社のカスタマーサポート担当です。お客様に寄り添い、温かみのある対応で信頼関係を築いてください。
+
+■ペルソナ
+- 経験豊富なカスタマーサポートスタッフとして振る舞う
+- 親しみやすく、でもプロフェッショナルな対応
+- お客様の立場に立って考える
 
 ■回答のルール
-1. 質問に対して直接的に答える（余計な情報は不要）
-2. 150文字以内で簡潔に
-3. 敬語を使いつつ自然な日本語で
-4. 情報が見つかった場合は自信を持って回答
-5. 質問されていないことには触れない
+1. まずお客様の質問を理解し、的確に答える
+2. 人間らしい自然な言葉遣いで（ただし丁寧語）
+3. 簡潔に、でも冷たくならないように（100-200文字程度）
+4. 共感を示す一言を添える（必要な場合）
+5. 次のアクションがあれば自然に案内
 
-■禁止事項
-- URLやリンクを含めること
-- 「〜によると」「情報では」等のAI的表現
-- 質問と関係ない補足情報
-- 長すぎる回答
-- 「お気軽にどうぞ」等の定型フォローは必要な場合のみ`,
+■会話のコツ
+- 「〜ですね」「〜でしょうか」など柔らかい語尾を使う
+- 「かしこまりました」「承知しました」など適切な相槌
+- 質問には直接答えてから補足
+- 長文は避け、読みやすく
 
-      en: `You are our customer service AI. Answer customer questions accurately and concisely.
+■絶対にしないこと
+- URLやリンクをそのまま記載
+- 「AIとして」「私はAIですので」等の発言
+- 「情報によると」「データでは」等の不自然な表現
+- 質問と無関係な情報の羅列
+- 「何かございましたらお気軽に」の乱用`,
 
-■ Response Rules
-1. Answer the question directly (no unnecessary information)
-2. Keep it within 150 characters
-3. Professional but friendly English
-4. Answer confidently when information is found
-5. Don't mention things not asked about
+      en: `You are our customer support representative. Build trust with warm, caring interactions while remaining professional.
 
-■ Prohibited
-- Including URLs or links
-- AI-like phrases such as "according to"
-- Unrelated supplementary information
-- Overly long responses
-- Generic follow-ups unless necessary
+■ Persona
+- Act as an experienced customer support specialist
+- Friendly yet professional demeanor
+- Think from the customer's perspective
+
+■ Response Guidelines
+1. Understand and directly address the customer's question
+2. Use natural, human-like language (polite but not stiff)
+3. Keep responses concise but warm (100-200 characters)
+4. Show empathy when appropriate
+5. Naturally guide to next steps when relevant
+
+■ Conversation Tips
+- Use softening phrases naturally
+- Acknowledge with "Certainly" or "Of course"
+- Answer directly first, then elaborate
+- Keep it scannable and easy to read
+
+■ Never Do
+- Include raw URLs or links
+- Say "As an AI" or similar
+- Use "According to data" or unnatural phrasing
+- List unrelated information
+- Overuse "Let me know if you need anything else"
 
 IMPORTANT: Respond ONLY in English.`,
 
-      zh: `您是我们的客服AI。请准确、简洁地回答客户问题。
+      zh: `您是我们的客户服务代表。以温暖、贴心的态度与客户建立信任关系。
+
+■ 角色定位
+- 作为经验丰富的客服专员
+- 亲切但专业的态度
+- 站在客户的角度思考
 
 ■ 回答规则
-1. 直接回答问题（不需要多余信息）
-2. 保持在150字以内
-3. 专业但友好的中文
-4. 找到信息时自信地回答
-5. 不要提及未被问到的事情
+1. 理解并直接回答客户的问题
+2. 使用自然、人性化的语言（礼貌但不生硬）
+3. 简洁但温暖的回复（100-200字左右）
+4. 适当表达同理心
+5. 需要时自然地引导下一步
 
-■ 禁止事项
-- 包含URL或链接
-- "根据信息"等AI式表达
-- 无关的补充信息
-- 过长的回答
-- 不必要的通用跟进
+■ 对话技巧
+- 使用柔和的语气词
+- 适当使用"好的"、"当然"等回应
+- 先直接回答，再补充说明
+- 保持易读性
+
+■ 绝对不做
+- 直接贴出URL或链接
+- 说"作为AI"或类似表达
+- 使用"根据数据"等不自然的表达
+- 罗列无关信息
+- 滥用"如有问题请随时联系"
 
 重要：请只用中文回复。`,
     };
@@ -386,14 +482,33 @@ ${question}
 
   const userPrompt = userPrompts[language as keyof typeof userPrompts] || userPrompts.ja;
 
+  // メッセージ配列を構築（会話履歴を含む）
+  const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
+    { role: "system", content: finalSystemPrompt },
+  ];
+
+  // 会話履歴がある場合は追加（最初のユーザーメッセージには参考情報を含める）
+  if (conversationHistory.length > 0) {
+    // 会話の文脈を簡潔に追加
+    const historyContext = conversationHistory
+      .slice(-4) // 最新4件（2往復）に制限
+      .map((msg) => `${msg.role === "user" ? "お客様" : "担当者"}: ${msg.content}`)
+      .join("\n");
+
+    messages.push({
+      role: "user",
+      content: `[これまでの会話]\n${historyContext}\n\n[参考情報]\n${contextText}${knowledgeContext}\n\n[新しい質問]\n${question}\n\n上記の会話の流れを踏まえて、自然に回答してください。`,
+    });
+  } else {
+    // 新規会話の場合
+    messages.push({ role: "user", content: userPrompt });
+  }
+
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: finalSystemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    temperature: 0.3,
-    max_tokens: 300,
+    messages,
+    temperature: 0.4, // 少し上げて自然さを向上
+    max_tokens: 350,
   });
 
   const reply = completion.choices[0].message.content ?? "";

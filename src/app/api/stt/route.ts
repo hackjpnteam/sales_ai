@@ -24,11 +24,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ text: "" });
   }
 
+  // ファイル名とMIMEタイプを決定
+  let fileName = file.name || "audio.webm";
+  const mimeType = file.type || "audio/webm";
+
+  // MIMEタイプに応じてファイル名の拡張子を修正
+  if (mimeType.includes("mp4") && !fileName.endsWith(".mp4")) {
+    fileName = "audio.mp4";
+  } else if (mimeType.includes("webm") && !fileName.endsWith(".webm")) {
+    fileName = "audio.webm";
+  } else if (mimeType.includes("wav") && !fileName.endsWith(".wav")) {
+    fileName = "audio.wav";
+  }
+
+  console.log("[STT] Processing file:", fileName, "mimeType:", mimeType, "size:", arrayBuffer.byteLength);
+
   const openai = getOpenAI();
 
   try {
     const transcription = await openai.audio.transcriptions.create({
-      file: await toFile(arrayBuffer, file.name || "audio.webm"),
+      file: await toFile(arrayBuffer, fileName),
       model: "whisper-1",
       language: language || "ja", // デフォルトは日本語
       prompt: "これは日本語または英語の音声です。", // 認識精度向上のためのヒント

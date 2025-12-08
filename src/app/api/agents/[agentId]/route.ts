@@ -3,8 +3,8 @@ import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
 import { User, Agent } from "@/lib/types";
 
-// PUT: エージェント設定を更新（ウェルカムメッセージ等）
-export async function PUT(
+// PUT/PATCH: エージェント設定を更新（ウェルカムメッセージ等）
+async function updateAgent(
   req: NextRequest,
   { params }: { params: Promise<{ agentId: string }> }
 ) {
@@ -37,7 +37,7 @@ export async function PUT(
     }
 
     // 許可するフィールドのみ更新
-    const allowedFields = ["welcomeMessage", "name", "themeColor", "voiceEnabled", "avatarUrl", "widgetPosition"];
+    const allowedFields = ["welcomeMessage", "name", "themeColor", "voiceEnabled", "avatarUrl", "widgetPosition", "quickButtons"];
     const updateData: Partial<Agent> = {};
 
     for (const field of allowedFields) {
@@ -67,6 +67,9 @@ export async function PUT(
     );
   }
 }
+
+// エクスポート
+export { updateAgent as PUT, updateAgent as PATCH };
 
 // DELETE: エージェントを削除
 export async function DELETE(

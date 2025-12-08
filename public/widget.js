@@ -155,24 +155,54 @@
       checkUrlChange();
     };
 
-    // 位置に応じたスタイル
+    // モバイル判定
+    const isMobile = () => window.innerWidth <= 768;
+
+    // 位置に応じたスタイル（モバイルフレンドリー）
     const getPositionStyles = (position) => {
+      // モバイルでは中央配置は下部に変換
+      const mobile = isMobile();
+
       switch (position) {
         case "bottom-left":
           return {
-            button: { left: "16px", right: "auto" },
-            iframe: { left: "16px", right: "auto" }
+            button: { bottom: "16px", left: "16px", right: "auto", top: "auto" },
+            iframe: { bottom: "70px", left: "16px", right: "auto", top: "auto" }
           };
         case "bottom-center":
           return {
-            button: { left: "50%", right: "auto", transform: "translateX(-50%)" },
-            iframe: { left: "50%", right: "auto", transform: "translateX(-50%)" }
+            button: { bottom: "16px", left: "50%", right: "auto", top: "auto", transform: "translateX(-50%)" },
+            iframe: { bottom: "70px", left: "50%", right: "auto", top: "auto", transform: "translateX(-50%)" }
+          };
+        case "middle-left":
+          // モバイルでは左下に配置
+          if (mobile) {
+            return {
+              button: { bottom: "16px", left: "16px", right: "auto", top: "auto" },
+              iframe: { bottom: "70px", left: "16px", right: "auto", top: "auto" }
+            };
+          }
+          return {
+            button: { top: "50%", left: "16px", right: "auto", bottom: "auto", transform: "translateY(-50%)" },
+            iframe: { top: "50%", left: "16px", right: "auto", bottom: "auto", transform: "translateY(-50%)" }
+          };
+        case "middle-right":
+          // モバイルでは右下に配置
+          if (mobile) {
+            return {
+              button: { bottom: "16px", right: "16px", left: "auto", top: "auto" },
+              iframe: { bottom: "70px", right: "16px", left: "auto", top: "auto" }
+            };
+          }
+          return {
+            button: { top: "50%", right: "16px", left: "auto", bottom: "auto", transform: "translateY(-50%)" },
+            iframe: { top: "50%", right: "16px", left: "auto", bottom: "auto", transform: "translateY(-50%)" }
           };
         case "bottom-right":
         default:
           return {
-            button: { right: "16px", left: "auto" },
-            iframe: { right: "16px", left: "auto" }
+            button: { bottom: "16px", right: "16px", left: "auto", top: "auto" },
+            iframe: { bottom: "70px", right: "16px", left: "auto", top: "auto" }
           };
       }
     };
@@ -184,7 +214,6 @@
     button.innerText = "AI相談";
     Object.assign(button.style, {
       position: "fixed",
-      bottom: "16px",
       zIndex: 999999,
       borderRadius: "9999px",
       padding: "10px 16px",
@@ -210,28 +239,33 @@
       return `rgb(${darkerR}, ${darkerG}, ${darkerB})`;
     };
 
+    // ホバー時のトランスフォーム計算
+    const getHoverTransform = (position, isHover) => {
+      const scale = isHover ? "scale(1.05)" : "scale(1)";
+      const mobile = isMobile();
+
+      if (position === "bottom-center") {
+        return `translateX(-50%) ${scale}`;
+      }
+      if (!mobile && (position === "middle-left" || position === "middle-right")) {
+        return `translateY(-50%) ${scale}`;
+      }
+      return scale;
+    };
+
     button.onmouseover = function () {
       button.style.backgroundColor = darkenColor(themeColor);
-      if (widgetPosition !== "bottom-center") {
-        button.style.transform = "scale(1.05)";
-      } else {
-        button.style.transform = "translateX(-50%) scale(1.05)";
-      }
+      button.style.transform = getHoverTransform(widgetPosition, true);
     };
     button.onmouseout = function () {
       button.style.backgroundColor = themeColor;
-      if (widgetPosition !== "bottom-center") {
-        button.style.transform = "scale(1)";
-      } else {
-        button.style.transform = "translateX(-50%)";
-      }
+      button.style.transform = getHoverTransform(widgetPosition, false);
     };
 
     // iframe コンテナ
     const iframeWrapper = document.createElement("div");
     Object.assign(iframeWrapper.style, {
       position: "fixed",
-      bottom: "70px",
       width: "360px",
       height: "520px",
       maxWidth: "95vw",
@@ -271,6 +305,17 @@
       } else {
         sendTrackingEvent({ type: 'chat_end' }, apiBase, companyId, visitorId, sessionId);
       }
+    });
+
+    // 画面リサイズ時に位置を再計算（モバイル↔デスクトップ切り替え対応）
+    var resizeTimeout;
+    window.addEventListener("resize", function() {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(function() {
+        var newStyles = getPositionStyles(widgetPosition);
+        Object.assign(button.style, newStyles.button);
+        Object.assign(iframeWrapper.style, newStyles.iframe);
+      }, 100);
     });
 
     document.body.appendChild(button);

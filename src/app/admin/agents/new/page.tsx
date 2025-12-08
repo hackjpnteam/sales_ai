@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, ArrowLeft, Globe, Zap, Bot, Palette, Volume2 } from "lucide-react";
+import Footer from "@/components/Footer";
 
 type ProgressEvent = {
   type: "discovering" | "crawling" | "embedding" | "saving" | "complete" | "error";
@@ -139,7 +140,7 @@ export default function NewAgentPage() {
             </div>
             <div>
               <h1 className="text-white font-bold text-xl tracking-tight">新規エージェント作成</h1>
-              <p className="text-white/70 text-xs">Powered by hackjpn ver 2.2</p>
+              <p className="text-white/70 text-xs">Powered by hackjpn</p>
             </div>
           </div>
         </div>
@@ -359,6 +360,7 @@ export default function NewAgentPage() {
           </div>
         )}
       </main>
+      <Footer />
     </div>
   );
 }

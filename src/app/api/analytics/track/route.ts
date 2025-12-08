@@ -20,11 +20,18 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
+    // CORSヘッダー
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
+
     // 必須フィールドチェック
     if (!body.companyId || !body.type || !body.visitorId || !body.sessionId || !body.url) {
       return NextResponse.json(
         { error: "Missing required fields: companyId, type, visitorId, sessionId, url" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -32,7 +39,7 @@ export async function POST(req: NextRequest) {
     if (!VALID_EVENT_TYPES.includes(body.type)) {
       return NextResponse.json(
         { error: `Invalid event type: ${body.type}` },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -43,7 +50,7 @@ export async function POST(req: NextRequest) {
     if (!company) {
       return NextResponse.json(
         { error: "Invalid companyId" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -85,12 +92,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       isPro,
-    });
+    }, { headers: corsHeaders });
   } catch (error) {
     console.error("[Analytics] Track error:", error);
     return NextResponse.json(
       { error: "Failed to track event" },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+      }
     );
   }
 }

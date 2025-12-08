@@ -119,7 +119,19 @@ function AnalyticsContent() {
       }
 
       setIsPro(summaryData.isPro);
-      setSummary(summaryData.summary);
+      setSummary(summaryData.summary || {
+        totalPV: 0,
+        sessions: 0,
+        uniqueVisitors: 0,
+        chatOpens: 0,
+        chatMessages: 0,
+        conversions: 0,
+        chatOpenRate: "0",
+        chatCVR: "0",
+        nonChatCVR: "0",
+        chatConversions: 0,
+        chatSessions: 0,
+      });
       setDailyData(summaryData.dailyData || []);
       setDeviceDistribution(summaryData.deviceDistribution || {pc: 0, mobile: 0, tablet: 0});
 
@@ -349,7 +361,7 @@ function AnalyticsContent() {
                   総PV
                 </div>
                 <div className="text-2xl font-bold text-slate-800">
-                  {summary.totalPV.toLocaleString()}
+                  {(summary.totalPV ?? 0).toLocaleString()}
                 </div>
               </div>
               <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
@@ -358,7 +370,7 @@ function AnalyticsContent() {
                   セッション
                 </div>
                 <div className="text-2xl font-bold text-slate-800">
-                  {summary.sessions.toLocaleString()}
+                  {(summary.sessions ?? 0).toLocaleString()}
                 </div>
               </div>
               <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
@@ -367,10 +379,10 @@ function AnalyticsContent() {
                   チャット開始
                 </div>
                 <div className="text-2xl font-bold text-slate-800">
-                  {summary.chatOpens.toLocaleString()}
+                  {(summary.chatOpens ?? 0).toLocaleString()}
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
-                  開始率 {summary.chatOpenRate}%
+                  開始率 {summary.chatOpenRate ?? "0"}%
                 </div>
               </div>
               <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
@@ -379,7 +391,7 @@ function AnalyticsContent() {
                   コンバージョン
                 </div>
                 <div className="text-2xl font-bold text-slate-800">
-                  {summary.conversions.toLocaleString()}
+                  {(summary.conversions ?? 0).toLocaleString()}
                 </div>
               </div>
             </div>
@@ -395,25 +407,25 @@ function AnalyticsContent() {
                   <div className="text-center p-4 bg-green-50 rounded-xl">
                     <div className="text-sm text-slate-600 mb-1">チャット利用者のCVR</div>
                     <div className="text-3xl font-bold text-green-600">
-                      {summary.chatCVR}%
+                      {summary.chatCVR ?? "0"}%
                     </div>
                     <div className="text-xs text-slate-500 mt-1">
-                      {summary.chatSessions}セッション / {summary.chatConversions}CV
+                      {summary.chatSessions ?? 0}セッション / {summary.chatConversions ?? 0}CV
                     </div>
                   </div>
                   <div className="text-center p-4 bg-slate-50 rounded-xl">
                     <div className="text-sm text-slate-600 mb-1">非チャットユーザーのCVR</div>
                     <div className="text-3xl font-bold text-slate-600">
-                      {summary.nonChatCVR}%
+                      {summary.nonChatCVR ?? "0"}%
                     </div>
                   </div>
                 </div>
-                {parseFloat(summary.chatCVR) > parseFloat(summary.nonChatCVR) && (
+                {parseFloat(summary.chatCVR ?? "0") > parseFloat(summary.nonChatCVR ?? "0") && (
                   <div className="mt-4 p-3 bg-green-50 rounded-lg text-center">
                     <span className="text-green-700 font-medium flex items-center justify-center gap-1">
                       <ArrowUpRight className="w-4 h-4" />
                       チャット利用者は非利用者より{" "}
-                      {(parseFloat(summary.chatCVR) / Math.max(parseFloat(summary.nonChatCVR), 0.01)).toFixed(1)}倍
+                      {(parseFloat(summary.chatCVR ?? "0") / Math.max(parseFloat(summary.nonChatCVR ?? "0"), 0.01)).toFixed(1)}倍
                       CVしやすい！
                     </span>
                   </div>
@@ -549,18 +561,18 @@ function AnalyticsContent() {
                   <div className="bg-gradient-to-b from-green-50 to-green-100 rounded-2xl p-6">
                     <div className="text-center">
                       <div className="text-5xl font-bold text-green-600 mb-2">
-                        {summary.chatCVR}%
+                        {summary.chatCVR ?? "0"}%
                       </div>
                       <div className="text-sm text-slate-600">コンバージョン率</div>
                       <div className="mt-4 pt-4 border-t border-green-200">
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
                             <div className="text-slate-500">セッション</div>
-                            <div className="font-bold text-slate-800">{summary.chatSessions}</div>
+                            <div className="font-bold text-slate-800">{summary.chatSessions ?? 0}</div>
                           </div>
                           <div>
                             <div className="text-slate-500">CV数</div>
-                            <div className="font-bold text-slate-800">{summary.chatConversions}</div>
+                            <div className="font-bold text-slate-800">{summary.chatConversions ?? 0}</div>
                           </div>
                         </div>
                       </div>
@@ -576,7 +588,7 @@ function AnalyticsContent() {
                   <div className="bg-gradient-to-b from-slate-50 to-slate-100 rounded-2xl p-6">
                     <div className="text-center">
                       <div className="text-5xl font-bold text-slate-600 mb-2">
-                        {summary.nonChatCVR}%
+                        {summary.nonChatCVR ?? "0"}%
                       </div>
                       <div className="text-sm text-slate-600">コンバージョン率</div>
                       <div className="mt-4 pt-4 border-t border-slate-200">
@@ -584,13 +596,13 @@ function AnalyticsContent() {
                           <div>
                             <div className="text-slate-500">セッション</div>
                             <div className="font-bold text-slate-800">
-                              {summary.sessions - summary.chatSessions}
+                              {(summary.sessions ?? 0) - (summary.chatSessions ?? 0)}
                             </div>
                           </div>
                           <div>
                             <div className="text-slate-500">CV数</div>
                             <div className="font-bold text-slate-800">
-                              {summary.conversions - summary.chatConversions}
+                              {(summary.conversions ?? 0) - (summary.chatConversions ?? 0)}
                             </div>
                           </div>
                         </div>
@@ -601,7 +613,7 @@ function AnalyticsContent() {
               </div>
 
               {/* インサイト */}
-              {parseFloat(summary.chatCVR) > parseFloat(summary.nonChatCVR) ? (
+              {parseFloat(summary.chatCVR ?? "0") > parseFloat(summary.nonChatCVR ?? "0") ? (
                 <div className="mt-6 p-4 bg-green-50 rounded-xl border border-green-200">
                   <div className="flex items-start gap-3">
                     <ArrowUpRight className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
@@ -610,7 +622,7 @@ function AnalyticsContent() {
                       <div className="text-sm text-green-700 mt-1">
                         チャットを利用したユーザーは、非利用者と比較して
                         <strong>
-                          {(parseFloat(summary.chatCVR) / Math.max(parseFloat(summary.nonChatCVR), 0.01)).toFixed(1)}倍
+                          {(parseFloat(summary.chatCVR ?? "0") / Math.max(parseFloat(summary.nonChatCVR ?? "0"), 0.01)).toFixed(1)}倍
                         </strong>
                         高い確率でコンバージョンしています。
                         チャットの露出を増やすことで、さらなるCV増加が期待できます。
