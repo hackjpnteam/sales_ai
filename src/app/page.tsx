@@ -1319,7 +1319,7 @@ export default function Home() {
           <div className="fixed bottom-20 sm:bottom-24 left-2 sm:left-6 right-2 sm:right-auto z-50 sm:w-[380px] h-[70vh] sm:h-[600px] max-h-[600px] rounded-2xl shadow-2xl overflow-hidden border border-rose-200">
             <iframe
               key={`widget-demo-hackjpn`}
-              src="https://saleschat.me/widget?companyId=e2c748ed-b950-4774-8591-06836b2e430c&agentName=hackjpn%20AI&themeColor=%23D86672"
+              src="https://saleschat.me/widget?companyId=e2c748ed-b950-4774-8591-06836b2e430c"
               className="w-full h-full"
               title="hackjpn AI Chat Widget"
             />
