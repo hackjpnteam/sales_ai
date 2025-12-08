@@ -224,9 +224,14 @@ function WidgetContent() {
               setAgentId(data.agent.agentId);
               console.log("[Widget] Set agentId:", data.agent.agentId);
             }
-            if (data.agent?.quickButtons && data.agent.quickButtons.length > 0) {
+            // カスタムクイックボタンが設定されている場合のみセット
+            // 空配列や未設定の場合はnullのままにして、言語別デフォルトを使用
+            if (data.agent?.quickButtons && Array.isArray(data.agent.quickButtons) && data.agent.quickButtons.length > 0) {
               setCustomQuickButtons(data.agent.quickButtons);
               console.log("[Widget] Set custom quick buttons:", data.agent.quickButtons);
+            } else {
+              setCustomQuickButtons(null);
+              console.log("[Widget] No custom quick buttons, using language defaults");
             }
             // URLパラメータでカラーが指定されていない場合のみ、DBの値を使用
             if (!paramThemeColor && data.agent?.themeColor) {
@@ -917,13 +922,13 @@ function WidgetContent() {
           )}
           {/* Quick buttons after welcome message */}
           {msg.id === "welcome" && showQuickButtons && (
-            <div className="flex flex-wrap gap-2 justify-center mt-4">
-              {(customQuickButtons || t.quickQuestions).slice(0, 5).map((q, i) => {
+            <div className="flex flex-wrap gap-2 justify-center mt-4" key={`quickbuttons-${language}`}>
+              {(customQuickButtons && customQuickButtons.length > 0 ? customQuickButtons : t.quickQuestions).slice(0, 5).map((q, i) => {
                 const icons = [Building2, Users, Briefcase, MessageCircle, HelpCircle];
                 const Icon = icons[i % 5];
                 return (
                   <button
-                    key={i}
+                    key={`${language}-${i}`}
                     onClick={() => handleQuickQuestion(q.query)}
                     disabled={loading || !isInitialized || !companyId}
                     className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl border text-sm text-slate-700 transition-all shadow-sm disabled:opacity-50"
