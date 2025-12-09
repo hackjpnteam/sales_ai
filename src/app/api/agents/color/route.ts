@@ -35,11 +35,16 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    // Check if user owns this company
+    // Check if user owns this company or has shared access
     const usersCol = await getCollection<User>("users");
     const user = await usersCol.findOne({ userId: session.user.id });
 
-    if (!user?.companyIds?.includes(agent.companyId)) {
+    const isOwner = user?.companyIds?.includes(agent.companyId);
+    const isSharedUser = agent.sharedWith?.some(
+      (shared) => shared.email === session.user?.email || shared.userId === session.user?.id
+    );
+
+    if (!isOwner && !isSharedUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

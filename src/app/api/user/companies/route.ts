@@ -29,34 +29,40 @@ export async function GET() {
     }
 
     // Get companies owned by user
-    const companies = await companiesCol
-      .find({ companyId: { $in: user.companyIds } })
+    const ownedCompanies = await companiesCol
+      .find({ companyId: { $in: user.companyIds || [] } })
       .toArray();
 
     // 全エージェントを一括取得（N+1クエリ問題を解決）
-    const companyIds = companies.map(c => c.companyId);
-    const allAgents = await agentsCol
-      .find({ companyId: { $in: companyIds } })
+    const ownedCompanyIds = ownedCompanies.map(c => c.companyId);
+    const ownedAgents = await agentsCol
+      .find({ companyId: { $in: ownedCompanyIds } })
       .toArray();
 
     // 会社ごとにエージェントをマッピング
-    const agentsByCompany = allAgents.reduce((acc, agent) => {
+    const ownedAgentsByCompany = ownedAgents.reduce((acc, agent) => {
       if (!acc[agent.companyId]) {
         acc[agent.companyId] = [];
       }
       acc[agent.companyId].push(agent);
       return acc;
-    }, {} as Record<string, typeof allAgents>);
+    }, {} as Record<string, typeof ownedAgents>);
 
-    const companiesWithAgents = companies.map((company) => ({
+    const ownedCompaniesWithAgents = ownedCompanies.map((company) => ({
       ...company,
-      agents: agentsByCompany[company.companyId] || [],
+      isShared: false,
+      agents: ownedAgentsByCompany[company.companyId] || [],
     }));
 
-    // 共有されたエージェントを取得
+    // 共有されたエージェントを取得（userIdまたはemailで検索）
+    // 自分が所有していない会社のエージェントのみ
     const sharedAgents = await agentsCol
       .find({
-        "sharedWith.userId": session.user.id,
+        companyId: { $nin: ownedCompanyIds },
+        $or: [
+          { "sharedWith.userId": session.user.id },
+          { "sharedWith.email": session.user.email },
+        ],
       })
       .toArray();
 
@@ -82,9 +88,13 @@ export async function GET() {
       agents: sharedAgentsByCompany[company.companyId] || [],
     }));
 
+    // 全ての会社を統合（所有 + 共有）
+    // 共有されたエージェントも所有者と同じ機能を使えるように統合
+    const allCompanies = [...ownedCompaniesWithAgents, ...sharedCompaniesWithAgents];
+
     return NextResponse.json({
-      companies: companiesWithAgents,
-      sharedCompanies: sharedCompaniesWithAgents,
+      companies: allCompanies,
+      sharedCompanies: sharedCompaniesWithAgents, // 後方互換性のため残す
     });
   } catch (error) {
     console.error("Get user companies error:", error);

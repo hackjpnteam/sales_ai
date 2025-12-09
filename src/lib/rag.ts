@@ -135,7 +135,7 @@ export async function findRelevantChunks(companyId: string, question: string): P
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 
-  console.log(`[RAG] Top scores: ${sorted.slice(0, 3).map(s => s.score.toFixed(3)).join(", ")}`);
+  console.log(`[RAG] Top scores: ${sorted.slice(0, 3).map(s => `${s.score.toFixed(3)}${s.isCustomKnowledge ? '(CK)' : ''}`).join(", ")}`);
 
   return sorted;
 }
@@ -195,9 +195,16 @@ export async function answerWithRAG(params: {
     };
   }
 
-  // 高スコアのチャンクのみ使用（閾値0.3以上）
-  const relevantChunks = chunks.filter(c => c.score >= 0.3);
-  console.log(`[RAG] High-score chunks: ${relevantChunks.length} (threshold: 0.3)`);
+  // 高スコアのチャンクのみ使用
+  // カスタムナレッジは閾値を低く設定（ユーザーが追加した情報は優先的に使用）
+  const relevantChunks = chunks.filter(c => {
+    if (c.isCustomKnowledge) {
+      console.log(`[RAG] Custom knowledge "${c.title}" score: ${c.score.toFixed(3)} (threshold: 0.15)`);
+      return c.score >= 0.15; // カスタムナレッジは低い閾値
+    }
+    return c.score >= 0.3; // 通常のドキュメントは0.3
+  });
+  console.log(`[RAG] High-score chunks: ${relevantChunks.length} (threshold: 0.3 / custom: 0.15)`);
 
   // URLを持つチャンクのみからリンクを抽出（カスタムナレッジは除外）
   const urlChunks = relevantChunks
@@ -269,11 +276,56 @@ ${linkEvalPrompt}
   }
 
   // 選択されたチャンクをさらにフィルタリング
+  let filteredChunks = relevantChunks.length > 0 ? relevantChunks : chunks.slice(0, 5);
+
+  // 「サービス」「プロダクト」「製品」などの質問では、利用規約・プライバシーポリシーを除外
+  const serviceKeywords = ['サービス', 'プロダクト', '製品', '事業', 'service', 'product'];
+  const isServiceQuestion = serviceKeywords.some(keyword => question.toLowerCase().includes(keyword.toLowerCase()));
+
+  if (isServiceQuestion) {
+    // 利用規約・プライバシーポリシーなどの法的文書は除外
+    const legalPatterns = [
+      /利用規約/,
+      /ご利用規約/,
+      /Terms.*Conditions/i,
+      /プライバシーポリシー/,
+      /Privacy.*Policy/i,
+      /個人情報.*保護/,
+      /個人情報.*取り扱い/,
+      /個人情報.*利用/,
+      /本規約/,
+      /当社.*免責/,
+      /第\d+条/,  // 法的条文
+    ];
+
+    const beforeCount = filteredChunks.length;
+    filteredChunks = filteredChunks.filter(chunk => {
+      const chunkText = chunk.chunk || '';
+      const titleText = chunk.title || '';
+      const urlText = chunk.url || '';
+
+      // /service/ URLを持つチャンクは優先
+      if (urlText.includes('/service')) {
+        return true;
+      }
+
+      // 法的文書パターンがあれば除外
+      if (legalPatterns.some(pattern => pattern.test(chunkText) || pattern.test(titleText))) {
+        console.log(`[RAG] Filtering out legal document for service question: ${titleText}`);
+        return false;
+      }
+
+      return true;
+    });
+
+    if (filteredChunks.length !== beforeCount) {
+      console.log(`[RAG] Service question: filtered from ${beforeCount} to ${filteredChunks.length} chunks`);
+    }
+  }
+
   // 「社長」「CEO」「代表」などの質問では、外部サイトの情報を除外
   const leadershipKeywords = ['社長', 'ceo', 'CEO', '代表', '代表取締役', '創業者', 'founder'];
   const isLeadershipQuestion = leadershipKeywords.some(keyword => question.toLowerCase().includes(keyword.toLowerCase()));
-
-  let filteredChunks = relevantChunks.length > 0 ? relevantChunks : chunks.slice(0, 5);
 
   if (isLeadershipQuestion) {
     // 外部情報（他社の社長・投資先・支援先・株主の情報など）を除外
@@ -309,6 +361,12 @@ ${linkEvalPrompt}
     ];
 
     filteredChunks = filteredChunks.filter(chunk => {
+      // カスタムナレッジはフィルタリング対象外（ユーザーが追加した信頼できる情報）
+      if (chunk.isCustomKnowledge) {
+        console.log(`[RAG] Keeping custom knowledge: ${chunk.title}`);
+        return true;
+      }
+
       const chunkText = chunk.chunk || '';
       const titleText = chunk.title || '';
       const urlText = chunk.url || '';

@@ -3,9 +3,31 @@ import { auth } from "@/lib/auth";
 import { getCollection } from "@/lib/mongodb";
 import { createEmbedding } from "@/lib/openai";
 import { v4 as uuidv4 } from "uuid";
-import { CustomKnowledge, Company, Agent } from "@/lib/types";
+import { CustomKnowledge, Company, Agent, User } from "@/lib/types";
 
 const MAX_CONTENT_LENGTH = 3000;
+
+// ユーザーが会社にアクセスできるか確認するヘルパー関数
+async function canAccessCompany(session: { user: { id?: string; email?: string | null } }, companyId: string): Promise<boolean> {
+  const usersCol = await getCollection<User>("users");
+  const agentsCol = await getCollection<Agent>("agents");
+
+  // ユーザーが所有者かチェック
+  const user = await usersCol.findOne({ userId: session.user.id });
+  if (user?.companyIds?.includes(companyId)) {
+    return true;
+  }
+
+  // 共有されているかチェック
+  const agent = await agentsCol.findOne({ companyId });
+  if (agent?.sharedWith?.some(
+    (shared) => shared.email === session.user.email || shared.userId === session.user.id
+  )) {
+    return true;
+  }
+
+  return false;
+}
 
 // GET: カスタムナレッジ一覧取得
 export async function GET(req: NextRequest) {
@@ -22,7 +44,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 権限チェック
+    // 権限チェック（所有者または共有ユーザー）
+    if (!await canAccessCompany(session, companyId)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const companiesCol = await getCollection<Company>("companies");
     const company = await companiesCol.findOne({ companyId });
 
@@ -87,7 +113,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 権限チェック
+    // 権限チェック（所有者または共有ユーザー）
+    if (!await canAccessCompany(session, companyId)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const companiesCol = await getCollection<Company>("companies");
     const company = await companiesCol.findOne({ companyId });
 
@@ -168,7 +198,11 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // 権限チェック
+    // 権限チェック（所有者または共有ユーザー）
+    if (!await canAccessCompany(session, companyId)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const companiesCol = await getCollection<Company>("companies");
     const company = await companiesCol.findOne({ companyId });
 
@@ -228,7 +262,11 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    // 権限チェック
+    // 権限チェック（所有者または共有ユーザー）
+    if (!await canAccessCompany(session, companyId)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
     const companiesCol = await getCollection<Company>("companies");
     const company = await companiesCol.findOne({ companyId });
 

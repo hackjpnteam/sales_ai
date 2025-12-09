@@ -13,6 +13,26 @@ type Avatar = {
   createdAt: Date;
 };
 
+// ユーザーがエージェントにアクセスできるか確認するヘルパー関数
+async function canAccessAgent(session: { user: { id?: string; email?: string | null } }, agent: AgentType): Promise<boolean> {
+  const usersCol = await getCollection<User>("users");
+
+  // ユーザーが所有者かチェック
+  const user = await usersCol.findOne({ userId: session.user.id });
+  if (user?.companyIds?.includes(agent.companyId)) {
+    return true;
+  }
+
+  // 共有されているかチェック
+  if (agent.sharedWith?.some(
+    (shared) => shared.email === session.user.email || shared.userId === session.user.id
+  )) {
+    return true;
+  }
+
+  return false;
+}
+
 // GET: エージェントのアバター一覧を取得
 export async function GET(req: NextRequest) {
   try {
@@ -28,7 +48,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "agentId is required" }, { status: 400 });
     }
 
-    // エージェントの所有権を確認
+    // エージェントを取得
     const agentsCol = await getCollection<AgentType>("agents");
     const agent = await agentsCol.findOne({ agentId });
 
@@ -36,10 +56,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    const usersCol = await getCollection<User>("users");
-    const user = await usersCol.findOne({ userId: session.user.id });
-
-    if (!user?.companyIds?.includes(agent.companyId)) {
+    // 所有権または共有アクセスを確認
+    if (!await canAccessAgent(session, agent)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -93,7 +111,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // エージェントの所有権を確認
+    // エージェントを取得
     const agentsCol = await getCollection<AgentType>("agents");
     const agent = await agentsCol.findOne({ agentId });
 
@@ -101,10 +119,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    const usersCol = await getCollection<User>("users");
-    const user = await usersCol.findOne({ userId: session.user.id });
-
-    if (!user?.companyIds?.includes(agent.companyId)) {
+    // 所有権または共有アクセスを確認
+    if (!await canAccessAgent(session, agent)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -164,11 +180,11 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Avatar not found" }, { status: 404 });
     }
 
-    // 所有権を確認
-    const usersCol = await getCollection<User>("users");
-    const user = await usersCol.findOne({ userId: session.user.id });
+    // エージェントを取得して所有権または共有アクセスを確認
+    const agentsCol = await getCollection<AgentType>("agents");
+    const agent = await agentsCol.findOne({ agentId: avatar.agentId });
 
-    if (!user?.companyIds?.includes(avatar.companyId)) {
+    if (!agent || !await canAccessAgent(session, agent)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

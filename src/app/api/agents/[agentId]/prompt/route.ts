@@ -35,11 +35,16 @@ export async function GET(
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    // ユーザーがこの会社を所有しているか確認
+    // ユーザーがこの会社を所有しているか、共有アクセス権があるか確認
     const usersCol = await getCollection<User>("users");
     const user = await usersCol.findOne({ userId: session.user.id });
 
-    if (!user?.companyIds?.includes(agent.companyId)) {
+    const isOwner = user?.companyIds?.includes(agent.companyId);
+    const isSharedUser = agent.sharedWith?.some(
+      (shared) => shared.email === session.user?.email || shared.userId === session.user?.id
+    );
+
+    if (!isOwner && !isSharedUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
@@ -84,11 +89,16 @@ export async function PATCH(
       return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    // ユーザーがこの会社を所有しているか確認
+    // ユーザーがこの会社を所有しているか、共有アクセス権があるか確認
     const usersCol = await getCollection<User>("users");
     const user = await usersCol.findOne({ userId: session.user.id });
 
-    if (!user?.companyIds?.includes(agent.companyId)) {
+    const isOwner = user?.companyIds?.includes(agent.companyId);
+    const isSharedUser = agent.sharedWith?.some(
+      (shared) => shared.email === session.user?.email || shared.userId === session.user?.id
+    );
+
+    if (!isOwner && !isSharedUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
