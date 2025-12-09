@@ -42,6 +42,7 @@ type User = {
   email: string;
   name?: string;
   createdAt: string;
+  maxPlanCount: number;
   companies: Company[];
   agents: Agent[];
 };
@@ -78,6 +79,10 @@ export default function SuperAdminPage() {
   const [editingPlan, setEditingPlan] = useState<{
     companyId: string;
     plan: string;
+  } | null>(null);
+  const [editingMaxPlan, setEditingMaxPlan] = useState<{
+    userId: string;
+    count: number;
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -198,6 +203,36 @@ export default function SuperAdminPage() {
     } catch (error) {
       console.error("Failed to update plan:", error);
       alert("プランの更新に失敗しました");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleMaxPlanChange = async (userId: string, newCount: number) => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/superadmin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, maxPlanCount: newCount }),
+      });
+
+      if (res.ok) {
+        // ユーザーリストを更新
+        setUsers((prev) =>
+          prev.map((user) =>
+            user.userId === userId
+              ? { ...user, maxPlanCount: newCount }
+              : user
+          )
+        );
+        setEditingMaxPlan(null);
+      } else {
+        alert("Max枠の更新に失敗しました");
+      }
+    } catch (error) {
+      console.error("Failed to update max plan count:", error);
+      alert("Max枠の更新に失敗しました");
     } finally {
       setSaving(false);
     }
@@ -507,11 +542,45 @@ export default function SuperAdminPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-                      <div className="text-right text-slate-500 text-xs sm:text-sm hidden sm:block">
-                        <span className="mr-3">
-                          会社: {user.companies.length}
-                        </span>
+                      <div className="text-right text-slate-500 text-xs sm:text-sm hidden sm:flex sm:items-center sm:gap-3">
+                        <span>会社: {user.companies.length}</span>
                         <span>エージェント: {user.agents.length}</span>
+                        {editingMaxPlan?.userId === user.userId ? (
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={editingMaxPlan.count}
+                              onChange={(e) => setEditingMaxPlan({ ...editingMaxPlan, count: parseInt(e.target.value) || 0 })}
+                              className="w-14 px-2 py-1 rounded border border-amber-300 text-slate-800 text-sm"
+                            />
+                            <button
+                              onClick={() => handleMaxPlanChange(user.userId, editingMaxPlan.count)}
+                              disabled={saving}
+                              className="p-1.5 rounded bg-green-500 text-white hover:bg-green-600 transition-all disabled:opacity-50"
+                            >
+                              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              onClick={() => setEditingMaxPlan(null)}
+                              className="p-1.5 rounded bg-slate-200 text-slate-600 hover:bg-slate-300 transition-all"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingMaxPlan({ userId: user.userId, count: user.maxPlanCount });
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-white text-xs font-medium hover:from-amber-500 hover:to-orange-600 transition-all"
+                          >
+                            <Crown className="w-3 h-3" />
+                            Max枠: {user.maxPlanCount}
+                          </button>
+                        )}
                       </div>
                       {expandedUser === user.userId ? (
                         <ChevronUp className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
@@ -523,6 +592,47 @@ export default function SuperAdminPage() {
 
                   {expandedUser === user.userId && (
                     <div className="px-3 sm:px-4 pb-3 sm:pb-4 space-y-2 sm:space-y-3">
+                      {/* モバイル用Max枠編集 */}
+                      <div className="sm:hidden ml-10 sm:ml-14 p-3 bg-amber-50 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <span className="text-amber-700 text-sm font-medium flex items-center gap-1">
+                            <Crown className="w-4 h-4" />
+                            Max枠
+                          </span>
+                          {editingMaxPlan?.userId === user.userId ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={editingMaxPlan.count}
+                                onChange={(e) => setEditingMaxPlan({ ...editingMaxPlan, count: parseInt(e.target.value) || 0 })}
+                                className="w-14 px-2 py-1 rounded border border-amber-300 text-slate-800 text-sm"
+                              />
+                              <button
+                                onClick={() => handleMaxPlanChange(user.userId, editingMaxPlan.count)}
+                                disabled={saving}
+                                className="p-1.5 rounded bg-green-500 text-white hover:bg-green-600 transition-all disabled:opacity-50"
+                              >
+                                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                onClick={() => setEditingMaxPlan(null)}
+                                className="p-1.5 rounded bg-slate-200 text-slate-600 hover:bg-slate-300 transition-all"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setEditingMaxPlan({ userId: user.userId, count: user.maxPlanCount })}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-white text-sm font-medium hover:from-amber-500 hover:to-orange-600 transition-all"
+                            >
+                              {user.maxPlanCount}枠
+                            </button>
+                          )}
+                        </div>
+                      </div>
                       {user.companies.length === 0 ? (
                         <p className="text-slate-400 text-xs sm:text-sm pl-10 sm:pl-14">
                           会社がありません

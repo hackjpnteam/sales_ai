@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/admin";
@@ -34,6 +34,7 @@ export async function GET() {
           email: user.email,
           name: user.name,
           createdAt: user.createdAt,
+          maxPlanCount: user.maxPlanCount || 0,
           companies: companies.map((c) => ({
             companyId: c.companyId,
             name: c.name,
@@ -94,6 +95,51 @@ export async function GET() {
     console.error("Super admin get users error:", error);
     return NextResponse.json(
       { error: "Failed to get users" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH: ユーザーのmaxPlanCountを更新
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.email || !isSuperAdmin(session.user.email)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { userId, maxPlanCount } = await req.json();
+
+    if (!userId) {
+      return NextResponse.json({ error: "userId is required" }, { status: 400 });
+    }
+
+    if (typeof maxPlanCount !== "number" || maxPlanCount < 0) {
+      return NextResponse.json({ error: "Valid maxPlanCount is required" }, { status: 400 });
+    }
+
+    const usersCol = await getCollection<User>("users");
+
+    const result = await usersCol.updateOne(
+      { userId },
+      { $set: { maxPlanCount } }
+    );
+
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    console.log(`[SuperAdmin] Updated maxPlanCount for user ${userId} to ${maxPlanCount}`);
+
+    return NextResponse.json({
+      success: true,
+      userId,
+      maxPlanCount,
+    });
+  } catch (error) {
+    console.error("Super admin update user error:", error);
+    return NextResponse.json(
+      { error: "Failed to update user" },
       { status: 500 }
     );
   }

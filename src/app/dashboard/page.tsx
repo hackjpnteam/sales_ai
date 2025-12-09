@@ -96,7 +96,7 @@ type Company = {
   name: string;
   rootUrl: string;
   language: string;
-  plan?: "free" | "lite" | "pro";
+  plan?: "free" | "lite" | "pro" | "max";
   isShared?: boolean;
   createdAt: Date;
   agents: Agent[];
@@ -146,6 +146,14 @@ const positionOptions = [
   { name: "左中央", value: "middle-left", icon: "←" },
 ] as const;
 
+// プランごとのエージェント作成上限
+const AGENT_LIMITS: Record<string, number> = {
+  free: 1,
+  lite: 1,
+  pro: 1,
+  max: 5,
+};
+
 // プラン情報
 const plans = {
   lite: {
@@ -173,6 +181,18 @@ const plans = {
       "端末情報トラッキング",
       "年齢層分析",
       "詳細な分析ダッシュボード",
+    ],
+  },
+  max: {
+    id: "max",
+    name: "Max",
+    price: "¥10,000",
+    period: "/月",
+    features: [
+      "Proプランの全機能",
+      "5エージェントまで作成可能",
+      "複数購入で無制限に拡張可能",
+      "優先サポート",
     ],
   },
 };
@@ -287,6 +307,12 @@ function DashboardContent() {
   ]);
   const [savingQuickButtons, setSavingQuickButtons] = useState(false);
 
+  // Maxプラン購入数
+  const [maxPlanCount, setMaxPlanCount] = useState(0);
+
+  // プラン変更処理中
+  const [changingPlanCompany, setChangingPlanCompany] = useState<string | null>(null);
+
   const [hasFetched, setHasFetched] = useState(false);
 
   const fetchCompanies = useCallback(async (force = false) => {
@@ -299,6 +325,7 @@ function DashboardContent() {
         const data = await res.json();
         setCompanies(data.companies || []);
         setSharedCompanies(data.sharedCompanies || []);
+        setMaxPlanCount(data.maxPlanCount || 0);
         // 初期状態では全て閉じた状態にする
         setHasFetched(true);
       }
@@ -357,8 +384,8 @@ function DashboardContent() {
     if (expandedCompany) {
       // 該当する会社を検索
       const company = [...companies, ...sharedCompanies].find(c => c.companyId === expandedCompany);
-      // Proプランで、まだナレッジを読み込んでいない場合に自動読み込み
-      if (company?.plan === "pro" && !customKnowledges[expandedCompany]) {
+      // Proプラン以上で、まだナレッジを読み込んでいない場合に自動読み込み
+      if ((company?.plan === "pro" || company?.plan === "max") && !customKnowledges[expandedCompany]) {
         fetch(`/api/knowledge?companyId=${expandedCompany}`)
           .then(res => res.ok ? res.json() : null)
           .then(data => {
@@ -751,7 +778,7 @@ function DashboardContent() {
   };
 
   // Stripeチェックアウトを開始
-  const handleSelectPlan = async (plan: "lite" | "pro") => {
+  const handleSelectPlan = async (plan: "lite" | "pro" | "max") => {
     if (!selectedCompanyForPlan) return;
 
     setProcessingPlan(plan);
@@ -781,6 +808,46 @@ function DashboardContent() {
       alert("エラーが発生しました。もう一度お試しください。");
     } finally {
       setProcessingPlan(null);
+    }
+  };
+
+  // companyのプランを変更（FreeからMax、またはMaxからFree）
+  const handleChangePlan = async (companyId: string, newPlan: "free" | "max") => {
+    setChangingPlanCompany(companyId);
+
+    try {
+      const res = await fetch(`/api/company/${companyId}/plan`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: newPlan }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // ローカルの状態を更新
+        setCompanies((prev) =>
+          prev.map((company) =>
+            company.companyId === companyId
+              ? { ...company, plan: newPlan }
+              : company
+          )
+        );
+        alert(`プランを${newPlan === "max" ? "Max" : "Free"}に変更しました`);
+      } else {
+        if (data.code === "NO_MAX_PLAN") {
+          alert("Maxプランを購入していません");
+        } else if (data.code === "MAX_SLOTS_FULL") {
+          alert(`Max枠が満杯です（${data.currentMaxCompanies}/${data.maxPlanCount}）`);
+        } else {
+          alert("プラン変更に失敗しました");
+        }
+      }
+    } catch (error) {
+      console.error("Change plan error:", error);
+      alert("エラーが発生しました");
+    } finally {
+      setChangingPlanCompany(null);
     }
   };
 
@@ -1000,9 +1067,9 @@ function DashboardContent() {
   const saveAgentSettings = async (agentId: string, companyId: string) => {
     setSavingSettings(true);
 
-    // Proプラン以外は音声機能を無効にする
+    // Proプラン未満は音声機能を無効にする
     const company = companies.find(c => c.companyId === companyId);
-    const voiceEnabledValue = company?.plan === "pro" ? editVoiceEnabled : false;
+    const voiceEnabledValue = (company?.plan === "pro" || company?.plan === "max") ? editVoiceEnabled : false;
 
     try {
       const res = await fetch("/api/agents/settings", {
@@ -1076,27 +1143,77 @@ function DashboardContent() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const getPlanBadge = (plan?: string) => {
-    switch (plan) {
-      case "pro":
-        return (
-          <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-            PRO
+  const getPlanBadge = (plan?: string, companyId?: string) => {
+    const badge = (() => {
+      switch (plan) {
+        case "max":
+          return (
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-amber-400 to-orange-500 text-white">
+              MAX
+            </span>
+          );
+        case "pro":
+          return (
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+              PRO
+            </span>
+          );
+        case "lite":
+          return (
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+              LITE
+            </span>
+          );
+        default:
+          return (
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+              FREE
+            </span>
+          );
+      }
+    })();
+
+    // Maxプラン購入者で、FreeプランのcompanyならMaxへ変更ボタンを表示
+    if (maxPlanCount > 0 && (!plan || plan === "free") && companyId) {
+      return (
+        <div className="flex items-center gap-2">
+          {badge}
+          <span
+            onClick={(e) => {
+              e.stopPropagation();
+              if (changingPlanCompany !== companyId) {
+                handleChangePlan(companyId, "max");
+              }
+            }}
+            className={`px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors cursor-pointer ${changingPlanCompany === companyId ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            {changingPlanCompany === companyId ? "..." : "→Max"}
           </span>
-        );
-      case "lite":
-        return (
-          <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-            LITE
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
-            FREE
-          </span>
-        );
+        </div>
+      );
     }
+
+    // MaxプランのcompanyならFreeへ戻すボタンを表示
+    if (plan === "max" && companyId) {
+      return (
+        <div className="flex items-center gap-2">
+          {badge}
+          <span
+            onClick={(e) => {
+              e.stopPropagation();
+              if (changingPlanCompany !== companyId && confirm("このcompanyをFreeプランに戻しますか？")) {
+                handleChangePlan(companyId, "free");
+              }
+            }}
+            className={`px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors cursor-pointer ${changingPlanCompany === companyId ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            {changingPlanCompany === companyId ? "..." : "→Free"}
+          </span>
+        </div>
+      );
+    }
+
+    return badge;
   };
 
   if (status === "loading" || loading) {
@@ -1143,18 +1260,88 @@ function DashboardContent() {
         </div>
       </div>
 
-      {/* 新規作成ボタン */}
+      {/* エージェント数表示と新規作成ボタン */}
       <div className="mb-4 sm:mb-6">
-        {!showCreateForm ? (
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-white shadow-lg hover:shadow-xl transition-all text-sm sm:text-base"
-            style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
-          >
-            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-            新しいエージェントを作成
-          </button>
-        ) : (
+        {(() => {
+          // 各プランのcompany数をカウント
+          const planCounts: Record<string, number> = { free: 0, lite: 0, pro: 0, max: 0 };
+          for (const company of companies) {
+            const companyPlan = company.plan || "free";
+            planCounts[companyPlan] = (planCounts[companyPlan] || 0) + 1;
+          }
+
+          // エージェント上限を計算
+          // Free/Lite/Pro: それぞれ1エージェント/company
+          // Max: maxPlanCount × 5 エージェント（ユーザー全体で共有）
+          const nonMaxAgentLimit = planCounts.free + planCounts.lite + planCounts.pro;
+          const maxAgentLimit = Math.max(maxPlanCount, planCounts.max > 0 ? 1 : 0) * 5;
+          const agentLimit = nonMaxAgentLimit + maxAgentLimit;
+
+          const currentAgentCount = companies.reduce((sum, c) => sum + c.agents.length, 0);
+          const canCreateMore = currentAgentCount < agentLimit;
+
+          // プラン表示用のサマリーを作成
+          const planSummary: string[] = [];
+          if (planCounts.max > 0 || maxPlanCount > 0) {
+            planSummary.push(`Max×${Math.max(maxPlanCount, planCounts.max > 0 ? 1 : 0)}`);
+          }
+          if (planCounts.pro > 0) planSummary.push(`Pro×${planCounts.pro}`);
+          if (planCounts.lite > 0) planSummary.push(`Lite×${planCounts.lite}`);
+          if (planCounts.free > 0) planSummary.push(`Free×${planCounts.free}`);
+
+          return (
+            <>
+              {/* エージェント数表示 */}
+              <div className="flex flex-wrap items-center gap-4 mb-3">
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <span className="font-medium">エージェント:</span>
+                  <span className={`font-bold ${currentAgentCount >= agentLimit ? "text-red-500" : "text-slate-800"}`}>
+                    {currentAgentCount} / {agentLimit}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    ({planSummary.join(", ")})
+                  </span>
+                </div>
+                {!canCreateMore && maxPlanCount === 0 && (
+                  <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
+                    Maxプランで+5枠追加可能
+                  </span>
+                )}
+                {(maxPlanCount > 0 || planCounts.max > 0) && (
+                  <>
+                    <span className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded-full flex items-center gap-1">
+                      <span className="font-medium">Max枠:</span>
+                      <span className="font-bold">{planCounts.max}</span>
+                      <span>/</span>
+                      <span>{maxPlanCount}</span>
+                      <span className="text-amber-500">（残り{maxPlanCount - planCounts.max}枠）</span>
+                    </span>
+                    <button
+                      onClick={() => {
+                        setSelectedCompanyForPlan(companies[0] || null);
+                        setShowPlanModal(true);
+                      }}
+                      className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full hover:bg-purple-100 transition-colors"
+                    >
+                      +5枠を追加購入
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {!showCreateForm ? (
+                <button
+                  onClick={() => setShowCreateForm(true)}
+                  disabled={!canCreateMore}
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium text-white shadow-md transition-all text-sm ${
+                    canCreateMore ? "hover:shadow-lg hover:scale-[1.02]" : "opacity-50 cursor-not-allowed"
+                  }`}
+                  style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {canCreateMore ? "新規作成" : "上限"}
+                </button>
+              ) : (
           <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-rose-100 p-4 sm:p-6">
             <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
               <Globe className="w-5 h-5 text-rose-500" />
@@ -1247,6 +1434,9 @@ function DashboardContent() {
             </form>
           </div>
         )}
+            </>
+          );
+        })()}
       </div>
 
       {/* 共有されたエージェント（自分のエージェントがない場合も表示） */}
@@ -1260,7 +1450,7 @@ function DashboardContent() {
             {sharedCompanies.map((company) => {
               const isExpanded = expandedCompany === company.companyId;
               const agent = company.agents[0];
-              const isPaid = company.plan === "lite" || company.plan === "pro";
+              const isPaid = company.plan === "lite" || company.plan === "pro" || company.plan === "max";
 
               return (
                 <div
@@ -1560,7 +1750,7 @@ function DashboardContent() {
           {companies.map((company) => {
             const isExpanded = expandedCompany === company.companyId;
             const agent = company.agents[0];
-            const isPaid = company.plan === "lite" || company.plan === "pro";
+            const isPaid = company.plan === "lite" || company.plan === "pro" || company.plan === "max";
 
             return (
               <div
@@ -1591,7 +1781,7 @@ function DashboardContent() {
                         共有
                       </span>
                     )}
-                    {getPlanBadge(company.plan)}
+                    {getPlanBadge(company.plan, company.companyId)}
                     {isExpanded ? (
                       <ChevronUp className="w-5 h-5 text-slate-400" />
                     ) : (
@@ -1745,10 +1935,10 @@ function DashboardContent() {
                             />
                           </div>
 
-                          {/* 音声モード（Proプラン限定） */}
+                          {/* 音声モード（Proプラン以上限定） */}
                           <div className="flex items-center justify-between">
                             <label className="text-sm text-slate-600 flex items-center gap-2">
-                              {company.plan === "pro" ? (
+                              {(company.plan === "pro" || company.plan === "max") ? (
                                 editVoiceEnabled ? (
                                   <Volume2 className="w-4 h-4 text-rose-500" />
                                 ) : (
@@ -1758,13 +1948,13 @@ function DashboardContent() {
                                 <Lock className="w-4 h-4 text-slate-400" />
                               )}
                               音声モード
-                              {company.plan !== "pro" && (
+                              {(company.plan !== "pro" && company.plan !== "max") && (
                                 <span className="text-xs bg-gradient-to-r from-amber-400 to-orange-500 text-white px-2 py-0.5 rounded-full">
                                   Pro
                                 </span>
                               )}
                             </label>
-                            {company.plan === "pro" ? (
+                            {(company.plan === "pro" || company.plan === "max") ? (
                               <button
                                 onClick={() => setEditVoiceEnabled(!editVoiceEnabled)}
                                 className={`relative w-12 h-6 rounded-full transition-all ${
@@ -2065,13 +2255,13 @@ function DashboardContent() {
                           <Database className="w-4 h-4 text-rose-500" />
                           カスタムナレッジ
                           <span className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
-                            {company.plan === "pro" ? "Pro" : <>
+                            {(company.plan === "pro" || company.plan === "max") ? "Pro" : <>
                               <Lock className="w-3 h-3" />
                               Pro
                             </>}
                           </span>
                         </h4>
-                        {company.plan === "pro" && (
+                        {(company.plan === "pro" || company.plan === "max") && (
                           <button
                             onClick={() => {
                               setKnowledgeCompanyId(company.companyId);
@@ -2088,7 +2278,7 @@ function DashboardContent() {
                           </button>
                         )}
                       </div>
-                      {company.plan === "pro" ? (
+                      {(company.plan === "pro" || company.plan === "max") ? (
                         <div className="space-y-2">
                           {(customKnowledges[company.companyId] || []).length === 0 ? (
                             <div className="bg-purple-50 rounded-xl p-4 text-center">
@@ -2151,13 +2341,13 @@ function DashboardContent() {
                           <MessageSquare className="w-4 h-4 text-blue-500" />
                           プロンプト設定
                           <span className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
-                            {company.plan === "pro" ? "Pro" : <>
+                            {(company.plan === "pro" || company.plan === "max") ? "Pro" : <>
                               <Lock className="w-3 h-3" />
                               Pro
                             </>}
                           </span>
                         </h4>
-                        {company.plan === "pro" && agent && (
+                        {(company.plan === "pro" || company.plan === "max") && agent && (
                           <button
                             onClick={() => openPromptModal(agent.agentId, company.plan || "free")}
                             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 transition-all"
@@ -2167,7 +2357,7 @@ function DashboardContent() {
                           </button>
                         )}
                       </div>
-                      {company.plan === "pro" ? (
+                      {(company.plan === "pro" || company.plan === "max") ? (
                         <div className="bg-blue-50 rounded-xl p-4">
                           <div className="space-y-3 text-sm">
                             <div>
@@ -2269,8 +2459,8 @@ function DashboardContent() {
                       )}
                     </div>
 
-                    {/* Proプラン: 分析 */}
-                    {company.plan === "pro" && (
+                    {/* Proプラン以上: 分析 */}
+                    {(company.plan === "pro" || company.plan === "max") && (
                       <div>
                         <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
                           <BarChart3 className="w-4 h-4 text-rose-500" />
@@ -2321,7 +2511,7 @@ function DashboardContent() {
                       </div>
                     )}
 
-                    {/* Freeプラン: 分析（Proアップグレード誘導） */}
+                    {/* Freeプラン: 分析（Pro/Maxアップグレード誘導） */}
                     {(!company.plan || company.plan === "free") && (
                       <div className="bg-gradient-to-r from-purple-50 to-rose-50 rounded-xl p-4">
                         <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-2">
@@ -2330,18 +2520,30 @@ function DashboardContent() {
                           <Lock className="w-3 h-3 text-slate-400" />
                         </h4>
                         <p className="text-sm text-slate-500 mb-3">
-                          Proプランでチャット経由CVR、質問分析、AI改善提案などの詳細分析が利用可能
+                          Pro/Maxプランでチャット経由CVR、質問分析、AI改善提案などの詳細分析が利用可能
                         </p>
-                        <button
-                          onClick={() => {
-                            setSelectedCompanyForPlan(company);
-                            setShowPlanModal(true);
-                          }}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-purple-500 to-rose-500 hover:from-purple-600 hover:to-rose-600 transition-all shadow-sm"
-                        >
-                          <Sparkles className="w-4 h-4" />
-                          Proプランにアップグレード
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedCompanyForPlan(company);
+                              setShowPlanModal(true);
+                            }}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-purple-500 to-rose-500 hover:from-purple-600 hover:to-rose-600 transition-all shadow-sm"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                            Proプランにアップグレード
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedCompanyForPlan(company);
+                              setShowPlanModal(true);
+                            }}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 transition-all shadow-sm"
+                          >
+                            <Zap className="w-4 h-4" />
+                            Maxプランにアップグレード
+                          </button>
+                        </div>
                       </div>
                     )}
 
@@ -2407,7 +2609,7 @@ function DashboardContent() {
                 {sharedCompanies.map((company) => {
                   const isExpanded = expandedCompany === company.companyId;
                   const agent = company.agents[0];
-                  const isPaid = company.plan === "lite" || company.plan === "pro";
+                  const isPaid = company.plan === "lite" || company.plan === "pro" || company.plan === "max";
 
                   return (
                     <div
@@ -2731,7 +2933,7 @@ function DashboardContent() {
       {/* プラン選択モーダル */}
       {showPlanModal && selectedCompanyForPlan && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
             {/* ヘッダー */}
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
@@ -2748,8 +2950,21 @@ function DashboardContent() {
               </button>
             </div>
 
+            {/* 現在のエージェント状況 */}
+            {maxPlanCount > 0 && (
+              <div className="px-6 pt-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm">
+                  <div className="flex items-center gap-2 text-amber-800">
+                    <Zap className="w-4 h-4" />
+                    <span className="font-medium">現在のMaxプラン:</span>
+                    <span>{maxPlanCount}つ購入済み（最大{maxPlanCount * 5}エージェント）</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* プラン一覧 */}
-            <div className="p-6 grid md:grid-cols-2 gap-6">
+            <div className="p-6 grid md:grid-cols-3 gap-6">
               {/* Liteプラン */}
               <div className="rounded-2xl border-2 border-blue-200 p-6 hover:border-blue-400 transition-all">
                 <div className="flex items-center gap-3 mb-4">
@@ -2826,7 +3041,7 @@ function DashboardContent() {
                 </ul>
                 <button
                   onClick={() => handleSelectPlan("pro")}
-                  disabled={processingPlan !== null || selectedCompanyForPlan.plan === "pro"}
+                  disabled={processingPlan !== null || selectedCompanyForPlan.plan === "pro" || selectedCompanyForPlan.plan === "max"}
                   className="w-full py-3 rounded-xl font-semibold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                   style={{ background: "linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)" }}
                 >
@@ -2835,7 +3050,7 @@ function DashboardContent() {
                       <Loader2 className="w-5 h-5 animate-spin" />
                       処理中...
                     </>
-                  ) : selectedCompanyForPlan.plan === "pro" ? (
+                  ) : (selectedCompanyForPlan.plan === "pro" || selectedCompanyForPlan.plan === "max") ? (
                     <>
                       <Check className="w-5 h-5" />
                       現在のプラン
@@ -2848,12 +3063,64 @@ function DashboardContent() {
                   )}
                 </button>
               </div>
+
+              {/* Maxプラン */}
+              <div className="rounded-2xl border-2 border-amber-300 p-6 hover:border-amber-400 transition-all relative overflow-hidden bg-gradient-to-br from-amber-50 to-orange-50">
+                <div className="absolute top-4 right-4">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-amber-400 to-orange-500 text-white">
+                    最上位
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 flex items-center justify-center">
+                    <Zap className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">{plans.max.name}</h3>
+                    <p className="text-2xl font-bold text-amber-600">
+                      {plans.max.price}
+                      <span className="text-sm font-normal text-slate-500">{plans.max.period}</span>
+                    </p>
+                  </div>
+                </div>
+                <ul className="space-y-2 mb-6">
+                  {plans.max.features.map((feature, i) => (
+                    <li key={i} className="flex items-center gap-2 text-sm text-slate-700">
+                      <Check className="w-4 h-4 text-amber-500" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => handleSelectPlan("max")}
+                  disabled={processingPlan !== null}
+                  className="w-full py-3 rounded-xl font-semibold text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: "linear-gradient(135deg, #F59E0B 0%, #EA580C 100%)" }}
+                >
+                  {processingPlan === "max" ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      処理中...
+                    </>
+                  ) : maxPlanCount > 0 ? (
+                    <>
+                      <Plus className="w-5 h-5" />
+                      追加購入 (+5エージェント)
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-5 h-5" />
+                      Maxプランを選択
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* 機能比較 */}
             <div className="p-6 bg-slate-50 border-t border-slate-100">
-              <h4 className="font-semibold text-slate-800 mb-4">Proプランの追加機能</h4>
-              <div className="grid md:grid-cols-3 gap-4">
+              <h4 className="font-semibold text-slate-800 mb-4">Pro/Maxプランの追加機能</h4>
+              <div className="grid md:grid-cols-4 gap-4">
                 <div className="flex items-center gap-3 text-sm text-slate-700">
                   <Users className="w-5 h-5 text-purple-500" />
                   <span>会話履歴トラッキング</span>
@@ -2865,6 +3132,10 @@ function DashboardContent() {
                 <div className="flex items-center gap-3 text-sm text-slate-700">
                   <Smartphone className="w-5 h-5 text-purple-500" />
                   <span>端末情報分析</span>
+                </div>
+                <div className="flex items-center gap-3 text-sm text-slate-700">
+                  <Zap className="w-5 h-5 text-amber-500" />
+                  <span>複数エージェント (Maxのみ)</span>
                 </div>
               </div>
             </div>

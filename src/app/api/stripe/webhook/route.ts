@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
       const companyId = session.metadata?.companyId;
-      const plan = session.metadata?.plan as "lite" | "pro";
+      const plan = session.metadata?.plan as "lite" | "pro" | "max";
       const userId = session.metadata?.userId;
       const customerId = session.customer as string;
       const subscriptionId = session.subscription as string;
@@ -53,8 +53,19 @@ export async function POST(req: NextRequest) {
         );
         console.log(`[Webhook] Company ${companyId} upgraded to ${plan} plan`);
 
-        // Link company to user if userId provided
-        if (userId) {
+        // Maxプランの場合はユーザーのmaxPlanCountをインクリメント
+        if (plan === "max" && userId) {
+          const usersCol = await getCollection("users");
+          await usersCol.updateOne(
+            { userId },
+            {
+              $addToSet: { companyIds: companyId },
+              $inc: { maxPlanCount: 1 }
+            }
+          );
+          console.log(`[Webhook] Incremented maxPlanCount for user ${userId}`);
+        } else if (userId) {
+          // Link company to user if userId provided (non-max plans)
           const usersCol = await getCollection("users");
           await usersCol.updateOne(
             { userId },

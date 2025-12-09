@@ -102,11 +102,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    // Proプランチェック
+    // Proプラン以上チェック（pro, max）
     const companiesCol = await getCollection<Company>("companies");
     const company = await companiesCol.findOne({ companyId: agent.companyId });
 
-    if (!company || company.plan !== "pro") {
+    if (!company || (company.plan !== "pro" && company.plan !== "max")) {
       return NextResponse.json(
         { error: "Pro plan required", code: "PRO_REQUIRED" },
         { status: 403 }

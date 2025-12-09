@@ -7,6 +7,7 @@ export type User = {
   name?: string;
   companyIds: string[];      // 所有するcompanyId配列
   stripeCustomerId?: string;
+  maxPlanCount?: number;     // Maxプラン購入数（1つにつき5エージェント）
   createdAt: Date;
   updatedAt: Date;
 };
@@ -19,7 +20,7 @@ export type Company = {
   rootUrl: string;
   language: "ja" | "en";
   userId?: string;           // 所有者のuserId
-  plan?: "free" | "lite" | "pro";
+  plan?: "free" | "lite" | "pro" | "max";
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   planStartedAt?: Date;

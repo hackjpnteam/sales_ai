@@ -246,22 +246,22 @@ function WidgetContent() {
                 timestamp: new Date(),
               }]);
             }
-            // Proプランかどうかを設定
-            const isProPlan = data.company?.plan === "pro";
+            // Proプラン以上（pro, max）かどうかを設定
+            const isProPlan = data.company?.plan === "pro" || data.company?.plan === "max";
             setIsPro(isProPlan);
 
-            // エージェント設定から音声有効/無効を読み込む（Proプラン限定）
+            // エージェント設定から音声有効/無効を読み込む（Pro以上限定）
             if (isProPlan && typeof data.agent?.voiceEnabled === "boolean") {
               setVoiceEnabled(data.agent.voiceEnabled);
             } else {
-              // Proプラン以外は音声機能を無効化
+              // Proプラン未満は音声機能を無効化
               setVoiceEnabled(false);
             }
             // アバターURLを設定
             if (data.agent?.avatarUrl) {
               setAvatarUrl(data.agent.avatarUrl);
             }
-            // Proプランの場合はトラッキングを有効化
+            // Pro以上の場合はトラッキングを有効化
             if (isProPlan) {
               setTrackingEnabled(true);
             }

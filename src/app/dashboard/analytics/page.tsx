@@ -399,10 +399,13 @@ function AnalyticsContent() {
             {/* CVR比較 */}
             {isPro && (
               <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
                   <TrendingUp className="w-5 h-5 text-rose-500" />
                   チャットの効果
                 </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  CVR（コンバージョン率）= お問い合わせや購入などの目標達成率。チャットを利用したユーザーと利用していないユーザーでCVRを比較し、チャットの効果を測定します。
+                </p>
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="text-center p-4 bg-green-50 rounded-xl">
                     <div className="text-sm text-slate-600 mb-1">チャット利用者のCVR</div>

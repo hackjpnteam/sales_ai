@@ -81,8 +81,8 @@ export default function Home() {
           const data = await res.json();
           setCurrentPlan(data.plan || "free");
 
-          // Proプランの場合はトラッキングデータも取得
-          if (data.plan === "pro") {
+          // Proプラン以上の場合はトラッキングデータも取得
+          if (data.plan === "pro" || data.plan === "max") {
             const trackingRes = await fetch(`/api/tracking?companyId=${result.companyId}&limit=100`);
             if (trackingRes.ok) {
               const trackingJson = await trackingRes.json();

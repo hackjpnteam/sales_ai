@@ -56,8 +56,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    // Proプランチェック
-    if (company.plan !== "pro") {
+    // Proプラン以上チェック（pro, max）
+    if (company.plan !== "pro" && company.plan !== "max") {
       return NextResponse.json(
         { error: "Pro plan required", knowledges: [] },
         { status: 200 }
@@ -125,8 +125,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    // Proプランチェック
-    if (company.plan !== "pro") {
+    // Proプラン以上チェック（pro, max）
+    if (company.plan !== "pro" && company.plan !== "max") {
       return NextResponse.json(
         { error: "Pro plan required" },
         { status: 403 }
@@ -206,7 +206,7 @@ export async function PUT(req: NextRequest) {
     const companiesCol = await getCollection<Company>("companies");
     const company = await companiesCol.findOne({ companyId });
 
-    if (!company || company.plan !== "pro") {
+    if (!company || (company.plan !== "pro" && company.plan !== "max")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -270,7 +270,7 @@ export async function DELETE(req: NextRequest) {
     const companiesCol = await getCollection<Company>("companies");
     const company = await companiesCol.findOne({ companyId });
 
-    if (!company || company.plan !== "pro") {
+    if (!company || (company.plan !== "pro" && company.plan !== "max")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

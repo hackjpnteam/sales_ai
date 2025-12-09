@@ -5,6 +5,9 @@ export function getStripe(): Stripe {
   if (!secretKey) {
     throw new Error("STRIPE_SECRET_KEY environment variable is not set");
   }
+  // Debug: log key prefix (first 15 chars only for security)
+  console.log(`[Stripe] Key prefix: ${secretKey.substring(0, 15)}...`);
+  console.log(`[Stripe] Using key type: ${secretKey.startsWith("sk_live_") ? "LIVE" : "TEST"}`);
   return new Stripe(secretKey, {
     apiVersion: "2025-11-17.clover",
   });

@@ -4,10 +4,10 @@ import { getCollection } from "./mongodb";
 import { Company } from "./types";
 
 /**
- * Proプランかどうかを判定
+ * Proプラン以上（pro, max）かどうかを判定
  */
 export function isProPlan(plan?: string): boolean {
-  return plan === "pro";
+  return plan === "pro" || plan === "max";
 }
 
 /**

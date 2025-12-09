@@ -95,6 +95,7 @@ export async function GET() {
     return NextResponse.json({
       companies: allCompanies,
       sharedCompanies: sharedCompaniesWithAgents, // 後方互換性のため残す
+      maxPlanCount: user.maxPlanCount || 0, // Maxプラン購入数
     });
   } catch (error) {
     console.error("Get user companies error:", error);

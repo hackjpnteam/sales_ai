@@ -51,11 +51,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // プランを確認（Proプランのみトラッキング可能）
+    // プランを確認（Pro以上のみトラッキング可能）
     const companiesCol = await getCollection("companies");
     const company = await companiesCol.findOne({ companyId }) as { plan?: string } | null;
 
-    if (!company || company.plan !== "pro") {
+    if (!company || (company.plan !== "pro" && company.plan !== "max")) {
       return NextResponse.json(
         { error: "Tracking is only available for Pro plan" },
         { status: 403 }
@@ -138,11 +138,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // プランを確認
+    // プランを確認（Pro以上）
     const companiesCol = await getCollection("companies");
     const company = await companiesCol.findOne({ companyId }) as { plan?: string } | null;
 
-    if (!company || company.plan !== "pro") {
+    if (!company || (company.plan !== "pro" && company.plan !== "max")) {
       return NextResponse.json(
         { error: "Tracking data is only available for Pro plan" },
         { status: 403 }
