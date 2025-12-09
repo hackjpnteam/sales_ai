@@ -39,10 +39,21 @@ export const PLANS = {
       "詳細な分析ダッシュボード",
     ],
   },
+  max: {
+    id: "max",
+    name: "Max",
+    priceId: process.env.STRIPE_MAX_PRICE_ID || "",
+    amount: 10000,
+    features: [
+      "Proの全機能",
+      "エージェントを5つまで作成可能",
+      "優先サポート",
+    ],
+  },
 } as const;
 
-export type PlanType = "free" | "lite" | "pro";
+export type PlanType = "free" | "lite" | "pro" | "max";
 
-export function getPriceId(plan: "lite" | "pro"): string {
+export function getPriceId(plan: "lite" | "pro" | "max"): string {
   return PLANS[plan].priceId;
 }

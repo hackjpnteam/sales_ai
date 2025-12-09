@@ -27,7 +27,7 @@ import Footer from "@/components/Footer";
 type Company = {
   companyId: string;
   name: string;
-  plan: "free" | "lite" | "pro";
+  plan: "free" | "lite" | "pro" | "max";
   planStartedAt?: string;
 };
 
@@ -186,7 +186,7 @@ export default function SuperAdminPage() {
             ...user,
             companies: user.companies.map((c) =>
               c.companyId === companyId
-                ? { ...c, plan: newPlan as "free" | "lite" | "pro" }
+                ? { ...c, plan: newPlan as "free" | "lite" | "pro" | "max" }
                 : c
             ),
           }))
@@ -257,6 +257,12 @@ export default function SuperAdminPage() {
 
   const getPlanBadge = (plan: string) => {
     switch (plan) {
+      case "max":
+        return (
+          <span className="px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-amber-400 to-orange-500 text-white">
+            MAX
+          </span>
+        );
       case "pro":
         return (
           <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
@@ -558,6 +564,9 @@ export default function SuperAdminPage() {
                                       </option>
                                       <option value="pro" className="text-black">
                                         PRO
+                                      </option>
+                                      <option value="max" className="text-black">
+                                        MAX
                                       </option>
                                     </select>
                                     <button

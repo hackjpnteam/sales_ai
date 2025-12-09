@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Sparkles, Globe, Zap, ArrowRight, Copy, ExternalLink, MessageCircle, X, Lock, CreditCard, Palette, Check, BarChart3, Users, Smartphone, MapPin, MessageSquare, LogIn, UserPlus, Bot, Clock, Shield, TrendingUp, Building2, ShoppingCart, Briefcase, GraduationCap, Heart, Headphones, ChevronRight, BadgePercent, Rocket, FileText } from "lucide-react";
+import { Sparkles, Globe, Zap, ArrowRight, Copy, ExternalLink, MessageCircle, X, Lock, CreditCard, Palette, Check, BarChart3, Users, Smartphone, MapPin, MessageSquare, LogIn, UserPlus, Bot, Clock, Shield, TrendingUp, Building2, ShoppingCart, Briefcase, GraduationCap, Heart, Headphones, ChevronRight, BadgePercent, Rocket, FileText, Crown } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
@@ -58,7 +58,7 @@ export default function Home() {
   const [checkingPlan, setCheckingPlan] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<"lite" | "pro">("lite");
-  const [expandedPlan, setExpandedPlan] = useState<"lite" | "pro" | null>(null);
+  const [expandedPlan, setExpandedPlan] = useState<"lite" | "pro" | "max" | null>(null);
   const [selectedColor, setSelectedColor] = useState(colorOptions[0].value);
   const [email, setEmail] = useState("");
   const [trackingData, setTrackingData] = useState<{
@@ -610,35 +610,46 @@ export default function Home() {
                   お試し無料
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-3 gap-3 mb-4">
                 {/* Lite プラン */}
                 <button
                   onClick={() => setExpandedPlan(expandedPlan === "lite" ? null : "lite")}
-                  className={`bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center transition-all hover:bg-white/20 cursor-pointer ${
+                  className={`bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 text-center transition-all hover:bg-white/20 cursor-pointer ${
                     expandedPlan === "lite" ? "ring-2 ring-white" : ""
                   }`}
                 >
-                  <p className="text-3xl sm:text-4xl font-bold">¥500</p>
-                  <p className="text-white/70 text-xs sm:text-sm">Lite プラン/月額</p>
-                  <p className="text-white/50 text-[10px] mt-1">クリックして詳細</p>
+                  <p className="text-2xl sm:text-3xl font-bold">¥500</p>
+                  <p className="text-white/70 text-[10px] sm:text-xs">Lite/月額</p>
+                  <p className="text-white/50 text-[10px] mt-1 hidden sm:block">詳細</p>
                 </button>
                 {/* Pro プラン */}
                 <button
                   onClick={() => setExpandedPlan(expandedPlan === "pro" ? null : "pro")}
-                  className={`bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center transition-all hover:bg-white/20 cursor-pointer ${
+                  className={`bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 text-center transition-all hover:bg-white/20 cursor-pointer ${
                     expandedPlan === "pro" ? "ring-2 ring-white" : ""
                   }`}
                 >
-                  <p className="text-3xl sm:text-4xl font-bold">¥3,000</p>
-                  <p className="text-white/70 text-xs sm:text-sm">Pro プラン/月額</p>
-                  <p className="text-white/50 text-[10px] mt-1">クリックして詳細</p>
+                  <p className="text-2xl sm:text-3xl font-bold">¥3,000</p>
+                  <p className="text-white/70 text-[10px] sm:text-xs">Pro/月額</p>
+                  <p className="text-white/50 text-[10px] mt-1 hidden sm:block">詳細</p>
+                </button>
+                {/* Max プラン */}
+                <button
+                  onClick={() => setExpandedPlan(expandedPlan === "max" ? null : "max")}
+                  className={`bg-gradient-to-br from-amber-400/30 to-orange-500/30 backdrop-blur-sm rounded-xl p-3 sm:p-4 text-center transition-all hover:from-amber-400/40 hover:to-orange-500/40 cursor-pointer ${
+                    expandedPlan === "max" ? "ring-2 ring-amber-300" : ""
+                  }`}
+                >
+                  <p className="text-2xl sm:text-3xl font-bold">¥10,000</p>
+                  <p className="text-white/70 text-[10px] sm:text-xs">Max/月額</p>
+                  <p className="text-amber-300/70 text-[10px] mt-1 hidden sm:block">人気</p>
                 </button>
               </div>
 
               {/* プラン詳細表示 */}
               {expandedPlan && (
                 <div className="bg-white/15 backdrop-blur-sm rounded-xl p-4 mb-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                  {expandedPlan === "lite" ? (
+                  {expandedPlan === "lite" && (
                     <div>
                       <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
                         <Zap className="w-5 h-5" />
@@ -667,7 +678,8 @@ export default function Home() {
                         </li>
                       </ul>
                     </div>
-                  ) : (
+                  )}
+                  {expandedPlan === "pro" && (
                     <div>
                       <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
                         <BarChart3 className="w-5 h-5" />
@@ -697,6 +709,28 @@ export default function Home() {
                         <li className="flex items-center gap-2">
                           <Check className="w-4 h-4 text-emerald-300 flex-shrink-0" />
                           音声読み上げ機能（TTS）
+                        </li>
+                      </ul>
+                    </div>
+                  )}
+                  {expandedPlan === "max" && (
+                    <div>
+                      <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
+                        <Crown className="w-5 h-5 text-amber-300" />
+                        Max プラン - ¥10,000/月
+                      </h4>
+                      <ul className="space-y-1.5 text-sm text-white/90">
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-amber-300 flex-shrink-0" />
+                          Proプランの全機能
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-amber-300 flex-shrink-0" />
+                          エージェントを5つまで作成可能
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <Check className="w-4 h-4 text-amber-300 flex-shrink-0" />
+                          優先サポート
                         </li>
                       </ul>
                     </div>

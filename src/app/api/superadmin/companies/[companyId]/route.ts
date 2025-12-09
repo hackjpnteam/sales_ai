@@ -18,9 +18,9 @@ export async function PUT(
     const { companyId } = await params;
     const { plan } = await req.json();
 
-    if (!plan || !["free", "lite", "pro"].includes(plan)) {
+    if (!plan || !["free", "lite", "pro", "max"].includes(plan)) {
       return NextResponse.json(
-        { error: "Invalid plan. Must be 'free', 'lite', or 'pro'" },
+        { error: "Invalid plan. Must be 'free', 'lite', 'pro', or 'max'" },
         { status: 400 }
       );
     }

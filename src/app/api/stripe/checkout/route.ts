@@ -16,9 +16,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!plan || !["lite", "pro"].includes(plan)) {
+    if (!plan || !["lite", "pro", "max"].includes(plan)) {
       return NextResponse.json(
-        { error: "Valid plan (lite or pro) is required" },
+        { error: "Valid plan (lite, pro or max) is required" },
         { status: 400 }
       );
     }

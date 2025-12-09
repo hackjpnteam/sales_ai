@@ -6,6 +6,14 @@ import { auth } from "@/lib/auth";
 import { randomUUID } from "crypto";
 import { getGeoFromIP, formatGeoLocation } from "@/lib/geoip";
 
+// プランごとのエージェント作成上限
+const AGENT_LIMITS: Record<string, number> = {
+  free: 1,
+  lite: 1,
+  pro: 1,
+  max: 5,
+};
+
 export async function POST(req: NextRequest) {
   // Get authenticated user (optional - agent creation works without auth too)
   const session = await auth();
@@ -50,14 +58,56 @@ export async function POST(req: NextRequest) {
   }
 
   const rootUrl = urlValidation.url;
+
+  const companiesCol = await getCollection<Company>("companies");
+  const agentsCol = await getCollection<Agent>("agents");
+  const usersCol = await getCollection<User>("users");
+
+  // 認証ユーザーの場合、エージェント作成制限をチェック
+  if (userId) {
+    const user = await usersCol.findOne({ userId });
+    if (user && user.companyIds && user.companyIds.length > 0) {
+      // ユーザーが所有する会社のプランを取得（最上位プランを使用）
+      const userCompanies = await companiesCol
+        .find({ companyId: { $in: user.companyIds } })
+        .toArray();
+
+      // 最上位プランを判定
+      const planPriority = { free: 0, lite: 1, pro: 2, max: 3 };
+      let highestPlan = "free";
+      for (const company of userCompanies) {
+        const companyPlan = company.plan || "free";
+        if ((planPriority[companyPlan as keyof typeof planPriority] || 0) > (planPriority[highestPlan as keyof typeof planPriority] || 0)) {
+          highestPlan = companyPlan;
+        }
+      }
+
+      // 現在のエージェント数をカウント
+      const currentAgentCount = await agentsCol.countDocuments({
+        companyId: { $in: user.companyIds },
+      });
+
+      const limit = AGENT_LIMITS[highestPlan] || 1;
+      if (currentAgentCount >= limit) {
+        return new Response(
+          JSON.stringify({
+            error: `現在のプラン（${highestPlan}）ではエージェントは${limit}つまでです。Maxプランにアップグレードすると最大5つまで作成できます。`,
+            code: "AGENT_LIMIT_REACHED",
+            currentCount: currentAgentCount,
+            limit,
+            plan: highestPlan,
+          }),
+          { status: 403, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+  }
+
   const companyId = randomUUID();
   const agentId = randomUUID();
 
   // ユーザー指定のテーマカラーがデフォルト以外の場合は優先
   const hasUserThemeColor = userThemeColor && userThemeColor !== "#FF6FB1" && userThemeColor !== "#2563eb";
-
-  const companiesCol = await getCollection<Company>("companies");
-  const agentsCol = await getCollection<Agent>("agents");
 
   const now = new Date();
 
@@ -140,7 +190,6 @@ export async function POST(req: NextRequest) {
 
         // Link company to user if authenticated
         if (userId) {
-          const usersCol = await getCollection<User>("users");
           await usersCol.updateOne(
             { userId },
             { $addToSet: { companyIds: companyId } }
