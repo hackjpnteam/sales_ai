@@ -65,6 +65,7 @@ export type Agent = {
   knowledge?: string;       // 会社固有のナレッジ
   style?: string;           // 会話スタイル
   guardrails?: string;      // 制約条件（編集不可）
+  ngResponses?: string;     // NG回答（絶対に回答してはいけない内容）
   // 共有設定
   sharedWith?: SharedUser[];
   createdAt: Date;

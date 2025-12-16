@@ -974,6 +974,28 @@ function WidgetContent() {
           </div>
         )}
 
+        {/* Quick buttons at the end of conversation (always visible when not loading) */}
+        {!loading && !isTranscribing && messages.length > 1 && (
+          <div className="flex flex-wrap gap-2 justify-center mt-4 mb-2" key={`quickbuttons-end-${language}`}>
+            {(customQuickButtons && customQuickButtons.length > 0 ? customQuickButtons : t.quickQuestions).slice(0, 5).map((q, i) => {
+              const icons = [Building2, Users, Briefcase, MessageCircle, HelpCircle];
+              const Icon = icons[i % 5];
+              return (
+                <button
+                  key={`end-${language}-${i}`}
+                  onClick={() => handleQuickQuestion(q.query)}
+                  disabled={loading || !isInitialized || !companyId}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl border text-sm text-slate-700 transition-all shadow-sm disabled:opacity-50 hover:shadow-md"
+                  style={{ borderColor: `${themeColor}40` }}
+                >
+                  <Icon className="w-4 h-4" style={{ color: themeColor }} />
+                  {q.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 

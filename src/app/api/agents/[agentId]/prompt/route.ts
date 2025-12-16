@@ -53,6 +53,7 @@ export async function GET(
       systemPrompt: agent.systemPrompt || "",
       knowledge: agent.knowledge || "",
       style: agent.style || "",
+      ngResponses: agent.ngResponses || "",
       guardrails: DEFAULT_GUARDRAILS, // guardrailsは常にデフォルト値を返す
     });
   } catch (error) {
@@ -114,7 +115,7 @@ export async function PATCH(
     }
 
     // 許可するフィールドのみ更新（guardrailsは更新不可）
-    const { systemPrompt, knowledge, style } = body;
+    const { systemPrompt, knowledge, style, ngResponses } = body;
     const updateData: Partial<Agent> = {};
 
     if (systemPrompt !== undefined) {
@@ -125,6 +126,9 @@ export async function PATCH(
     }
     if (style !== undefined) {
       updateData.style = style;
+    }
+    if (ngResponses !== undefined) {
+      updateData.ngResponses = ngResponses;
     }
 
     if (Object.keys(updateData).length === 0) {

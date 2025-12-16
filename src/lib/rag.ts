@@ -153,6 +153,7 @@ export type PromptSettings = {
   systemPrompt?: string;
   knowledge?: string;
   style?: string;
+  ngResponses?: string;
   guardrails?: string;
 };
 
@@ -430,7 +431,7 @@ ${linkEvalPrompt}
   // プロンプト設定がある場合はカスタムプロンプトを構築
   let finalSystemPrompt: string;
 
-  if (promptSettings && (promptSettings.systemPrompt || promptSettings.knowledge || promptSettings.style)) {
+  if (promptSettings && (promptSettings.systemPrompt || promptSettings.knowledge || promptSettings.style || promptSettings.ngResponses)) {
     // カスタムプロンプト設定がある場合
     const baseSystemPrompt = promptSettings.systemPrompt || 'あなたは丁寧なカスタマーサポートAIです。お客様のご質問に的確に、簡潔に回答してください。';
 
@@ -442,6 +443,11 @@ ${linkEvalPrompt}
       ? `\n\n# 会話スタイル\n${promptSettings.style}`
       : '';
 
+    // NG回答セクション（絶対に回答してはいけない内容）
+    const ngResponsesSection = promptSettings.ngResponses
+      ? `\n\n# 【重要】NG回答（絶対に回答してはいけない内容）\n以下のトピックや質問には絶対に回答しないでください。該当する質問があった場合は「申し訳ございませんが、その件についてはお答えできません」と丁寧にお断りしてください。\n\n${promptSettings.ngResponses}`
+      : '';
+
     const guardrailsSection = promptSettings.guardrails || DEFAULT_GUARDRAILS;
 
     const languageInstructions = {
@@ -450,7 +456,7 @@ ${linkEvalPrompt}
       zh: '\n\n■ 回答规则\n- 直接回答问题\n- 务必包含上述"重要信息"中的电话号码和联系方式\n- 保持在200字以内\n- 专业但友好的中文\n\n重要：请只用中文回复。',
     };
 
-    finalSystemPrompt = `${baseSystemPrompt}${knowledgeSection}${styleSection}\n\n${guardrailsSection}${languageInstructions[language as keyof typeof languageInstructions] || languageInstructions.ja}`;
+    finalSystemPrompt = `${baseSystemPrompt}${knowledgeSection}${styleSection}${ngResponsesSection}\n\n${guardrailsSection}${languageInstructions[language as keyof typeof languageInstructions] || languageInstructions.ja}`;
   } else {
     // デフォルトのシステムプロンプト（言語別）
     const systemPrompts = {
@@ -597,25 +603,44 @@ ${question}
 
   const userPrompt = userPrompts[language as keyof typeof userPrompts] || userPrompts.ja;
 
+  // ラリー数を計算（ユーザーのメッセージ数 + 現在の質問）
+  const userMessageCount = conversationHistory.filter(msg => msg.role === "user").length;
+  const currentRally = userMessageCount + 1; // 現在の質問を含めたラリー数
+
+  // ラリー数に応じた営業制御指示
+  const salesControlInstruction = currentRally < 3
+    ? {
+        ja: `\n\n【重要：営業制御】\n現在${currentRally}ラリー目です（3ラリー未満）。この段階では絶対に営業的な提案や売り込み、商品・サービスの案内はしないでください。お客様の質問に対して自然な会話で対応し、信頼関係の構築に専念してください。`,
+        en: `\n\n【IMPORTANT: Sales Control】\nThis is rally ${currentRally} (less than 3). At this stage, absolutely DO NOT make any sales proposals, promotions, or product/service recommendations. Focus on natural conversation and building trust with the customer.`,
+        zh: `\n\n【重要：销售控制】\n当前是第${currentRally}轮对话（少于3轮）。在此阶段，绝对不要进行任何销售提案、推销或产品/服务介绍。请专注于自然对话，与客户建立信任关系。`,
+      }
+    : {
+        ja: `\n\n【会話状況】\n現在${currentRally}ラリー目です。お客様との信頼関係が構築されてきています。質問に答えつつ、適切であれば自然な流れで提案を行っても構いません。`,
+        en: `\n\n【Conversation Status】\nThis is rally ${currentRally}. Trust has been built with the customer. While answering questions, you may naturally make suggestions if appropriate.`,
+        zh: `\n\n【对话状况】\n当前是第${currentRally}轮对话。已与客户建立了一定的信任关系。在回答问题的同时，如果合适可以自然地提出建议。`,
+      };
+
+  const salesInstruction = salesControlInstruction[language as keyof typeof salesControlInstruction] || salesControlInstruction.ja;
+
   // メッセージ配列を構築（会話履歴を含む）
   const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
-    { role: "system", content: finalSystemPrompt },
+    { role: "system", content: finalSystemPrompt + salesInstruction },
   ];
 
   // 会話履歴がある場合は追加（最初のユーザーメッセージには参考情報を含める）
   if (conversationHistory.length > 0) {
     // 会話の文脈を簡潔に追加
     const historyContext = conversationHistory
-      .slice(-4) // 最新4件（2往復）に制限
+      .slice(-6) // 最新6件（3往復）に制限して、ラリー判定の精度を上げる
       .map((msg) => `${msg.role === "user" ? "お客様" : "担当者"}: ${msg.content}`)
       .join("\n");
 
     messages.push({
       role: "user",
-      content: `[これまでの会話]\n${historyContext}\n\n[参考情報]\n${contextText}${knowledgeContext}\n\n[新しい質問]\n${question}\n\n上記の会話の流れを踏まえて、自然に回答してください。`,
+      content: `[これまでの会話（${currentRally}ラリー目）]\n${historyContext}\n\n[参考情報]\n${contextText}${knowledgeContext}\n\n[新しい質問]\n${question}\n\n上記の会話の流れを踏まえて、自然に回答してください。`,
     });
   } else {
-    // 新規会話の場合
+    // 新規会話の場合（1ラリー目）
     messages.push({ role: "user", content: userPrompt });
   }
 

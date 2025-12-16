@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { ChatLog } from "@/lib/types";
+import { auth } from "@/lib/auth";
+import { isSuperAdmin } from "@/lib/admin";
 
 export async function GET(req: NextRequest) {
   try {
+    // 認証チェック
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // SuperAdmin権限チェック
+    if (!isSuperAdmin(session.user.email)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const searchParams = req.nextUrl.searchParams;
     const companyId = searchParams.get("companyId");
     const sessionId = searchParams.get("sessionId");

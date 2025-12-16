@@ -40,6 +40,7 @@ import {
   UserPlus,
   Mail,
   Send,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -82,6 +83,7 @@ type PromptSettings = {
   systemPrompt: string;
   knowledge: string;
   style: string;
+  ngResponses: string;
   guardrails: string;
 };
 
@@ -282,6 +284,7 @@ function DashboardContent() {
   const [knowledgeTitle, setKnowledgeTitle] = useState("");
   const [knowledgeContent, setKnowledgeContent] = useState("");
   const [savingKnowledge, setSavingKnowledge] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
 
   // プロンプト設定（Pro機能）
   const [showPromptModal, setShowPromptModal] = useState(false);
@@ -291,6 +294,7 @@ function DashboardContent() {
     systemPrompt: "",
     knowledge: "",
     style: "",
+    ngResponses: "",
     guardrails: "",
   });
   const [savingPrompt, setSavingPrompt] = useState(false);
@@ -470,6 +474,49 @@ function DashboardContent() {
     }
   };
 
+  // ファイルアップロード処理
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !knowledgeCompanyId) return;
+
+    // ファイルサイズチェック（20MB以下）
+    if (file.size > 20 * 1024 * 1024) {
+      alert("ファイルサイズは20MB以下にしてください");
+      return;
+    }
+
+    setUploadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("companyId", knowledgeCompanyId);
+
+      const res = await fetch("/api/knowledge/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(`${data.message}\n（${data.totalCharacters}文字を読み込みました）`);
+        await fetchCustomKnowledge(knowledgeCompanyId);
+        setShowKnowledgeModal(false);
+        setKnowledgeTitle("");
+        setKnowledgeContent("");
+      } else {
+        alert(data.error || "アップロードに失敗しました");
+      }
+    } catch (error) {
+      console.error("Failed to upload file:", error);
+      alert("アップロードに失敗しました");
+    } finally {
+      setUploadingFile(false);
+      // inputをリセット
+      e.target.value = "";
+    }
+  };
+
   // プロンプト設定取得
   const fetchPromptSettings = async (agentId: string) => {
     setLoadingPrompt(true);
@@ -481,6 +528,7 @@ function DashboardContent() {
           systemPrompt: data.systemPrompt || "",
           knowledge: data.knowledge || "",
           style: data.style || "",
+          ngResponses: data.ngResponses || "",
           guardrails: data.guardrails || "",
         });
       }
@@ -504,6 +552,7 @@ function DashboardContent() {
           systemPrompt: promptSettings.systemPrompt,
           knowledge: promptSettings.knowledge,
           style: promptSettings.style,
+          ngResponses: promptSettings.ngResponses,
         }),
       });
 
@@ -3173,6 +3222,50 @@ function DashboardContent() {
 
             {/* コンテンツ */}
             <div className="p-4 sm:p-6 space-y-4">
+              {/* ファイルアップロード（新規追加時のみ） */}
+              {!editingKnowledge && (
+                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-100">
+                  <label className="block text-sm font-medium text-purple-700 mb-3 flex items-center gap-2">
+                    <Upload className="w-4 h-4" />
+                    ファイルからインポート
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-purple-300 bg-white cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all ${uploadingFile ? "opacity-50 cursor-not-allowed" : ""}`}>
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.txt,.md"
+                        onChange={handleFileUpload}
+                        disabled={uploadingFile}
+                        className="hidden"
+                      />
+                      {uploadingFile ? (
+                        <>
+                          <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
+                          <span className="text-sm text-purple-600">読み込み中...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-5 h-5 text-purple-500" />
+                          <span className="text-sm text-purple-600">PDF / Word / テキストファイルを選択</span>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                  <p className="text-xs text-purple-500 mt-2">
+                    対応形式: PDF, DOCX, TXT, MD（最大20MB）
+                  </p>
+                </div>
+              )}
+
+              {/* 区切り線（新規追加時のみ） */}
+              {!editingKnowledge && (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 border-t border-slate-200"></div>
+                  <span className="text-xs text-slate-400">または手動で入力</span>
+                  <div className="flex-1 border-t border-slate-200"></div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   タイトル
@@ -3194,7 +3287,7 @@ function DashboardContent() {
                   onChange={(e) => setKnowledgeContent(e.target.value)}
                   placeholder="例: 当店の営業時間は平日9:00-18:00、土日祝日は10:00-17:00です。年末年始（12/31-1/3）は休業となります。"
                   rows={8}
-                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-300"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-y min-h-[150px] focus:outline-none focus:ring-2 focus:ring-purple-300"
                 />
                 <p className={`text-xs mt-1 ${knowledgeContent.length > 3000 ? "text-red-500" : "text-slate-400"}`}>
                   {knowledgeContent.length} / 3000文字
@@ -3235,8 +3328,8 @@ function DashboardContent() {
 
       {/* プロンプト設定モーダル */}
       {showPromptModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto">
             {/* ヘッダー */}
             <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
@@ -3272,9 +3365,9 @@ function DashboardContent() {
                     value={promptSettings.systemPrompt}
                     onChange={(e) => setPromptSettings(prev => ({ ...prev, systemPrompt: e.target.value }))}
                     placeholder="例: あなたはプロの採用担当者です。弊社のキャリア情報をユーザーに的確に導けるように指導してください。"
-                    rows={4}
+                    rows={6}
                     disabled={promptCompanyPlan !== "pro"}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-y min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                   <p className="text-xs text-slate-500 mt-1">
                     AIの基本的な役割や人格を定義します
@@ -3290,12 +3383,12 @@ function DashboardContent() {
                     value={promptSettings.knowledge}
                     onChange={(e) => setPromptSettings(prev => ({ ...prev, knowledge: e.target.value }))}
                     placeholder="例: 弊社は2010年設立のIT企業です。主力サービスはクラウド会計ソフト「○○」で、中小企業向けに提供しています。営業時間は平日9:00-18:00です。"
-                    rows={5}
+                    rows={10}
                     disabled={promptCompanyPlan !== "pro"}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-y min-h-[200px] focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                   <p className="text-xs text-slate-500 mt-1">
-                    会社概要、サービス説明、よくある質問への回答など
+                    会社概要、サービス説明、よくある質問への回答など（常にAIに参照される情報）
                   </p>
                 </div>
 
@@ -3308,12 +3401,35 @@ function DashboardContent() {
                     value={promptSettings.style}
                     onChange={(e) => setPromptSettings(prev => ({ ...prev, style: e.target.value }))}
                     placeholder="例: 丁寧で親しみやすいトーンで話してください。専門用語は避け、わかりやすく説明してください。"
-                    rows={3}
+                    rows={6}
                     disabled={promptCompanyPlan !== "pro"}
-                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-y min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                   <p className="text-xs text-slate-500 mt-1">
                     トーン、話し方、フォーマットなど
+                  </p>
+                </div>
+
+                {/* NG回答 */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-500" />
+                    NG回答（絶対に回答してはいけない内容）
+                  </label>
+                  <textarea
+                    value={promptSettings.ngResponses}
+                    onChange={(e) => setPromptSettings(prev => ({ ...prev, ngResponses: e.target.value }))}
+                    placeholder="例:
+- 競合他社の○○社についての質問には回答しない
+- 価格交渉や値引きの約束はしない
+- 個人の連絡先を聞かれても教えない
+- 社内の機密情報（売上、人事など）は開示しない"
+                    rows={6}
+                    disabled={promptCompanyPlan !== "pro"}
+                    className="w-full border border-red-100 rounded-xl px-4 py-3 text-sm resize-y min-h-[120px] focus:outline-none focus:ring-2 focus:ring-red-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    AIが絶対に回答してはいけないトピックや内容を指定します
                   </p>
                 </div>
 

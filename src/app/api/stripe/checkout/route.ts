@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe, getPriceId } from "@/lib/stripe";
 import { auth } from "@/lib/auth";
+import { checkRateLimit, getClientIP, RATE_LIMIT_CONFIGS } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
+    // レート制限チェック
+    const clientIP = getClientIP(req);
+    const rateLimit = await checkRateLimit(clientIP, "checkout", RATE_LIMIT_CONFIGS.checkout);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "リクエストが多すぎます。しばらくお待ちください。" },
+        { status: 429 }
+      );
+    }
+
     const authSession = await auth();
     const userId = authSession?.user?.id || "";
 
@@ -63,10 +74,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sessionId: session.id, url: session.url });
   } catch (error) {
     console.error("Stripe checkout error:", error);
-    // エラーの詳細を返す（開発用）
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to create checkout session", details: errorMessage },
+      { error: "Failed to create checkout session" },
       { status: 500 }
     );
   }

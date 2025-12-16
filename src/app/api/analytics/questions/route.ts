@@ -1,10 +1,30 @@
 // [Analytics] 質問分析API（Pro機能）
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
-import { AnalyticsEvent, Company } from "@/lib/types";
+import { AnalyticsEvent, Company, User, Agent } from "@/lib/types";
 import { isProPlan, getDateRange, QUESTION_CATEGORIES } from "@/lib/analytics";
 import { auth } from "@/lib/auth";
 import { getOpenAI } from "@/lib/openai";
+
+// ユーザーが会社にアクセスできるか確認
+async function canAccessCompany(userId: string, userEmail: string | null | undefined, companyId: string): Promise<boolean> {
+  const usersCol = await getCollection<User>("users");
+  const agentsCol = await getCollection<Agent>("agents");
+
+  const user = await usersCol.findOne({ userId });
+  if (user?.companyIds?.includes(companyId)) {
+    return true;
+  }
+
+  const agent = await agentsCol.findOne({ companyId });
+  if (agent?.sharedWith?.some(
+    (shared) => shared.email === userEmail || shared.userId === userId
+  )) {
+    return true;
+  }
+
+  return false;
+}
 
 // 質問をAIでカテゴリ分類
 async function categorizeQuestion(text: string): Promise<{
@@ -67,6 +87,11 @@ export async function GET(req: NextRequest) {
 
     if (!companyId) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
+    }
+
+    // 会社アクセス権限チェック
+    if (!await canAccessCompany(session.user.id, session.user.email, companyId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Proプランチェック

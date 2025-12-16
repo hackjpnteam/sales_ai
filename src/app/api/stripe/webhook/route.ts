@@ -3,6 +3,12 @@ import { getStripe } from "@/lib/stripe";
 import { getCollection } from "@/lib/mongodb";
 import Stripe from "stripe";
 
+// 処理済みイベントの型
+interface ProcessedEvent {
+  eventId: string;
+  processedAt: Date;
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const signature = req.headers.get("stripe-signature");
@@ -26,6 +32,20 @@ export async function POST(req: NextRequest) {
     console.error("Webhook signature verification failed:", err);
     return NextResponse.json({ error: "Webhook signature verification failed" }, { status: 400 });
   }
+
+  // 重複処理防止: イベントIDが既に処理されているかチェック
+  const processedEventsCol = await getCollection<ProcessedEvent>("processed_stripe_events");
+  const existingEvent = await processedEventsCol.findOne({ eventId: event.id });
+  if (existingEvent) {
+    console.log(`[Webhook] Event ${event.id} already processed, skipping`);
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
+  // イベントを処理済みとして記録
+  await processedEventsCol.insertOne({
+    eventId: event.id,
+    processedAt: new Date(),
+  });
 
   // イベント処理
   switch (event.type) {

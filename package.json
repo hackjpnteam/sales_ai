@@ -14,6 +14,7 @@
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.1.2",
     "lucide-react": "^0.555.0",
+    "mammoth": "^1.11.0",
     "maxmind": "^5.0.1",
     "mongodb": "^7.0.0",
     "next": "^16.0.7",
@@ -23,6 +24,7 @@
     "react-dom": "19.2.0",
     "react-markdown": "^10.1.0",
     "stripe": "^20.0.0",
+    "unpdf": "^1.4.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
@@ -32,6 +34,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
+    "dotenv": "^17.2.3",
     "eslint": "^9",
     "eslint-config-next": "16.0.6",
     "tailwindcss": "^4",
