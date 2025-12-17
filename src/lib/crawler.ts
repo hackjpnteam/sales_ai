@@ -5,25 +5,37 @@ import { DocChunk } from "./types";
 import puppeteerCore from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 
-const MAX_PAGES = 15; // 重要ページを確実に取得するため
+const MAX_PAGES = 30; // 重要ページを確実に取得するため（サブディレクトリ含む）
 const CHUNK_SIZE = 600; // 500〜800文字程度でチャンク分割
 const PARALLEL_LIMIT = 5; // 並列クロール数
 const FETCH_TIMEOUT = 5000; // 5秒タイムアウト
-const MIN_CHUNKS_FOR_EARLY_EXIT = 50; // 十分なコンテンツを確保
+const MIN_CHUNKS_FOR_EARLY_EXIT = 100; // 十分なコンテンツを確保（早期終了しない）
 const PUPPETEER_TIMEOUT = 15000; // Puppeteer用の長めのタイムアウト
 
 // 優先的にクロールすべき重要ページのパターン
 const PRIORITY_PATHS = [
   '/company', '/about', '/corporate', '/profile',  // 会社概要
   '/contact', '/inquiry',  // お問い合わせ
-  '/service', '/services', '/business',  // サービス
+  '/service', '/services', '/business', '/product',  // サービス・事業内容
   '/news', '/topics',  // ニュース
   '/recruit', '/careers', '/jobs',  // 採用
+  '/faq', '/question',  // よくある質問
+  '/case', '/works', '/portfolio',  // 導入事例・実績
+  '/space', '/location',  // 場所・スペース
+  '/price', '/pricing', '/fee',  // 料金
+  '/flow', '/process',  // 流れ
 ];
 
 // SPAや空ページの場合に試すサブディレクトリパス（WordPressなど）
 const FALLBACK_SUBDIRECTORIES = [
   '/test',      // よくあるテスト/ステージング環境
+  '/test/about',     // テスト環境の会社概要
+  '/test/product',   // テスト環境の事業内容
+  '/test/contact',   // テスト環境のお問い合わせ
+  '/test/faq',       // テスト環境のFAQ
+  '/test/case',      // テスト環境の導入事例
+  '/test/news',      // テスト環境のニュース
+  '/test/space',     // テスト環境のスペース
   '/wp',        // WordPress
   '/blog',      // ブログ
   '/site',      // サイト
