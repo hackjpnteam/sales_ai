@@ -312,7 +312,156 @@ function isSPAHtml(html: string): boolean {
 // Puppeteerブラウザインスタンス（再利用）
 let browserInstance: Awaited<ReturnType<typeof puppeteerCore.launch>> | null = null;
 
-// Puppeteerでページを取得する関数
+// SPAナビゲーション要素を検出するセレクタ
+const NAV_SELECTORS = [
+  "nav a",
+  "header a",
+  "[role='navigation'] a",
+  ".nav a",
+  ".menu a",
+  ".navbar a",
+];
+
+// クリックすべきでないリンクのパターン
+const SKIP_LINK_PATTERNS = [
+  /^#$/,
+  /^javascript:/i,
+  /^mailto:/i,
+  /^tel:/i,
+  /logout/i,
+  /signout/i,
+  /login/i,
+  /signin/i,
+  /register/i,
+  /signup/i,
+];
+
+// SPAサイトの全ビューを取得する関数
+async function fetchAllSPAViews(url: string): Promise<string[]> {
+  let browser = browserInstance;
+  let page = null;
+  const htmlContents: string[] = [];
+
+  try {
+    // ブラウザがなければ起動
+    if (!browser) {
+      const executablePath = await chromium.executablePath();
+
+      browser = await puppeteerCore.launch({
+        args: chromium.args,
+        defaultViewport: { width: 1280, height: 720 },
+        executablePath,
+        headless: true,
+      });
+      browserInstance = browser;
+    }
+
+    page = await browser.newPage();
+
+    // ユーザーエージェントを設定
+    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+    // ページにアクセス
+    await page.goto(url, {
+      waitUntil: "networkidle2",
+      timeout: PUPPETEER_TIMEOUT,
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // 初期ページのHTMLを取得
+    const initialHtml = await page.content();
+    htmlContents.push(initialHtml);
+    console.log("[Crawler] SPA: Initial page captured");
+
+    // ナビゲーションリンクを取得
+    const navLinks = await page.evaluate((selectors: string[], skipPatterns: string[]) => {
+      const links: { text: string; index: number }[] = [];
+      const seen = new Set<string>();
+
+      for (const selector of selectors) {
+        document.querySelectorAll(selector).forEach((el, idx) => {
+          const anchor = el as HTMLAnchorElement;
+          const text = anchor.innerText.trim();
+          const href = anchor.getAttribute("href") || "";
+
+          // スキップすべきリンクをフィルタ
+          const shouldSkip = skipPatterns.some(pattern => new RegExp(pattern).test(href));
+          if (shouldSkip) return;
+
+          // 重複チェック
+          if (text && text.length > 0 && text.length < 50 && !seen.has(text)) {
+            seen.add(text);
+            links.push({ text, index: idx });
+          }
+        });
+      }
+
+      return links;
+    }, NAV_SELECTORS, SKIP_LINK_PATTERNS.map(r => r.source));
+
+    console.log(`[Crawler] SPA: Found ${navLinks.length} navigation links:`, navLinks.map(l => l.text));
+
+    // 各ナビゲーションをクリックしてコンテンツを取得
+    for (const link of navLinks) {
+      try {
+        // ナビゲーションリンクをクリック
+        const clicked = await page.evaluate((linkText: string, selectors: string[]) => {
+          for (const selector of selectors) {
+            const elements = document.querySelectorAll(selector);
+            for (const el of elements) {
+              if (el.textContent?.trim() === linkText) {
+                (el as HTMLElement).click();
+                return true;
+              }
+            }
+          }
+          return false;
+        }, link.text, NAV_SELECTORS);
+
+        if (clicked) {
+          // コンテンツの読み込みを待つ
+          await new Promise(resolve => setTimeout(resolve, 1500));
+
+          // 現在のHTMLを取得
+          const currentHtml = await page.content();
+
+          // 重複チェック（コンテンツが異なる場合のみ追加）
+          const isDuplicate = htmlContents.some(html => {
+            // body部分のテキストで比較
+            const existingText = html.replace(/<[^>]*>/g, "").substring(0, 1000);
+            const currentText = currentHtml.replace(/<[^>]*>/g, "").substring(0, 1000);
+            return existingText === currentText;
+          });
+
+          if (!isDuplicate) {
+            htmlContents.push(currentHtml);
+            console.log(`[Crawler] SPA: Captured view for "${link.text}"`);
+          }
+        }
+      } catch (e) {
+        console.log(`[Crawler] SPA: Failed to click "${link.text}":`, e);
+      }
+    }
+
+    console.log(`[Crawler] SPA: Total ${htmlContents.length} unique views captured`);
+    return htmlContents;
+
+  } catch (error) {
+    console.error("[Crawler] Puppeteer SPA error:", error);
+    return htmlContents;
+  } finally {
+    if (page) {
+      try {
+        await page.close();
+      } catch {
+        // ページクローズエラーは無視
+      }
+    }
+  }
+}
+
+// Puppeteerでページを取得する関数（単一ページ）
 async function fetchHtmlWithPuppeteer(url: string): Promise<string | null> {
   let browser = browserInstance;
   let page = null;
@@ -335,17 +484,6 @@ async function fetchHtmlWithPuppeteer(url: string): Promise<string | null> {
 
     // ユーザーエージェントを設定
     await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-
-    // 不要なリソースをブロックして高速化
-    await page.setRequestInterception(true);
-    page.on("request", (req) => {
-      const resourceType = req.resourceType();
-      if (["image", "stylesheet", "font", "media"].includes(resourceType)) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
 
     // ページにアクセス
     await page.goto(url, {
@@ -433,6 +571,23 @@ async function fetchHtml(url: string, usePuppeteer: boolean = false): Promise<st
   }
 
   return html;
+}
+
+// SPA用：全ビューのHTMLを取得
+async function fetchHtmlForSPA(url: string): Promise<string[] | null> {
+  // まず通常のfetchを試す
+  const html = await fetchHtmlSimple(url);
+  if (!html) return null;
+
+  // SPAかどうかを検出
+  if (isSPAHtml(html)) {
+    console.log(`[Crawler] SPA detected, fetching all views: ${url}`);
+    const views = await fetchAllSPAViews(url);
+    return views.length > 0 ? views : null;
+  }
+
+  // 通常のサイトは単一のHTMLを返す
+  return [html];
 }
 
 // 構造化コンテンツ抽出（仕様準拠: h1/h2/h3ごとにセクション分割）
@@ -738,6 +893,89 @@ async function processPage(
   return { url, docs: docsToInsert, links, html };
 }
 
+// 複数のHTMLからドキュメントを生成する関数
+function processMultipleHtmls(
+  htmls: string[],
+  url: string,
+  companyId: string,
+  agentId: string
+): { docs: Omit<DocChunk, "_id">[]; themeColor: string } {
+  const docsToInsert: Omit<DocChunk, "_id">[] = [];
+  let themeColor = "#2563eb";
+  let themeColorExtracted = false;
+
+  for (const html of htmls) {
+    // テーマカラー抽出（最初の成功したページから）
+    if (!themeColorExtracted) {
+      themeColor = extractThemeColor(html);
+      themeColorExtracted = true;
+    }
+
+    const pageMeta = extractPageMeta(html, url);
+    const sections = extractStructuredContent(html, url);
+
+    for (const section of sections) {
+      const sectionText = [
+        `【${section.sectionTitle}】`,
+        ...section.content,
+        ...section.links,
+      ].join("\n");
+
+      const chunks = splitIntoChunks(sectionText);
+
+      for (const chunk of chunks) {
+        if (chunk.length < 20) continue;
+        // 重複チェック
+        const isDuplicate = docsToInsert.some(d => d.chunk === chunk);
+        if (!isDuplicate) {
+          docsToInsert.push({
+            companyId,
+            agentId,
+            url,
+            title: pageMeta.title,
+            sectionTitle: section.sectionTitle,
+            chunk,
+            embeddings: [],
+            createdAt: new Date(),
+          });
+        }
+      }
+    }
+
+    // フォールバック抽出
+    if (docsToInsert.length < 2) {
+      const $ = cheerio.load(html);
+      $("script, style, nav, header, footer, aside, noscript").remove();
+      const fullText = $("main, article, .content, #content, body")
+        .first()
+        .text()
+        .replace(/\s+/g, " ")
+        .trim();
+
+      if (fullText.length > 100) {
+        const chunks = splitIntoChunks(fullText, 800);
+        for (let i = 0; i < chunks.length; i++) {
+          const isDuplicate = docsToInsert.some(d => d.chunk === chunks[i]);
+          if (!isDuplicate) {
+            docsToInsert.push({
+              companyId,
+              agentId,
+              url,
+              title: "ページコンテンツ",
+              sectionTitle: `ページ内容 (パート${i + 1})`,
+              chunk: chunks[i],
+              embeddings: [],
+              createdAt: new Date(),
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return { docs: docsToInsert, themeColor };
+}
+
 // 進捗コールバック付きクロール（並列処理版）
 export async function crawlAndEmbedSiteWithProgress(
   params: {
@@ -766,6 +1004,105 @@ export async function crawlAndEmbedSiteWithProgress(
     percent: 0,
     message: "サイトの解析を開始しています...",
   });
+
+  // まずルートURLをチェックしてSPAかどうか判定
+  const initialHtml = await fetchHtmlSimple(rootUrl);
+  const isSPA = initialHtml ? isSPAHtml(initialHtml) : false;
+
+  // SPAサイトの場合は特別な処理
+  if (isSPA) {
+    console.log("[Crawler] SPA site detected, using navigation-based crawling");
+    onProgress({
+      type: "crawling",
+      currentPage: 1,
+      totalPages: 1,
+      percent: 30,
+      message: "🔄 SPAサイトを検出しました。全ページを取得中...",
+    });
+
+    // SPAの全ビューを取得
+    const spaViews = await fetchAllSPAViews(rootUrl);
+
+    if (spaViews && spaViews.length > 0) {
+      onProgress({
+        type: "embedding",
+        currentPage: 1,
+        totalPages: 1,
+        percent: 60,
+        message: `🧠 ${spaViews.length}ビューからコンテンツを抽出中...`,
+      });
+
+      // 全ビューからドキュメントを生成
+      const { docs: allDocs, themeColor: extractedColor } = processMultipleHtmls(
+        spaViews,
+        rootUrl,
+        companyId,
+        agentId
+      );
+      themeColor = extractedColor;
+
+      if (allDocs.length > 0) {
+        onProgress({
+          type: "embedding",
+          currentPage: 1,
+          totalPages: 1,
+          percent: 70,
+          chunksFound: allDocs.length,
+          message: `🧠 ${allDocs.length}件のコンテンツをAI学習用に変換中...`,
+        });
+
+        try {
+          // Embeddingをバッチ生成
+          const textsToEmbed = allDocs.map((d) => d.chunk);
+          const embRes = await openai.embeddings.create({
+            model: "text-embedding-3-small",
+            input: textsToEmbed,
+          });
+
+          for (let i = 0; i < allDocs.length; i++) {
+            allDocs[i].embeddings = embRes.data[i].embedding;
+          }
+
+          onProgress({
+            type: "saving",
+            currentPage: 1,
+            totalPages: 1,
+            percent: 90,
+            chunksFound: allDocs.length,
+            message: `💾 ${allDocs.length}件のデータを保存中...`,
+          });
+
+          // MongoDBに保存
+          await docsCol.insertMany(allDocs as DocChunk[]);
+          totalChunks = allDocs.length;
+        } catch (error) {
+          console.error("[Crawler] Error processing SPA content:", error);
+        }
+      }
+
+      // Puppeteerブラウザを閉じる
+      await closeBrowser();
+
+      // 完了通知
+      onProgress({
+        type: "saving",
+        currentPage: 1,
+        totalPages: 1,
+        percent: 100,
+        chunksFound: totalChunks,
+        message: `✅ 完了！ SPAサイトから${totalChunks}件の情報を学習しました`,
+      });
+
+      return {
+        success: totalChunks > 0,
+        pagesVisited: spaViews.length,
+        totalChunks,
+        themeColor,
+      };
+    }
+  }
+
+  // 通常サイトの処理（従来のクロール）
 
   while (queue.length > 0 && visited.size < MAX_PAGES) {
     // 早期終了チェック: 十分なコンテンツが集まったら終了
