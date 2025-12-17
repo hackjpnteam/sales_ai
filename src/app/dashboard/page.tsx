@@ -43,6 +43,7 @@ import {
   AlertTriangle,
   Building2,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
 import type { CompanyInfo } from "@/lib/types";
@@ -274,6 +275,9 @@ function DashboardContent() {
   const [editingCompanyInfo, setEditingCompanyInfo] = useState<string | null>(null);
   const [editCompanyInfo, setEditCompanyInfo] = useState<CompanyInfo>({});
   const [savingCompanyInfo, setSavingCompanyInfo] = useState(false);
+
+  // 再クロール
+  const [recrawlingAgent, setRecrawlingAgent] = useState<string | null>(null);
 
   // アバター管理
   const [uploadedAvatars, setUploadedAvatars] = useState<UploadedAvatar[]>([]);
@@ -1233,6 +1237,56 @@ function DashboardContent() {
   const startEditingCompanyInfo = (agent: Agent) => {
     setEditingCompanyInfo(agent.agentId);
     setEditCompanyInfo(agent.companyInfo || {});
+  };
+
+  // 再クロールして基本情報を再取得
+  const recrawlAgent = async (agentId: string, companyId: string) => {
+    if (!confirm("サイトを再クロールして基本情報を更新しますか？\n\n※プロンプトやナレッジの設定は保持されます")) {
+      return;
+    }
+
+    setRecrawlingAgent(agentId);
+    try {
+      const res = await fetch(`/api/agents/${agentId}/recrawl`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // ローカルの状態を更新
+        if (data.companyInfo) {
+          setCompanies((prev) =>
+            prev.map((c) =>
+              c.companyId === companyId
+                ? {
+                    ...c,
+                    agents: c.agents.map((agent) =>
+                      agent.agentId === agentId
+                        ? {
+                            ...agent,
+                            companyInfo: data.companyInfo,
+                            themeColor: data.themeColor || agent.themeColor,
+                          }
+                        : agent
+                    ),
+                  }
+                : c
+            )
+          );
+          alert(`基本情報を更新しました（${data.pagesCount || 0}ページをクロール）`);
+        } else {
+          alert(data.message || "基本情報を抽出できませんでした");
+        }
+      } else {
+        alert(data.error || "再クロールに失敗しました");
+      }
+    } catch (error) {
+      console.error("Recrawl error:", error);
+      alert("エラーが発生しました");
+    } finally {
+      setRecrawlingAgent(null);
+    }
   };
 
   const getEmbedCode = (company: Company, agent: Agent) => {
@@ -2363,12 +2417,23 @@ function DashboardContent() {
                               サイトから基本情報を取得できませんでした。編集ボタンから手動で追加できます。
                             </p>
                           )}
-                          <button
-                            onClick={() => startEditingCompanyInfo(agent)}
-                            className="w-full py-2 rounded-xl font-medium text-blue-600 text-sm border border-blue-200 hover:bg-blue-50 transition-all"
-                          >
-                            基本情報を編集
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => startEditingCompanyInfo(agent)}
+                              className="flex-1 py-2 rounded-xl font-medium text-blue-600 text-sm border border-blue-200 hover:bg-blue-50 transition-all"
+                            >
+                              基本情報を編集
+                            </button>
+                            <button
+                              onClick={() => recrawlAgent(agent.agentId, company.companyId)}
+                              disabled={recrawlingAgent === agent.agentId}
+                              className="flex items-center justify-center gap-1 px-4 py-2 rounded-xl font-medium text-emerald-600 text-sm border border-emerald-200 hover:bg-emerald-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="サイトを再クロールして基本情報を更新"
+                            >
+                              <RefreshCw className={`w-4 h-4 ${recrawlingAgent === agent.agentId ? "animate-spin" : ""}`} />
+                              {recrawlingAgent === agent.agentId ? "取得中..." : "再取得"}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
