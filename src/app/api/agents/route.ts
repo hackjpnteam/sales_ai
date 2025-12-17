@@ -188,14 +188,22 @@ export async function POST(req: NextRequest) {
           return;
         }
 
-        // themeColorを更新（ユーザー指定がない場合のみ自動抽出を使用）
+        // themeColorとcompanyInfoを更新
         let finalThemeColor = userThemeColor || "#2563eb";
+        const updateFields: Record<string, unknown> = {};
+
         if (!hasUserThemeColor && result.themeColor && result.themeColor !== "#2563eb") {
-          await agentsCol.updateOne(
-            { agentId },
-            { $set: { themeColor: result.themeColor } }
-          );
+          updateFields.themeColor = result.themeColor;
           finalThemeColor = result.themeColor;
+        }
+
+        // companyInfoがあれば保存
+        if (result.companyInfo && Object.keys(result.companyInfo).length > 0) {
+          updateFields.companyInfo = result.companyInfo;
+        }
+
+        if (Object.keys(updateFields).length > 0) {
+          await agentsCol.updateOne({ agentId }, { $set: updateFields });
         }
 
         // Link company to user if authenticated
@@ -206,7 +214,7 @@ export async function POST(req: NextRequest) {
           );
         }
 
-        // 完了イベント
+        // 完了イベント（companyInfo含む）
         sendEvent({
           type: "complete",
           companyId,
@@ -214,6 +222,7 @@ export async function POST(req: NextRequest) {
           themeColor: finalThemeColor,
           pagesVisited: result.pagesVisited,
           totalChunks: result.totalChunks,
+          companyInfo: result.companyInfo,
         });
       } catch (error) {
         // エラー時もデータを削除

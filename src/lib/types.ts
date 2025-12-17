@@ -46,6 +46,21 @@ export type QuickButton = {
   query: string;           // クリック時に送信するメッセージ
 };
 
+// クロール時に抽出した基本情報
+export type CompanyInfo = {
+  companyName?: string;          // 会社名
+  representativeName?: string;   // 代表者名
+  establishedYear?: string;      // 設立年
+  address?: string;              // 住所
+  businessDescription?: string;  // 事業内容
+  phone?: string;                // 電話番号
+  email?: string;                // メールアドレス
+  employeeCount?: string;        // 従業員数
+  capital?: string;              // 資本金
+  recruitmentInfo?: string;      // 採用情報
+  websiteDescription?: string;   // サイト概要
+};
+
 // AIエージェント設定
 export type Agent = {
   _id?: string;
@@ -68,6 +83,8 @@ export type Agent = {
   ngResponses?: string;     // NG回答（絶対に回答してはいけない内容）
   // 共有設定
   sharedWith?: SharedUser[];
+  // クロール時に抽出した基本情報
+  companyInfo?: CompanyInfo;
   createdAt: Date;
 };
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Sparkles, Globe, Zap, ArrowRight, Copy, ExternalLink, MessageCircle, X, Lock, CreditCard, Palette, Check, BarChart3, Users, Smartphone, MapPin, MessageSquare, LogIn, UserPlus, Bot, Clock, Shield, TrendingUp, Building2, ShoppingCart, Briefcase, GraduationCap, Heart, Headphones, ChevronRight, BadgePercent, Rocket, FileText, Crown } from "lucide-react";
+import { Sparkles, Globe, Zap, ArrowRight, Copy, ExternalLink, MessageCircle, X, Lock, CreditCard, Palette, Check, BarChart3, Users, Smartphone, MapPin, MessageSquare, LogIn, UserPlus, Bot, Clock, Shield, TrendingUp, Building2, ShoppingCart, Briefcase, GraduationCap, Heart, Headphones, ChevronRight, BadgePercent, Rocket, FileText, Crown, Info } from "lucide-react";
+import type { CompanyInfo } from "@/lib/types";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
@@ -37,6 +38,7 @@ type ProgressEvent = {
   message?: string;
   companyId?: string;
   agentId?: string;
+  companyInfo?: CompanyInfo;
 };
 
 export default function Home() {
@@ -47,6 +49,7 @@ export default function Home() {
   const [result, setResult] = useState<{
     companyId: string;
     agentId: string;
+    companyInfo?: CompanyInfo;
   } | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -192,6 +195,7 @@ export default function Home() {
                 setResult({
                   companyId: data.companyId!,
                   agentId: data.agentId!,
+                  companyInfo: data.companyInfo,
                 });
               } else if (data.type === "error") {
                 setError(data.message || "エラーが発生しました");
@@ -857,6 +861,69 @@ export default function Home() {
                 <p className="mt-1">Agent ID: <code className="bg-white/20 px-2 py-0.5 rounded">{result.agentId}</code></p>
               </div>
             </div>
+
+            {/* 取得した基本情報 */}
+            {result.companyInfo && Object.values(result.companyInfo).some(v => v) && (
+              <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-6">
+                <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                  <Info className="w-4 h-4 text-rose-500" />
+                  取得した基本情報
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  {result.companyInfo.companyName && (
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 mb-1">会社名</p>
+                      <p className="font-medium text-slate-800">{result.companyInfo.companyName}</p>
+                    </div>
+                  )}
+                  {result.companyInfo.representativeName && (
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 mb-1">代表者名</p>
+                      <p className="font-medium text-slate-800">{result.companyInfo.representativeName}</p>
+                    </div>
+                  )}
+                  {result.companyInfo.establishedYear && (
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 mb-1">設立年</p>
+                      <p className="font-medium text-slate-800">{result.companyInfo.establishedYear}</p>
+                    </div>
+                  )}
+                  {result.companyInfo.address && (
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 mb-1">住所</p>
+                      <p className="font-medium text-slate-800">{result.companyInfo.address}</p>
+                    </div>
+                  )}
+                  {result.companyInfo.phone && (
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 mb-1">電話番号</p>
+                      <p className="font-medium text-slate-800">{result.companyInfo.phone}</p>
+                    </div>
+                  )}
+                  {result.companyInfo.email && (
+                    <div className="bg-slate-50 rounded-lg p-3">
+                      <p className="text-xs text-slate-500 mb-1">メール</p>
+                      <p className="font-medium text-slate-800">{result.companyInfo.email}</p>
+                    </div>
+                  )}
+                  {result.companyInfo.businessDescription && (
+                    <div className="bg-slate-50 rounded-lg p-3 sm:col-span-2">
+                      <p className="text-xs text-slate-500 mb-1">事業内容</p>
+                      <p className="font-medium text-slate-800">{result.companyInfo.businessDescription}</p>
+                    </div>
+                  )}
+                  {result.companyInfo.websiteDescription && (
+                    <div className="bg-slate-50 rounded-lg p-3 sm:col-span-2">
+                      <p className="text-xs text-slate-500 mb-1">サイト概要</p>
+                      <p className="font-medium text-slate-800">{result.companyInfo.websiteDescription}</p>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-3">
+                  ※ ダッシュボードで編集できます
+                </p>
+              </div>
+            )}
 
             {/* カラー選択（お試し可能） */}
             <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-6">

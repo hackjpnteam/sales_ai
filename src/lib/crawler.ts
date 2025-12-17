@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import { getOpenAI } from "./openai";
 import { getCollection } from "./mongodb";
-import { DocChunk } from "./types";
+import { DocChunk, CompanyInfo } from "./types";
 import puppeteerCore from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 
@@ -61,6 +61,7 @@ export interface CrawlResult {
   pagesVisited: number;
   totalChunks: number;
   themeColor: string;
+  companyInfo?: CompanyInfo;
   error?: string;
 }
 
@@ -558,6 +559,66 @@ async function closeBrowser(): Promise<void> {
   }
 }
 
+// クロールしたコンテンツから基本情報を抽出する関数
+async function extractCompanyInfo(chunks: string[]): Promise<CompanyInfo> {
+  const openai = getOpenAI();
+
+  // チャンクから最大5000文字を抽出（コスト節約）
+  const combinedText = chunks.slice(0, 20).join("\n").substring(0, 5000);
+
+  if (combinedText.length < 50) {
+    return {};
+  }
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `あなたはウェブサイトから企業情報を抽出するアシスタントです。
+以下のテキストから企業の基本情報を抽出してJSON形式で返してください。
+情報が見つからない場合は空文字を入れてください。
+
+必ず以下のJSON形式のみを返してください（説明文は不要）：
+{
+  "companyName": "会社名",
+  "representativeName": "代表者名",
+  "establishedYear": "設立年（例：2020年、令和2年）",
+  "address": "住所",
+  "businessDescription": "事業内容（100文字以内）",
+  "phone": "電話番号",
+  "email": "メールアドレス",
+  "employeeCount": "従業員数",
+  "capital": "資本金",
+  "recruitmentInfo": "採用情報の有無や概要（50文字以内）",
+  "websiteDescription": "サイト全体の概要（100文字以内）"
+}`
+        },
+        {
+          role: "user",
+          content: combinedText
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 500,
+    });
+
+    const content = response.choices[0]?.message?.content?.trim() || "{}";
+    // JSONを抽出（マークダウンコードブロックを除去）
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]) as CompanyInfo;
+      console.log("[Crawler] Extracted company info:", parsed);
+      return parsed;
+    }
+    return {};
+  } catch (error) {
+    console.error("[Crawler] Error extracting company info:", error);
+    return {};
+  }
+}
+
 // 通常のfetchでHTMLを取得
 async function fetchHtmlSimple(url: string): Promise<string | null> {
   try {
@@ -1024,6 +1085,7 @@ export async function crawlAndEmbedSiteWithProgress(
   let totalChunks = 0;
   let themeColor = "#2563eb";
   let themeColorExtracted = false;
+  const allChunkTexts: string[] = [];  // 基本情報抽出用にチャンクテキストを収集
 
   // 開始通知
   onProgress({
@@ -1170,6 +1232,9 @@ export async function crawlAndEmbedSiteWithProgress(
           // MongoDBに保存
           await docsCol.insertMany(allDocs as DocChunk[]);
           totalChunks = allDocs.length;
+
+          // 基本情報抽出用にチャンクテキストを収集
+          allChunkTexts.push(...allDocs.map(d => d.chunk));
         } catch (error) {
           console.error("[Crawler] Error processing SPA content:", error);
         }
@@ -1284,6 +1349,9 @@ export async function crawlAndEmbedSiteWithProgress(
       await docsCol.insertMany(allDocs as DocChunk[]);
       totalChunks += allDocs.length;
 
+      // 基本情報抽出用にチャンクテキストを収集
+      allChunkTexts.push(...allDocs.map(d => d.chunk));
+
     } catch (error) {
       console.error(`[Crawler] Error processing batch:`, error);
     }
@@ -1291,6 +1359,18 @@ export async function crawlAndEmbedSiteWithProgress(
 
   // Puppeteerブラウザを閉じる
   await closeBrowser();
+
+  // 基本情報を抽出
+  onProgress({
+    type: "saving",
+    currentPage: visited.size,
+    totalPages: visited.size,
+    percent: 95,
+    chunksFound: totalChunks,
+    message: `📋 基本情報を抽出中...`,
+  });
+
+  const companyInfo = await extractCompanyInfo(allChunkTexts);
 
   // 完了通知
   onProgress({
@@ -1307,6 +1387,7 @@ export async function crawlAndEmbedSiteWithProgress(
     pagesVisited: visited.size,
     totalChunks,
     themeColor,
+    companyInfo,
   };
 }
 
