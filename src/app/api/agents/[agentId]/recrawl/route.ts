@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
 import { Company, Agent, User } from "@/lib/types";
-import { crawlAndEmbedSite } from "@/lib/crawler";
+import { crawlAndEmbedSiteWithProgress, CrawlProgress } from "@/lib/crawler";
 
 // POST: サイトを再クロールして基本情報のみ更新（プロンプト・ナレッジは保持）
 export async function POST(
@@ -52,41 +52,80 @@ export async function POST(
 
     console.log(`[Recrawl] Starting recrawl for agent ${agentId}, URL: ${rootUrl}`);
 
-    // クロールを実行（ストリーミングなし、同期的に実行）
-    const result = await crawlAndEmbedSite({
-      companyId: agent.companyId,
-      agentId,
-      rootUrl,
+    // SSEストリーミングレスポンス
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const sendEvent = (data: object) => {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        };
+
+        try {
+          // クロールを実行（進捗コールバック付き）
+          const result = await crawlAndEmbedSiteWithProgress(
+            {
+              companyId: agent.companyId,
+              agentId,
+              rootUrl,
+            },
+            (progress: CrawlProgress) => {
+              // 進捗をSSEで送信
+              sendEvent({
+                type: "progress",
+                ...progress,
+              });
+            }
+          );
+
+          // 基本情報のみ更新（プロンプト・ナレッジは保持）
+          if (result.companyInfo && Object.keys(result.companyInfo).length > 0) {
+            await agentsCol.updateOne(
+              { agentId },
+              {
+                $set: {
+                  companyInfo: result.companyInfo,
+                  themeColor: result.themeColor || agent.themeColor,
+                  updatedAt: new Date(),
+                },
+              }
+            );
+
+            console.log(`[Recrawl] Updated company info for agent ${agentId}`);
+
+            sendEvent({
+              type: "complete",
+              success: true,
+              companyInfo: result.companyInfo,
+              themeColor: result.themeColor,
+              pagesCount: result.pagesVisited || 0,
+            });
+          } else {
+            sendEvent({
+              type: "complete",
+              success: true,
+              companyInfo: null,
+              message: "クロールは完了しましたが、基本情報を抽出できませんでした",
+            });
+          }
+        } catch (error) {
+          console.error("[Recrawl] Error:", error);
+          sendEvent({
+            type: "error",
+            error: "再クロールに失敗しました",
+          });
+        } finally {
+          controller.close();
+        }
+      },
     });
 
-    // 基本情報のみ更新（プロンプト・ナレッジは保持）
-    if (result.companyInfo && Object.keys(result.companyInfo).length > 0) {
-      await agentsCol.updateOne(
-        { agentId },
-        {
-          $set: {
-            companyInfo: result.companyInfo,
-            themeColor: result.themeColor || agent.themeColor,
-            updatedAt: new Date(),
-          },
-        }
-      );
-
-      console.log(`[Recrawl] Updated company info for agent ${agentId}`);
-
-      return NextResponse.json({
-        success: true,
-        companyInfo: result.companyInfo,
-        themeColor: result.themeColor,
-        pagesCount: result.crawledPages?.length || 0,
-      });
-    } else {
-      return NextResponse.json({
-        success: true,
-        companyInfo: null,
-        message: "クロールは完了しましたが、基本情報を抽出できませんでした",
-      });
-    }
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
   } catch (error) {
     console.error("[Recrawl] Error:", error);
     return NextResponse.json(

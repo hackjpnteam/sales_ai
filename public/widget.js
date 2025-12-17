@@ -209,23 +209,95 @@
 
     const positionStyles = getPositionStyles(widgetPosition);
 
-    // フローティングボタン
-    const button = document.createElement("button");
-    button.innerText = "AI相談";
-    Object.assign(button.style, {
+    // パルスアニメーション用スタイルを追加
+    const styleId = 'saleschat-widget-styles';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = `
+        @keyframes saleschat-pulse {
+          0% { box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
+          50% { box-shadow: 0 4px 20px rgba(0,0,0,0.35), 0 0 0 8px rgba(0,0,0,0.05); }
+          100% { box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
+        }
+        .saleschat-pulse {
+          animation: saleschat-pulse 2s ease-in-out infinite;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // チャットアイコンSVG
+    const chatIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`;
+    const closeIconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+
+    // ボタンコンテナ（ボタンとツールチップをまとめる）
+    const buttonContainer = document.createElement("div");
+    Object.assign(buttonContainer.style, {
       position: "fixed",
       zIndex: 999999,
-      borderRadius: "9999px",
-      padding: "10px 16px",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: widgetPosition.includes("left") ? "flex-start" : "flex-end",
+      gap: "8px",
+      ...positionStyles.button
+    });
+
+    // ツールチップ（5秒後に消える）
+    const tooltip = document.createElement("div");
+    tooltip.innerHTML = `<span style="font-weight: 500;">AIアシスタントが対応します</span>`;
+    Object.assign(tooltip.style, {
+      backgroundColor: "#fff",
+      color: "#374151",
+      padding: "10px 14px",
+      borderRadius: "12px",
+      fontSize: "13px",
+      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+      whiteSpace: "nowrap",
+      opacity: "1",
+      transition: "opacity 0.3s ease",
+      position: "relative"
+    });
+
+    // ツールチップの矢印
+    const tooltipArrow = document.createElement("div");
+    Object.assign(tooltipArrow.style, {
+      position: "absolute",
+      bottom: "-6px",
+      [widgetPosition.includes("left") ? "left" : "right"]: "20px",
+      width: "12px",
+      height: "12px",
+      backgroundColor: "#fff",
+      transform: "rotate(45deg)",
+      boxShadow: "2px 2px 4px rgba(0,0,0,0.1)"
+    });
+    tooltip.appendChild(tooltipArrow);
+
+    // 5秒後にツールチップをフェードアウト
+    setTimeout(function() {
+      tooltip.style.opacity = "0";
+      setTimeout(function() {
+        tooltip.style.display = "none";
+      }, 300);
+    }, 5000);
+
+    // フローティングボタン（円形バブル）
+    const button = document.createElement("button");
+    button.innerHTML = chatIconSvg;
+    button.className = "saleschat-pulse";
+    Object.assign(button.style, {
+      width: "56px",
+      height: "56px",
+      borderRadius: "50%",
       border: "none",
       backgroundColor: themeColor,
       color: "#fff",
-      fontSize: "14px",
-      fontWeight: "500",
-      boxShadow: "0 10px 15px -3px rgba(15,23,42,0.2)",
+      boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
       cursor: "pointer",
       transition: "all 0.2s ease",
-      ...positionStyles.button
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
     });
 
     // ホバーで少し暗くする
@@ -239,28 +311,18 @@
       return `rgb(${darkerR}, ${darkerG}, ${darkerB})`;
     };
 
-    // ホバー時のトランスフォーム計算
-    const getHoverTransform = (position, isHover) => {
-      const scale = isHover ? "scale(1.05)" : "scale(1)";
-      const mobile = isMobile();
-
-      if (position === "bottom-center") {
-        return `translateX(-50%) ${scale}`;
-      }
-      if (!mobile && (position === "middle-left" || position === "middle-right")) {
-        return `translateY(-50%) ${scale}`;
-      }
-      return scale;
-    };
-
     button.onmouseover = function () {
       button.style.backgroundColor = darkenColor(themeColor);
-      button.style.transform = getHoverTransform(widgetPosition, true);
+      button.style.transform = "scale(1.1)";
     };
     button.onmouseout = function () {
       button.style.backgroundColor = themeColor;
-      button.style.transform = getHoverTransform(widgetPosition, false);
+      button.style.transform = "scale(1)";
     };
+
+    // コンテナに追加
+    buttonContainer.appendChild(tooltip);
+    buttonContainer.appendChild(button);
 
     // iframe コンテナ
     const iframeWrapper = document.createElement("div");
@@ -297,7 +359,13 @@
     button.addEventListener("click", function () {
       var isHidden = iframeWrapper.style.display === "none";
       iframeWrapper.style.display = isHidden ? "block" : "none";
-      button.innerText = isHidden ? "✕ 閉じる" : "AI相談";
+      button.innerHTML = isHidden ? closeIconSvg : chatIconSvg;
+
+      // チャット開いたらツールチップを非表示 & パルスアニメーション停止
+      if (isHidden) {
+        tooltip.style.display = "none";
+        button.className = "";
+      }
 
       // [Analytics] チャット開閉イベント
       if (isHidden) {
@@ -313,12 +381,12 @@
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(function() {
         var newStyles = getPositionStyles(widgetPosition);
-        Object.assign(button.style, newStyles.button);
+        Object.assign(buttonContainer.style, newStyles.button);
         Object.assign(iframeWrapper.style, newStyles.iframe);
       }, 100);
     });
 
-    document.body.appendChild(button);
+    document.body.appendChild(buttonContainer);
     document.body.appendChild(iframeWrapper);
   }
 

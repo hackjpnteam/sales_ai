@@ -278,6 +278,7 @@ function DashboardContent() {
 
   // 再クロール
   const [recrawlingAgent, setRecrawlingAgent] = useState<string | null>(null);
+  const [recrawlProgress, setRecrawlProgress] = useState<{ percent: number; currentUrl?: string } | null>(null);
 
   // アバター管理
   const [uploadedAvatars, setUploadedAvatars] = useState<UploadedAvatar[]>([]);
@@ -1246,46 +1247,85 @@ function DashboardContent() {
     }
 
     setRecrawlingAgent(agentId);
+    setRecrawlProgress({ percent: 0 });
     try {
       const res = await fetch(`/api/agents/${agentId}/recrawl`, {
         method: "POST",
       });
 
-      const data = await res.json();
+      if (!res.ok) {
+        const errorData = await res.json();
+        alert(errorData.error || "再クロールに失敗しました");
+        return;
+      }
 
-      if (res.ok) {
-        // ローカルの状態を更新
-        if (data.companyInfo) {
-          setCompanies((prev) =>
-            prev.map((c) =>
-              c.companyId === companyId
-                ? {
-                    ...c,
-                    agents: c.agents.map((agent) =>
-                      agent.agentId === agentId
+      // SSEストリーミングを読み取る
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        alert("ストリーミングに失敗しました");
+        return;
+      }
+
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.type === "progress") {
+                setRecrawlProgress({
+                  percent: data.percent || 0,
+                  currentUrl: data.currentUrl,
+                });
+              } else if (data.type === "complete") {
+                if (data.success && data.companyInfo) {
+                  setCompanies((prev) =>
+                    prev.map((c) =>
+                      c.companyId === companyId
                         ? {
-                            ...agent,
-                            companyInfo: data.companyInfo,
-                            themeColor: data.themeColor || agent.themeColor,
+                            ...c,
+                            agents: c.agents.map((agent) =>
+                              agent.agentId === agentId
+                                ? {
+                                    ...agent,
+                                    companyInfo: data.companyInfo,
+                                    themeColor: data.themeColor || agent.themeColor,
+                                  }
+                                : agent
+                            ),
                           }
-                        : agent
-                    ),
-                  }
-                : c
-            )
-          );
-          alert(`基本情報を更新しました（${data.pagesCount || 0}ページをクロール）`);
-        } else {
-          alert(data.message || "基本情報を抽出できませんでした");
+                        : c
+                    )
+                  );
+                  alert(`基本情報を更新しました（${data.pagesCount || 0}ページをクロール）`);
+                } else {
+                  alert(data.message || "基本情報を抽出できませんでした");
+                }
+              } else if (data.type === "error") {
+                alert(data.error || "再クロールに失敗しました");
+              }
+            } catch (e) {
+              console.error("Failed to parse SSE data:", e);
+            }
+          }
         }
-      } else {
-        alert(data.error || "再クロールに失敗しました");
       }
     } catch (error) {
       console.error("Recrawl error:", error);
       alert("エラーが発生しました");
     } finally {
       setRecrawlingAgent(null);
+      setRecrawlProgress(null);
     }
   };
 
@@ -1629,293 +1669,8 @@ function DashboardContent() {
         })()}
       </div>
 
-      {/* 共有されたエージェント（自分のエージェントがない場合も表示） */}
-      {sharedCompanies.length > 0 && companies.length === 0 && !showCreateForm && (
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-            <Users className="w-5 h-5 text-blue-500" />
-            共有されたエージェント
-          </h2>
-          <div className="space-y-4">
-            {sharedCompanies.map((company) => {
-              const isExpanded = expandedCompany === company.companyId;
-              const agent = company.agents[0];
-              const isPaid = company.plan === "lite" || company.plan === "pro" || company.plan === "max";
-
-              return (
-                <div
-                  key={`shared-top-${company.companyId}`}
-                  className="bg-white rounded-2xl shadow-lg border border-blue-100 overflow-hidden"
-                >
-                  {/* ヘッダー */}
-                  <button
-                    onClick={() => setExpandedCompany(isExpanded ? null : company.companyId)}
-                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-all"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div
-                        className="w-12 h-12 rounded-xl flex items-center justify-center relative"
-                        style={{ backgroundColor: (agent?.themeColor || "#3B82F6") + "20" }}
-                      >
-                        <Globe
-                          className="w-6 h-6"
-                          style={{ color: agent?.themeColor || "#3B82F6" }}
-                        />
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                          <Users className="w-3 h-3 text-white" />
-                        </div>
-                      </div>
-                      <div className="text-left">
-                        <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-                          {company.name || company.rootUrl}
-                          <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full">
-                            共有
-                          </span>
-                        </h2>
-                        <p className="text-sm text-slate-500 truncate max-w-[200px] sm:max-w-none">
-                          {company.rootUrl}
-                        </p>
-                      </div>
-                    </div>
-                    {isExpanded ? (
-                      <ChevronUp className="w-5 h-5 text-slate-400" />
-                    ) : (
-                      <ChevronDown className="w-5 h-5 text-slate-400" />
-                    )}
-                  </button>
-
-                  {/* 展開コンテンツ（編集機能付き） */}
-                  {isExpanded && agent && (
-                    <div className="px-6 pb-6 border-t border-slate-100 pt-4 space-y-6">
-                      <p className="text-sm text-slate-500">
-                        このエージェントはあなたと共有されています。編集が可能です。
-                      </p>
-
-                      {/* 基本設定 */}
-                      <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-4">
-                        <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
-                          <MessageCircle className="w-4 h-4 text-blue-500" />
-                          基本設定
-                        </h4>
-                        {editingAgent === agent.agentId ? (
-                          <div className="space-y-4">
-                            {/* 編集フォーム */}
-                            <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
-                                エージェント名
-                              </label>
-                              <input
-                                type="text"
-                                value={editAgentName}
-                                onChange={(e) => setEditAgentName(e.target.value)}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-slate-500 mb-1">
-                                ウェルカムメッセージ
-                              </label>
-                              <textarea
-                                value={editWelcomeMessage}
-                                onChange={(e) => setEditWelcomeMessage(e.target.value)}
-                                rows={2}
-                                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                              />
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-slate-600">音声読み上げ</span>
-                              {isPaid ? (
-                                <button
-                                  onClick={() => setEditVoiceEnabled(!editVoiceEnabled)}
-                                  className={`relative w-12 h-6 rounded-full transition-colors ${
-                                    editVoiceEnabled ? "bg-blue-500" : "bg-slate-200"
-                                  }`}
-                                >
-                                  <div
-                                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                                      editVoiceEnabled ? "left-7" : "left-1"
-                                    }`}
-                                  />
-                                </button>
-                              ) : (
-                                <div className="relative w-12 h-6 rounded-full bg-slate-200 cursor-not-allowed">
-                                  <div className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex gap-2 pt-2">
-                              <button
-                                onClick={() => saveAgentSettings(agent.agentId, company.companyId)}
-                                disabled={savingSettings}
-                                className="flex-1 py-2 rounded-xl font-medium text-white text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 bg-blue-500 hover:bg-blue-600"
-                              >
-                                {savingSettings ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                  <Save className="w-4 h-4" />
-                                )}
-                                保存
-                              </button>
-                              <button
-                                onClick={() => setEditingAgent(null)}
-                                disabled={savingSettings}
-                                className="px-4 py-2 rounded-xl font-medium text-slate-600 text-sm bg-white border border-slate-200 hover:bg-slate-50 transition-all disabled:opacity-50"
-                              >
-                                キャンセル
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200">
-                                <img
-                                  src={agent.avatarUrl || "/agent-avatar.png"}
-                                  alt="Agent avatar"
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.currentTarget.src = "/agent-avatar.png";
-                                  }}
-                                />
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-sm font-medium text-slate-800">{agent.name}</p>
-                                <p className="text-xs text-slate-500 line-clamp-1">
-                                  {agent.welcomeMessage || "いらっしゃいませ。"}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                {agent.voiceEnabled !== false ? (
-                                  <Volume2 className="w-4 h-4 text-blue-500" />
-                                ) : (
-                                  <VolumeX className="w-4 h-4 text-slate-400" />
-                                )}
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => startEditingAgent(agent)}
-                              className="w-full py-2 rounded-xl font-medium text-blue-600 text-sm border border-blue-200 hover:bg-blue-50 transition-all"
-                            >
-                              設定を編集
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* プレビュー */}
-                      <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
-                        <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
-                          <ExternalLink className="w-4 h-4 text-blue-500" />
-                          プレビュー
-                        </h4>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => {
-                              setCreatedAgent({
-                                companyId: company.companyId,
-                                agentId: agent.agentId,
-                                agentName: agent.name,
-                                themeColor: agent.themeColor,
-                                widgetPosition: agent.widgetPosition || "bottom-right",
-                              });
-                              setShowWidget(true);
-                            }}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 transition-all"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                            チャットを試す
-                          </button>
-                          <button
-                            onClick={() => {
-                              setPreviewAgent({
-                                companyId: agent.companyId,
-                                agentId: agent.agentId,
-                                agentName: agent.name,
-                                themeColor: agent.themeColor,
-                                widgetPosition: agent.widgetPosition || "bottom-right",
-                              });
-                              setShowWidgetPreview(true);
-                            }}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-all border border-slate-200"
-                          >
-                            <Globe className="w-4 h-4" />
-                            ウィジェットで試す
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* カラー選択 */}
-                      <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-medium text-slate-700 flex items-center gap-2">
-                            <Palette className="w-4 h-4 text-blue-500" />
-                            チャットカラー
-                          </h4>
-                          {updatingColor === agent.agentId && (
-                            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                          )}
-                        </div>
-                        <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
-                          {colorOptions.map((color) => (
-                            <button
-                              key={color.value}
-                              onClick={() => handleColorChange(agent.agentId, company.companyId, color.value)}
-                              disabled={updatingColor === agent.agentId}
-                              className={`w-8 h-8 rounded-lg transition-all ${
-                                agent.themeColor === color.value
-                                  ? "ring-2 ring-offset-2 scale-110"
-                                  : ""
-                              } hover:scale-105 cursor-pointer ${
-                                updatingColor === agent.agentId ? "opacity-50" : ""
-                              } ${
-                                color.value === "#FFFFFF" ? "border border-slate-300" : ""
-                              }`}
-                              style={{
-                                backgroundColor: color.value,
-                                // @ts-expect-error - CSS custom property for Tailwind ring color
-                                "--tw-ring-color": color.value,
-                              }}
-                              title={color.name}
-                            />
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* ウィジェット位置 */}
-                      <div>
-                        <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
-                          <MapPin className="w-4 h-4 text-blue-500" />
-                          表示位置
-                        </h4>
-                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                          {positionOptions.map((pos) => (
-                            <button
-                              key={pos.value}
-                              onClick={() => handlePositionChange(agent.agentId, company.companyId, pos.value)}
-                              disabled={updatingColor === agent.agentId}
-                              className={`flex flex-col items-center justify-center px-2 py-2 sm:px-3 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
-                                (agent.widgetPosition || "bottom-right") === pos.value
-                                  ? "bg-blue-500 text-white shadow-md"
-                                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                              } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
-                            >
-                              <span className="text-base sm:text-lg mb-0.5">{pos.icon}</span>
-                              <span className="whitespace-nowrap">{pos.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* 会社リスト */}
-      {companies.length === 0 && sharedCompanies.length === 0 && !showCreateForm ? (
+      {companies.length === 0 && !showCreateForm ? (
         <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-12 text-center">
           <MessageCircle className="w-12 h-12 text-rose-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-slate-800 mb-2">
@@ -1923,16 +1678,6 @@ function DashboardContent() {
           </h3>
           <p className="text-slate-600 text-sm">
             上のボタンから新しいエージェントを作成しましょう
-          </p>
-        </div>
-      ) : companies.length === 0 && sharedCompanies.length > 0 && !showCreateForm ? (
-        <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-8 text-center">
-          <Plus className="w-10 h-10 text-rose-300 mx-auto mb-3" />
-          <h3 className="text-base font-semibold text-slate-800 mb-2">
-            自分のエージェントを作成
-          </h3>
-          <p className="text-slate-600 text-sm mb-4">
-            上のボタンから新しいエージェントを作成できます
           </p>
         </div>
       ) : (
@@ -1948,37 +1693,55 @@ function DashboardContent() {
                 className="bg-white rounded-2xl shadow-lg border border-rose-100 overflow-hidden"
               >
                 {/* ヘッダー */}
-                <button
+                <div
                   onClick={() => setExpandedCompany(isExpanded ? null : company.companyId)}
-                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-all"
+                  className="w-full px-4 sm:px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-all gap-2 cursor-pointer"
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
                     <div
-                      className="w-12 h-12 rounded-xl flex items-center justify-center"
+                      className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0"
                       style={{ backgroundColor: agent?.themeColor + "20" }}
                     >
-                      <Globe className="w-6 h-6" style={{ color: agent?.themeColor }} />
+                      <Globe className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: agent?.themeColor }} />
                     </div>
-                    <div className="text-left">
-                      <h3 className="font-semibold text-slate-800">{company.name}</h3>
-                      <p className="text-sm text-slate-500">{company.rootUrl}</p>
+                    <div className="text-left min-w-0 flex-1">
+                      <h3 className="font-semibold text-slate-800 truncate">{company.name}</h3>
+                      <p className="text-xs sm:text-sm text-slate-500 truncate">{company.rootUrl}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
                     {company.isShared && (
-                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full flex items-center gap-1">
+                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full flex items-center gap-1 hidden sm:flex">
                         <Users className="w-3 h-3" />
                         共有
                       </span>
                     )}
                     {getPlanBadge(company.plan, company.companyId)}
+                    {/* 削除ボタン（共有されていないエージェントのみ） */}
+                    {!company.isShared && agent && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteAgent(agent.agentId, company.name);
+                        }}
+                        disabled={deletingAgent === agent.agentId}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all disabled:opacity-50"
+                        title="エージェントを削除"
+                      >
+                        {deletingAgent === agent.agentId ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
                     {isExpanded ? (
                       <ChevronUp className="w-5 h-5 text-slate-400" />
                     ) : (
                       <ChevronDown className="w-5 h-5 text-slate-400" />
                     )}
                   </div>
-                </button>
+                </div>
 
                 {/* 展開コンテンツ */}
                 {isExpanded && agent && (
@@ -2431,7 +2194,9 @@ function DashboardContent() {
                               title="サイトを再クロールして基本情報を更新"
                             >
                               <RefreshCw className={`w-4 h-4 ${recrawlingAgent === agent.agentId ? "animate-spin" : ""}`} />
-                              {recrawlingAgent === agent.agentId ? "取得中..." : "再取得"}
+                              {recrawlingAgent === agent.agentId
+                                ? `取得中... ${recrawlProgress?.percent ?? 0}%`
+                                : "再取得"}
                             </button>
                           </div>
                         </div>
