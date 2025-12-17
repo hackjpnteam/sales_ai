@@ -41,8 +41,11 @@ import {
   Mail,
   Send,
   AlertTriangle,
+  Building2,
+  Info,
 } from "lucide-react";
 import Link from "next/link";
+import type { CompanyInfo } from "@/lib/types";
 
 const SUPER_ADMIN_EMAILS = ["tomura@hackjpn.com"];
 
@@ -76,6 +79,8 @@ type Agent = {
   // 共有
   sharedWith?: SharedUser[];
   isShared?: boolean;
+  // 基本情報
+  companyInfo?: CompanyInfo;
   createdAt: Date;
 };
 
@@ -265,6 +270,11 @@ function DashboardContent() {
   const [editAvatarUrl, setEditAvatarUrl] = useState("/agent-avatar.png");
   const [savingSettings, setSavingSettings] = useState(false);
 
+  // 基本情報編集
+  const [editingCompanyInfo, setEditingCompanyInfo] = useState<string | null>(null);
+  const [editCompanyInfo, setEditCompanyInfo] = useState<CompanyInfo>({});
+  const [savingCompanyInfo, setSavingCompanyInfo] = useState(false);
+
   // アバター管理
   const [uploadedAvatars, setUploadedAvatars] = useState<UploadedAvatar[]>([]);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -327,6 +337,13 @@ function DashboardContent() {
       const res = await fetch("/api/user/companies");
       if (res.ok) {
         const data = await res.json();
+        // デバッグ: 会社データをログ出力
+        console.log("[Dashboard] Fetched companies:", data.companies?.map((c: Company) => ({
+          companyId: c.companyId,
+          name: c.name,
+          plan: c.plan,
+          agentCount: c.agents?.length,
+        })));
         setCompanies(data.companies || []);
         setSharedCompanies(data.sharedCompanies || []);
         setMaxPlanCount(data.maxPlanCount || 0);
@@ -563,7 +580,7 @@ function DashboardContent() {
       } else {
         const data = await res.json();
         if (data.code === "PRO_REQUIRED") {
-          alert("この機能はProプラン限定です。アップグレードしてください。");
+          alert("この機能はPro/Maxプラン限定です。アップグレードしてください。");
         } else {
           alert(data.error || "保存に失敗しました");
         }
@@ -1166,6 +1183,56 @@ function DashboardContent() {
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  // 基本情報を保存
+  const saveCompanyInfo = async (agentId: string, companyId: string) => {
+    setSavingCompanyInfo(true);
+    try {
+      const res = await fetch(`/api/agents/${agentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyInfo: editCompanyInfo,
+        }),
+      });
+
+      if (res.ok) {
+        // ローカルの状態を更新
+        setCompanies((prev) =>
+          prev.map((c) =>
+            c.companyId === companyId
+              ? {
+                  ...c,
+                  agents: c.agents.map((agent) =>
+                    agent.agentId === agentId
+                      ? {
+                          ...agent,
+                          companyInfo: editCompanyInfo,
+                        }
+                      : agent
+                  ),
+                }
+              : c
+          )
+        );
+        setEditingCompanyInfo(null);
+      } else {
+        const data = await res.json();
+        alert(data.error || "基本情報の保存に失敗しました");
+      }
+    } catch (error) {
+      console.error("Company info save error:", error);
+      alert("エラーが発生しました");
+    } finally {
+      setSavingCompanyInfo(false);
+    }
+  };
+
+  // 基本情報編集を開始
+  const startEditingCompanyInfo = (agent: Agent) => {
+    setEditingCompanyInfo(agent.agentId);
+    setEditCompanyInfo(agent.companyInfo || {});
   };
 
   const getEmbedCode = (company: Company, agent: Agent) => {
@@ -2099,6 +2166,208 @@ function DashboardContent() {
                             className="w-full py-2 rounded-xl font-medium text-rose-600 text-sm border border-rose-200 hover:bg-rose-50 transition-all"
                           >
                             設定を編集
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 基本情報（自動取得） */}
+                    <div className="bg-blue-50 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-blue-500" />
+                          基本情報
+                        </h4>
+                        <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                          自動取得
+                        </span>
+                      </div>
+
+                      {editingCompanyInfo === agent.agentId ? (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">会社名</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.companyName || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, companyName: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="株式会社〇〇"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">代表者</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.representativeName || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, representativeName: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="山田 太郎"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">設立年</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.establishedYear || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, establishedYear: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="2020年"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">従業員数</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.employeeCount || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, employeeCount: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="50名"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">電話番号</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.phone || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, phone: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="03-1234-5678"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">メールアドレス</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.email || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, email: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="info@example.com"
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs text-slate-600 mb-1">住所</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.address || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, address: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="東京都渋谷区〇〇1-2-3"
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs text-slate-600 mb-1">事業内容</label>
+                              <textarea
+                                value={editCompanyInfo.businessDescription || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, businessDescription: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                                rows={2}
+                                placeholder="Webサービスの企画・開発・運営"
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs text-slate-600 mb-1">採用情報</label>
+                              <textarea
+                                value={editCompanyInfo.recruitmentInfo || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, recruitmentInfo: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                                rows={2}
+                                placeholder="積極採用中。詳しくは採用ページをご覧ください。"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2 pt-2">
+                            <button
+                              onClick={() => saveCompanyInfo(agent.agentId, company.companyId)}
+                              disabled={savingCompanyInfo}
+                              className="flex-1 py-2 rounded-xl font-medium text-white text-sm bg-blue-500 hover:bg-blue-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                              {savingCompanyInfo ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Save className="w-4 h-4" />
+                              )}
+                              保存
+                            </button>
+                            <button
+                              onClick={() => setEditingCompanyInfo(null)}
+                              disabled={savingCompanyInfo}
+                              className="px-4 py-2 rounded-xl font-medium text-slate-600 text-sm bg-white border border-slate-200 hover:bg-slate-50 transition-all disabled:opacity-50"
+                            >
+                              キャンセル
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {agent.companyInfo && Object.values(agent.companyInfo).some(v => v) ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                              {agent.companyInfo.companyName && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-slate-500 min-w-[4rem]">会社名:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.companyName}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.representativeName && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-slate-500 min-w-[4rem]">代表者:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.representativeName}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.establishedYear && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-slate-500 min-w-[4rem]">設立年:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.establishedYear}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.employeeCount && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-slate-500 min-w-[4rem]">従業員数:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.employeeCount}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.phone && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-slate-500 min-w-[4rem]">電話番号:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.phone}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.email && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-slate-500 min-w-[4rem]">メール:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.email}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.address && (
+                                <div className="flex items-start gap-2 sm:col-span-2">
+                                  <span className="text-slate-500 min-w-[4rem]">住所:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.address}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.businessDescription && (
+                                <div className="flex items-start gap-2 sm:col-span-2">
+                                  <span className="text-slate-500 min-w-[4rem]">事業内容:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.businessDescription}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.recruitmentInfo && (
+                                <div className="flex items-start gap-2 sm:col-span-2">
+                                  <span className="text-slate-500 min-w-[4rem]">採用情報:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.recruitmentInfo}</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-500">
+                              サイトから基本情報を取得できませんでした。編集ボタンから手動で追加できます。
+                            </p>
+                          )}
+                          <button
+                            onClick={() => startEditingCompanyInfo(agent)}
+                            className="w-full py-2 rounded-xl font-medium text-blue-600 text-sm border border-blue-200 hover:bg-blue-50 transition-all"
+                          >
+                            基本情報を編集
                           </button>
                         </div>
                       )}
@@ -3386,7 +3655,7 @@ function DashboardContent() {
                     onChange={(e) => setPromptSettings(prev => ({ ...prev, systemPrompt: e.target.value }))}
                     placeholder="例: あなたはプロの採用担当者です。弊社のキャリア情報をユーザーに的確に導けるように指導してください。"
                     rows={6}
-                    disabled={promptCompanyPlan !== "pro"}
+                    disabled={promptCompanyPlan !== "pro" && promptCompanyPlan !== "max"}
                     className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-y min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                   <p className="text-xs text-slate-500 mt-1">
@@ -3404,7 +3673,7 @@ function DashboardContent() {
                     onChange={(e) => setPromptSettings(prev => ({ ...prev, knowledge: e.target.value }))}
                     placeholder="例: 弊社は2010年設立のIT企業です。主力サービスはクラウド会計ソフト「○○」で、中小企業向けに提供しています。営業時間は平日9:00-18:00です。"
                     rows={10}
-                    disabled={promptCompanyPlan !== "pro"}
+                    disabled={promptCompanyPlan !== "pro" && promptCompanyPlan !== "max"}
                     className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-y min-h-[200px] focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                   <p className="text-xs text-slate-500 mt-1">
@@ -3422,7 +3691,7 @@ function DashboardContent() {
                     onChange={(e) => setPromptSettings(prev => ({ ...prev, style: e.target.value }))}
                     placeholder="例: 丁寧で親しみやすいトーンで話してください。専門用語は避け、わかりやすく説明してください。"
                     rows={6}
-                    disabled={promptCompanyPlan !== "pro"}
+                    disabled={promptCompanyPlan !== "pro" && promptCompanyPlan !== "max"}
                     className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-y min-h-[120px] focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                   <p className="text-xs text-slate-500 mt-1">
@@ -3445,7 +3714,7 @@ function DashboardContent() {
 - 個人の連絡先を聞かれても教えない
 - 社内の機密情報（売上、人事など）は開示しない"
                     rows={6}
-                    disabled={promptCompanyPlan !== "pro"}
+                    disabled={promptCompanyPlan !== "pro" && promptCompanyPlan !== "max"}
                     className="w-full border border-red-100 rounded-xl px-4 py-3 text-sm resize-y min-h-[120px] focus:outline-none focus:ring-2 focus:ring-red-300 disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                   <p className="text-xs text-slate-500 mt-1">
@@ -3467,16 +3736,16 @@ function DashboardContent() {
                   </p>
                 </div>
 
-                {/* Pro限定の案内 */}
-                {promptCompanyPlan !== "pro" && (
+                {/* Pro/Max限定の案内 */}
+                {promptCompanyPlan !== "pro" && promptCompanyPlan !== "max" && (
                   <div className="bg-purple-50 rounded-xl p-4 flex items-start gap-3">
                     <Lock className="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm font-medium text-purple-800">
-                        プロンプト設定はProプラン限定機能です
+                        プロンプト設定はPro/Maxプラン限定機能です
                       </p>
                       <p className="text-xs text-purple-600 mt-1">
-                        Proプランにアップグレードすると、AIの振る舞いを自由にカスタマイズできます
+                        Pro/Maxプランにアップグレードすると、AIの振る舞いを自由にカスタマイズできます
                       </p>
                     </div>
                   </div>
@@ -3494,7 +3763,7 @@ function DashboardContent() {
               </button>
               <button
                 onClick={handleSavePromptSettings}
-                disabled={savingPrompt || promptCompanyPlan !== "pro"}
+                disabled={savingPrompt || (promptCompanyPlan !== "pro" && promptCompanyPlan !== "max")}
                 className="flex-1 py-3 rounded-xl font-medium text-white disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                 style={{ background: "linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)" }}
               >

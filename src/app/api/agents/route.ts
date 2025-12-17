@@ -181,9 +181,14 @@ export async function POST(req: NextRequest) {
           await companiesCol.deleteOne({ companyId });
           await agentsCol.deleteOne({ agentId });
 
+          // SPAサイトの場合はより詳細なエラーメッセージを表示
+          const errorMessage = result.isSPA
+            ? "このサイトはJavaScriptで動的にコンテンツを生成するSPA（シングルページアプリケーション）のため、コンテンツを取得できませんでした。サーバーサイドレンダリング（SSR）対応のURLをお試しください。"
+            : "サイトからコンテンツを取得できませんでした。URLを確認して再度お試しください。";
+
           sendEvent({
             type: "error",
-            message: "サイトからコンテンツを取得できませんでした。URLを確認して再度お試しください。",
+            message: errorMessage,
           });
           return;
         }

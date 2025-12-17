@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Sparkles, Globe, Zap, ArrowRight, Copy, ExternalLink, MessageCircle, X, Lock, CreditCard, Palette, Check, BarChart3, Users, Smartphone, MapPin, MessageSquare, LogIn, UserPlus, Bot, Clock, Shield, TrendingUp, Building2, ShoppingCart, Briefcase, GraduationCap, Heart, Headphones, ChevronRight, BadgePercent, Rocket, FileText, Crown, Info } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Sparkles, Globe, Zap, ArrowRight, Copy, ExternalLink, MessageCircle, X, Lock, CreditCard, Palette, Check, BarChart3, Users, Smartphone, MapPin, MessageSquare, LogIn, UserPlus, Bot, Clock, Shield, TrendingUp, Building2, ShoppingCart, Briefcase, GraduationCap, Heart, Headphones, ChevronRight, BadgePercent, Rocket, FileText, Crown, Info, Brain, Search, Database, Cpu, Building, Star, Award, CheckCircle, Newspaper } from "lucide-react";
 import type { CompanyInfo } from "@/lib/types";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -25,11 +25,23 @@ const colorOptions = [
   { name: "ピンク", value: "#EC4899" },
 ];
 
+// 進捗中に表示するTips
+const progressTips = [
+  { icon: "🤖", title: "24時間対応", desc: "AIチャットは休むことなく顧客対応を続けます" },
+  { icon: "💬", title: "自然な会話", desc: "最新のAI技術で人間のような会話を実現" },
+  { icon: "📈", title: "売上向上", desc: "平均30%の問い合わせ対応率向上を実現" },
+  { icon: "🎯", title: "正確な回答", desc: "御社サイトの情報を学習し、的確に回答" },
+  { icon: "🌐", title: "多言語対応", desc: "日本語はもちろん、英語での対応も可能" },
+  { icon: "⚡", title: "即座に導入", desc: "コード1行で御社サイトにチャット機能を追加" },
+  { icon: "🔒", title: "安全性", desc: "企業情報を安全に管理・活用します" },
+  { icon: "📊", title: "分析機能", desc: "顧客の質問傾向を分析しビジネスに活用" },
+];
+
 // デモ用のCompany ID（hackjpn.com）
 const DEMO_COMPANY_ID = "30ac1882-0497-4ce3-8774-d359d779e36b";
 
 type ProgressEvent = {
-  type: "discovering" | "crawling" | "embedding" | "saving" | "complete" | "error";
+  type: "discovering" | "crawling" | "embedding" | "saving" | "extracting" | "complete" | "error";
   currentUrl?: string;
   currentPage?: number;
   totalPages?: number;
@@ -38,6 +50,9 @@ type ProgressEvent = {
   message?: string;
   companyId?: string;
   agentId?: string;
+  themeColor?: string;
+  pagesVisited?: number;
+  totalChunks?: number;
   companyInfo?: CompanyInfo;
 };
 
@@ -56,6 +71,10 @@ export default function Home() {
   const [widgetOpen, setWidgetOpen] = useState(false);
   const [widgetKey, setWidgetKey] = useState(0);
 
+  // 進捗Tips用
+  const [tipIndex, setTipIndex] = useState(0);
+  const [elapsedTime, setElapsedTime] = useState(0);
+
   // Plan features
   const [currentPlan, setCurrentPlan] = useState<PlanType>("free");
   const [checkingPlan, setCheckingPlan] = useState(false);
@@ -73,6 +92,29 @@ export default function Home() {
       locationDistribution: Record<string, number>;
     } | null;
   }>({ stats: null });
+
+  // 進捗Tips自動ローテーション & 経過時間カウント
+  useEffect(() => {
+    if (loading) {
+      setTipIndex(0);
+      setElapsedTime(0);
+
+      // Tips切り替え（4秒ごと）
+      const tipInterval = setInterval(() => {
+        setTipIndex((prev) => (prev + 1) % progressTips.length);
+      }, 4000);
+
+      // 経過時間カウント（1秒ごと）
+      const timeInterval = setInterval(() => {
+        setElapsedTime((prev) => prev + 1);
+      }, 1000);
+
+      return () => {
+        clearInterval(tipInterval);
+        clearInterval(timeInterval);
+      };
+    }
+  }, [loading]);
 
   // Check plan status when result is available
   useEffect(() => {
@@ -119,12 +161,12 @@ export default function Home() {
     }
   }, []);
 
-  // resultが変わったらwidgetを強制リロード
+  // resultが変わったらwidgetを強制リロード（自動では開かない）
   useEffect(() => {
     if (result) {
       setWidgetKey((prev) => prev + 1);
-      // 自動的にウィジェットを開く
-      setWidgetOpen(true);
+      // 自動では開かない - ユーザーがボタンをクリックして開く
+      setWidgetOpen(false);
     }
   }, [result]);
 
@@ -191,9 +233,14 @@ export default function Home() {
               const data = JSON.parse(line.slice(6)) as ProgressEvent;
               setProgress(data);
 
-              if (data.type === "complete") {
+              if (data.type === "complete" && data.companyId) {
+                // 完了イベント - companyInfoを含む最終イベントのみ処理
+                console.log("[ChatSales] 企業情報を取得:", {
+                  crawledPages: data.companyInfo?.crawledPages?.length || 0,
+                  fields: Object.keys(data.companyInfo || {}),
+                });
                 setResult({
-                  companyId: data.companyId!,
+                  companyId: data.companyId,
                   agentId: data.agentId!,
                   companyInfo: data.companyInfo,
                 });
@@ -202,13 +249,29 @@ export default function Home() {
                 setLoading(false);
                 return;
               }
-            } catch (parseError) {
-              // JSON parse error - not an error event, just skip
-              if (!(parseError instanceof SyntaxError)) {
-                console.error("Unexpected error:", parseError);
-              }
+            } catch {
+              // JSON parse error - skip incomplete events
             }
           }
+        }
+      }
+
+      // ストリーム終了後、残りのバッファを処理（最後のイベントが\n\nで終わっていない場合）
+      if (buffer.trim() && buffer.startsWith("data: ")) {
+        try {
+          const data = JSON.parse(buffer.slice(6)) as ProgressEvent;
+          if (data.type === "complete" && data.companyId) {
+            console.log("[ChatSales] バッファから企業情報を取得:", {
+              crawledPages: data.companyInfo?.crawledPages?.length || 0,
+            });
+            setResult({
+              companyId: data.companyId,
+              agentId: data.agentId!,
+              companyInfo: data.companyInfo,
+            });
+          }
+        } catch {
+          // JSON parse error - ignore incomplete buffer
         }
       }
     } catch (err) {
@@ -275,6 +338,7 @@ export default function Home() {
       className="min-h-screen flex flex-col"
       style={{
         background: `linear-gradient(180deg, ${colors.background} 0%, #E8DDE7 50%, #DFD4DE 100%)`,
+        scrollbarGutter: 'stable',
       }}
     >
       {/* ヘッダー */}
@@ -365,7 +429,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-2xl mx-auto px-4 py-8 sm:py-12">
+      <main className="flex-1 w-full max-w-2xl mx-auto px-4 py-8 sm:py-12">
         {/* イントロ */}
         <div className="text-center mb-6 sm:mb-10">
           <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-2 sm:mb-3">
@@ -384,7 +448,7 @@ export default function Home() {
         </div>
 
         {/* メインフォーム */}
-        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
+        <div className="w-full bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
             <div>
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
@@ -429,7 +493,7 @@ export default function Home() {
         {!result && !loading && (
           <>
             {/* 利用用途 */}
-            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
+            <div className="w-full bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
               <div className="text-center mb-6">
                 <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">こんな用途に最適</h3>
                 <p className="text-slate-600 text-sm">あらゆる業種・業態でご活用いただけます</p>
@@ -481,7 +545,7 @@ export default function Home() {
             </div>
 
             {/* 機能紹介 */}
-            <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
+            <div className="w-full bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
               <div className="text-center mb-6">
                 <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">充実の機能</h3>
                 <p className="text-slate-600 text-sm">あなたのビジネスを24時間サポート</p>
@@ -545,7 +609,7 @@ export default function Home() {
             </div>
 
             {/* 導入プロセス */}
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-8 mb-6 sm:mb-8 text-white shadow-xl">
+            <div className="w-full bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-8 mb-6 sm:mb-8 text-white shadow-xl">
               <div className="text-center mb-6">
                 <h3 className="text-xl sm:text-2xl font-bold mb-2">かんたん3ステップで導入</h3>
                 <p className="text-slate-300 text-sm">たった5分で設置完了</p>
@@ -597,7 +661,7 @@ export default function Home() {
 
             {/* 業界最安値アピール */}
             <div
-              className="rounded-2xl sm:rounded-3xl p-5 sm:p-8 mb-6 sm:mb-8 text-white shadow-xl"
+              className="w-full rounded-2xl sm:rounded-3xl p-5 sm:p-8 mb-6 sm:mb-8 text-white shadow-xl"
               style={{ background: `linear-gradient(135deg, ${colors.primary} 0%, #B85561 100%)` }}
             >
               <div className="flex items-center justify-between mb-4">
@@ -768,65 +832,97 @@ export default function Home() {
           </>
         )}
 
-        {/* 進捗表示 */}
+        {/* 進捗表示 - エンゲージング版 */}
         {loading && progress && (
-          <div className="bg-white rounded-3xl shadow-xl border border-rose-100 p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-rose-500" />
-                サイト解析中...
-              </h3>
-              <span
-                className="text-2xl font-bold bg-clip-text text-transparent"
-                style={{ backgroundImage: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primary} 100%)` }}
-              >
-                {progress.percent || 0}%
-              </span>
-            </div>
-
-            {/* プログレスバー */}
-            <div className="w-full bg-rose-100 rounded-full h-3 overflow-hidden mb-4">
-              <div
-                className="h-3 rounded-full transition-all duration-300 ease-out"
-                style={{
-                  width: `${progress.percent || 0}%`,
-                  background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primary} 100%)`,
-                }}
-              />
-            </div>
-
-            {/* ステータス */}
-            <div className="flex items-center gap-2 text-sm text-slate-600 mb-4 min-w-0">
-              <div className="animate-pulse text-lg flex-shrink-0">
-                {progress.type === "discovering" && "🔍"}
-                {progress.type === "crawling" && "📄"}
-                {progress.type === "embedding" && "🧠"}
-                {progress.type === "saving" && "💾"}
-              </div>
-              <span className="truncate">{progress.message}</span>
-            </div>
-
-            {/* 統計 */}
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-rose-100">
-              <div className="text-center bg-rose-50 rounded-xl p-3">
-                <div className="text-2xl font-bold text-rose-600">
-                  {progress.currentPage || 0}
+          <div className="w-full bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 overflow-hidden mb-6 sm:mb-8">
+            {/* ヘッダー部分 */}
+            <div
+              className="p-5 sm:p-6 text-white"
+              style={{ background: `linear-gradient(135deg, ${colors.primary} 0%, #E88D97 100%)` }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center animate-pulse">
+                    <Bot className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg">AIエージェント作成中</h3>
+                    <p className="text-white/80 text-sm">御社専用のAIを学習しています</p>
+                  </div>
                 </div>
-                <div className="text-xs text-slate-500">解析済みページ</div>
-              </div>
-              <div className="text-center bg-rose-50 rounded-xl p-3">
-                <div className="text-2xl font-bold text-rose-600">
-                  {progress.chunksFound || 0}
+                <div className="text-right">
+                  <div className="text-3xl font-bold">{progress.percent || 0}%</div>
+                  <div className="text-white/70 text-xs">{elapsedTime}秒経過</div>
                 </div>
-                <div className="text-xs text-slate-500">抽出データ数</div>
+              </div>
+
+              {/* プログレスバー */}
+              <div className="w-full bg-white/20 rounded-full h-2 overflow-hidden">
+                <div
+                  className="h-2 rounded-full transition-all duration-500 ease-out bg-white"
+                  style={{ width: `${progress.percent || 0}%` }}
+                />
               </div>
             </div>
 
-            {progress.currentUrl && (
-              <div className="text-xs text-slate-400 truncate pt-4 border-t border-rose-100 mt-4">
-                {progress.currentUrl}
+            {/* コンテンツ部分 */}
+            <div className="p-5 sm:p-6">
+              {/* ステータス表示 */}
+              <div className="flex items-center gap-3 mb-4 sm:mb-6 p-3 bg-slate-50 rounded-xl overflow-hidden">
+                <div className="flex-shrink-0">
+                  {progress.type === "discovering" && <Search className="w-5 h-5 text-blue-500 animate-pulse" />}
+                  {progress.type === "crawling" && <Globe className="w-5 h-5 text-green-500 animate-spin" style={{ animationDuration: '3s' }} />}
+                  {progress.type === "embedding" && <Brain className="w-5 h-5 text-purple-500 animate-pulse" />}
+                  {progress.type === "saving" && <Database className="w-5 h-5 text-orange-500 animate-bounce" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-slate-700 truncate">{progress.message}</p>
+                  {progress.currentUrl && (
+                    <p className="text-xs text-slate-400 truncate">{progress.currentUrl}</p>
+                  )}
+                </div>
               </div>
-            )}
+
+              {/* 統計カード */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
+                <div className="text-center bg-blue-50 rounded-xl p-3">
+                  <div className="text-xl font-bold text-blue-600">{progress.currentPage || 0}</div>
+                  <div className="text-xs text-slate-500">ページ</div>
+                </div>
+                <div className="text-center bg-purple-50 rounded-xl p-3">
+                  <div className="text-xl font-bold text-purple-600">{progress.chunksFound || 0}</div>
+                  <div className="text-xs text-slate-500">学習データ</div>
+                </div>
+                <div className="text-center bg-green-50 rounded-xl p-3">
+                  <div className="text-xl font-bold text-green-600">
+                    {progress.type === "saving" ? "保存中" : progress.type === "embedding" ? "学習中" : "取得中"}
+                  </div>
+                  <div className="text-xs text-slate-500">ステータス</div>
+                </div>
+              </div>
+
+              {/* Tips表示 */}
+              <div className="border-t border-slate-100 pt-4">
+                <div className="flex items-start gap-3 transition-all duration-500">
+                  <div className="text-2xl flex-shrink-0">{progressTips[tipIndex].icon}</div>
+                  <div>
+                    <p className="font-semibold text-slate-800 text-sm">{progressTips[tipIndex].title}</p>
+                    <p className="text-slate-500 text-xs">{progressTips[tipIndex].desc}</p>
+                  </div>
+                </div>
+                {/* Tipインジケーター */}
+                <div className="flex justify-center gap-1.5 mt-4">
+                  {progressTips.map((_, i) => (
+                    <div
+                      key={i}
+                      className={`w-1.5 h-1.5 rounded-full transition-all ${
+                        i === tipIndex ? 'bg-rose-500 w-4' : 'bg-slate-200'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -839,10 +935,10 @@ export default function Home() {
 
         {/* 結果 */}
         {result && (
-          <div className="space-y-6">
+          <div className="w-full space-y-4 sm:space-y-6 mb-6 sm:mb-8">
             {/* 成功メッセージ */}
             <div
-              className="rounded-2xl p-6 text-white"
+              className="w-full rounded-2xl sm:rounded-3xl shadow-xl p-5 sm:p-8 text-white"
               style={{
                 background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primary} 100%)`,
               }}
@@ -862,71 +958,286 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 取得した基本情報 */}
+            {/* 取得した基本情報（詳細版） */}
             {result.companyInfo && Object.values(result.companyInfo).some(v => v) && (
-              <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-6">
-                <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                  <Info className="w-4 h-4 text-rose-500" />
-                  取得した基本情報
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                  {result.companyInfo.companyName && (
-                    <div className="bg-slate-50 rounded-lg p-3">
-                      <p className="text-xs text-slate-500 mb-1">会社名</p>
-                      <p className="font-medium text-slate-800">{result.companyInfo.companyName}</p>
-                    </div>
-                  )}
-                  {result.companyInfo.representativeName && (
-                    <div className="bg-slate-50 rounded-lg p-3">
-                      <p className="text-xs text-slate-500 mb-1">代表者名</p>
-                      <p className="font-medium text-slate-800">{result.companyInfo.representativeName}</p>
-                    </div>
-                  )}
-                  {result.companyInfo.establishedYear && (
-                    <div className="bg-slate-50 rounded-lg p-3">
-                      <p className="text-xs text-slate-500 mb-1">設立年</p>
-                      <p className="font-medium text-slate-800">{result.companyInfo.establishedYear}</p>
-                    </div>
-                  )}
-                  {result.companyInfo.address && (
-                    <div className="bg-slate-50 rounded-lg p-3">
-                      <p className="text-xs text-slate-500 mb-1">住所</p>
-                      <p className="font-medium text-slate-800">{result.companyInfo.address}</p>
-                    </div>
-                  )}
-                  {result.companyInfo.phone && (
-                    <div className="bg-slate-50 rounded-lg p-3">
-                      <p className="text-xs text-slate-500 mb-1">電話番号</p>
-                      <p className="font-medium text-slate-800">{result.companyInfo.phone}</p>
-                    </div>
-                  )}
-                  {result.companyInfo.email && (
-                    <div className="bg-slate-50 rounded-lg p-3">
-                      <p className="text-xs text-slate-500 mb-1">メール</p>
-                      <p className="font-medium text-slate-800">{result.companyInfo.email}</p>
-                    </div>
-                  )}
-                  {result.companyInfo.businessDescription && (
-                    <div className="bg-slate-50 rounded-lg p-3 sm:col-span-2">
-                      <p className="text-xs text-slate-500 mb-1">事業内容</p>
-                      <p className="font-medium text-slate-800">{result.companyInfo.businessDescription}</p>
-                    </div>
-                  )}
-                  {result.companyInfo.websiteDescription && (
-                    <div className="bg-slate-50 rounded-lg p-3 sm:col-span-2">
-                      <p className="text-xs text-slate-500 mb-1">サイト概要</p>
-                      <p className="font-medium text-slate-800">{result.companyInfo.websiteDescription}</p>
-                    </div>
+              <div className="w-full bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+                    <Info className="w-5 h-5 text-rose-500" />
+                    取得した企業情報
+                  </h3>
+                  {result.companyInfo.totalPagesVisited && (
+                    <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                      {result.companyInfo.totalPagesVisited}ページ / {result.companyInfo.totalChunks}件のデータ
+                    </span>
                   )}
                 </div>
-                <p className="text-xs text-slate-500 mt-3">
-                  ※ ダッシュボードで編集できます
+
+                {/* 基本情報セクション */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-1">
+                    <Building className="w-4 h-4" />
+                    基本情報
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                    {result.companyInfo.companyName && (
+                      <div className="bg-gradient-to-br from-rose-50 to-pink-50 rounded-lg p-3 border border-rose-100">
+                        <p className="text-xs text-rose-600 mb-1 font-medium">会社名</p>
+                        <p className="font-semibold text-slate-800">{result.companyInfo.companyName}</p>
+                        {result.companyInfo.tradeName && (
+                          <p className="text-xs text-slate-500 mt-1">屋号: {result.companyInfo.tradeName}</p>
+                        )}
+                      </div>
+                    )}
+                    {result.companyInfo.representativeName && (
+                      <div className="bg-slate-50 rounded-lg p-3">
+                        <p className="text-xs text-slate-500 mb-1">代表者</p>
+                        <p className="font-medium text-slate-800">
+                          {result.companyInfo.representativeTitle && <span className="text-xs text-slate-500">{result.companyInfo.representativeTitle} </span>}
+                          {result.companyInfo.representativeName}
+                        </p>
+                      </div>
+                    )}
+                    {result.companyInfo.establishedYear && (
+                      <div className="bg-slate-50 rounded-lg p-3">
+                        <p className="text-xs text-slate-500 mb-1">設立</p>
+                        <p className="font-medium text-slate-800">{result.companyInfo.establishedYear}</p>
+                      </div>
+                    )}
+                    {result.companyInfo.address && (
+                      <div className="bg-slate-50 rounded-lg p-3 sm:col-span-2">
+                        <p className="text-xs text-slate-500 mb-1">所在地</p>
+                        <p className="font-medium text-slate-800">{result.companyInfo.address}</p>
+                      </div>
+                    )}
+                    {result.companyInfo.phone && (
+                      <div className="bg-slate-50 rounded-lg p-3">
+                        <p className="text-xs text-slate-500 mb-1">電話番号</p>
+                        <p className="font-medium text-slate-800">{result.companyInfo.phone}</p>
+                      </div>
+                    )}
+                    {result.companyInfo.email && (
+                      <div className="bg-slate-50 rounded-lg p-3">
+                        <p className="text-xs text-slate-500 mb-1">メール</p>
+                        <p className="font-medium text-slate-800">{result.companyInfo.email}</p>
+                      </div>
+                    )}
+                    {result.companyInfo.capital && (
+                      <div className="bg-slate-50 rounded-lg p-3">
+                        <p className="text-xs text-slate-500 mb-1">資本金</p>
+                        <p className="font-medium text-slate-800">{result.companyInfo.capital}</p>
+                      </div>
+                    )}
+                    {result.companyInfo.employeeCount && (
+                      <div className="bg-slate-50 rounded-lg p-3">
+                        <p className="text-xs text-slate-500 mb-1">従業員数</p>
+                        <p className="font-medium text-slate-800">{result.companyInfo.employeeCount}</p>
+                      </div>
+                    )}
+                    {result.companyInfo.revenue && (
+                      <div className="bg-slate-50 rounded-lg p-3">
+                        <p className="text-xs text-slate-500 mb-1">売上高</p>
+                        <p className="font-medium text-slate-800">{result.companyInfo.revenue}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 事業内容セクション */}
+                {(result.companyInfo.businessDescription || result.companyInfo.services?.length) && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-1">
+                      <Briefcase className="w-4 h-4" />
+                      事業内容
+                    </h4>
+                    {result.companyInfo.businessDescription && (
+                      <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3 mb-3">
+                        {result.companyInfo.businessDescription}
+                      </p>
+                    )}
+                    {result.companyInfo.services && result.companyInfo.services.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {result.companyInfo.services.map((service, i) => (
+                          <span key={i} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full border border-blue-100">
+                            {service}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {result.companyInfo.industries && result.companyInfo.industries.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {result.companyInfo.industries.map((industry, i) => (
+                          <span key={i} className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded-full border border-purple-100">
+                            {industry}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 企業理念・強み */}
+                {(result.companyInfo.mission || result.companyInfo.vision || result.companyInfo.strengths?.length) && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-1">
+                      <Star className="w-4 h-4" />
+                      企業理念・強み
+                    </h4>
+                    <div className="space-y-3">
+                      {result.companyInfo.mission && (
+                        <div className="bg-amber-50 rounded-lg p-3 border border-amber-100">
+                          <p className="text-xs text-amber-600 font-medium mb-1">ミッション</p>
+                          <p className="text-sm text-slate-700">{result.companyInfo.mission}</p>
+                        </div>
+                      )}
+                      {result.companyInfo.vision && (
+                        <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
+                          <p className="text-xs text-emerald-600 font-medium mb-1">ビジョン</p>
+                          <p className="text-sm text-slate-700">{result.companyInfo.vision}</p>
+                        </div>
+                      )}
+                      {result.companyInfo.strengths && result.companyInfo.strengths.length > 0 && (
+                        <div className="bg-slate-50 rounded-lg p-3">
+                          <p className="text-xs text-slate-500 font-medium mb-2">強み・特徴</p>
+                          <ul className="text-sm text-slate-700 space-y-1">
+                            {result.companyInfo.strengths.map((s, i) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <CheckCircle className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                                <span>{s}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 実績・沿革 */}
+                {(result.companyInfo.achievements?.length || result.companyInfo.clients?.length || result.companyInfo.history?.length) && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-1">
+                      <Award className="w-4 h-4" />
+                      実績・沿革
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {result.companyInfo.achievements && result.companyInfo.achievements.length > 0 && (
+                        <div className="bg-slate-50 rounded-lg p-3">
+                          <p className="text-xs text-slate-500 font-medium mb-2">実績・受賞</p>
+                          <ul className="text-sm text-slate-700 space-y-1">
+                            {result.companyInfo.achievements.slice(0, 5).map((a, i) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className="text-amber-500">●</span>
+                                <span>{a}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {result.companyInfo.clients && result.companyInfo.clients.length > 0 && (
+                        <div className="bg-slate-50 rounded-lg p-3">
+                          <p className="text-xs text-slate-500 font-medium mb-2">主要取引先</p>
+                          <div className="flex flex-wrap gap-1">
+                            {result.companyInfo.clients.slice(0, 8).map((c, i) => (
+                              <span key={i} className="text-xs bg-white text-slate-600 px-2 py-1 rounded border border-slate-200">
+                                {c}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {result.companyInfo.history && result.companyInfo.history.length > 0 && (
+                        <div className="bg-slate-50 rounded-lg p-3 sm:col-span-2">
+                          <p className="text-xs text-slate-500 font-medium mb-2">沿革</p>
+                          <ul className="text-sm text-slate-700 space-y-1">
+                            {result.companyInfo.history.slice(0, 5).map((h, i) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className="text-slate-400">―</span>
+                                <span>{h}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 最新ニュース */}
+                {result.companyInfo.recentNews && result.companyInfo.recentNews.length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-1">
+                      <Newspaper className="w-4 h-4" />
+                      最新ニュース
+                    </h4>
+                    <ul className="bg-slate-50 rounded-lg p-3 space-y-2">
+                      {result.companyInfo.recentNews.slice(0, 5).map((news, i) => (
+                        <li key={i} className="text-sm text-slate-700 flex items-start gap-2">
+                          <span className="text-blue-500 mt-1">•</span>
+                          <span>{news}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* クロールしたページ一覧 */}
+                {result.companyInfo.crawledPages && result.companyInfo.crawledPages.length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-1">
+                      <Globe className="w-4 h-4" />
+                      クロールしたページ ({result.companyInfo.crawledPages.length}ページ)
+                    </h4>
+                    <div className="max-h-48 overflow-y-auto bg-slate-50 rounded-lg p-3 space-y-2">
+                      {result.companyInfo.crawledPages.map((page, i) => (
+                        <div key={i} className="bg-white rounded p-2 border border-slate-100 hover:border-slate-200 transition-colors">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                              {page.category}
+                            </span>
+                            <span className="text-xs font-medium text-slate-700 truncate flex-1">
+                              {page.title || page.url}
+                            </span>
+                          </div>
+                          {page.summary && (
+                            <p className="text-xs text-slate-500 line-clamp-1">{page.summary}</p>
+                          )}
+                          <a
+                            href={page.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-500 hover:underline truncate block mt-1"
+                          >
+                            {page.url}
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* サイト概要 */}
+                {result.companyInfo.websiteDescription && (
+                  <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-lg p-4 border border-slate-200">
+                    <p className="text-xs text-slate-500 mb-1">サイト概要</p>
+                    <p className="text-sm text-slate-700">{result.companyInfo.websiteDescription}</p>
+                  </div>
+                )}
+
+                <p className="text-xs text-slate-500 mt-4 flex items-center gap-1">
+                  <Info className="w-3 h-3" />
+                  ダッシュボードで編集できます
+                  {result.companyInfo.crawledAt && (
+                    <span className="ml-auto">
+                      取得日時: {new Date(result.companyInfo.crawledAt).toLocaleString('ja-JP')}
+                    </span>
+                  )}
                 </p>
               </div>
             )}
 
             {/* カラー選択（お試し可能） */}
-            <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-6">
+            <div className="w-full bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-slate-800 flex items-center gap-2">
                   <Palette className="w-4 h-4 text-rose-500" />
@@ -965,7 +1276,7 @@ export default function Home() {
             </div>
 
             {/* 埋め込みコード（有料機能） */}
-            <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-6 relative">
+            <div className="w-full bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 relative">
               <h3 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
                 <Copy className="w-4 h-4 text-rose-500" />
                 埋め込みコード
@@ -1025,7 +1336,7 @@ export default function Home() {
             </div>
 
             {/* プレビューリンク */}
-            <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-6">
+            <div className="w-full bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8">
               <h3 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
                 <ExternalLink className="w-4 h-4 text-rose-500" />
                 ウィジェットプレビュー
@@ -1047,9 +1358,9 @@ export default function Home() {
               </a>
             </div>
 
-            {/* Proプランのトラッキングダッシュボード */}
-            {currentPlan === "pro" && trackingData.stats && (
-              <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-6">
+            {/* Pro/Maxプランのトラッキングダッシュボード */}
+            {(currentPlan === "pro" || currentPlan === "max") && trackingData.stats && (
+              <div className="w-full bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8">
                 <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-rose-500" />
                   トラッキングダッシュボード
@@ -1379,13 +1690,6 @@ export default function Home() {
 
       {/* ウィジェット表示 */}
       <>
-        {/* デモバッジ - resultがある場合のみ表示（右下） */}
-        {result && (
-          <div className="fixed bottom-20 sm:bottom-24 right-4 sm:right-6 z-40 bg-rose-500 text-white text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-lg animate-bounce">
-            埋め込むとこうなります
-          </div>
-        )}
-
         {/* ユーザー作成後のウィジェット（右下） */}
         {result && widgetOpen && (
           <div className="fixed bottom-20 sm:bottom-24 right-2 sm:right-6 left-2 sm:left-auto z-50 sm:w-[380px] h-[70vh] sm:h-[600px] max-h-[600px] rounded-2xl shadow-2xl overflow-hidden border border-rose-200">
@@ -1400,19 +1704,39 @@ export default function Home() {
 
         {/* ユーザー作成後のフローティングボタン（右下） */}
         {result && (
-          <button
-            onClick={() => setWidgetOpen(!widgetOpen)}
-            className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 z-50 w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110"
-            style={{
-              background: `linear-gradient(135deg, ${selectedColor} 0%, ${selectedColor} 100%)`,
-            }}
-          >
-            {widgetOpen ? (
-              <X className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-            ) : (
-              <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+          <div className="fixed bottom-4 sm:bottom-6 right-4 sm:right-6 z-50">
+            {/* クリック促進のツールチップ（ウィジェットが閉じている時のみ） */}
+            {!widgetOpen && (
+              <div className="absolute bottom-full right-0 mb-3 animate-bounce">
+                <div className="bg-slate-800 text-white text-xs sm:text-sm px-3 py-2 rounded-lg shadow-lg whitespace-nowrap">
+                  👆 クリックしてAIをお試し！
+                  <div className="absolute top-full right-4 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-slate-800" />
+                </div>
+              </div>
             )}
-          </button>
+            {/* パルスエフェクト（ウィジェットが閉じている時のみ） */}
+            {!widgetOpen && (
+              <div
+                className="absolute inset-0 rounded-full animate-ping opacity-75"
+                style={{ backgroundColor: selectedColor }}
+              />
+            )}
+            <button
+              onClick={() => setWidgetOpen(!widgetOpen)}
+              className={`relative w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 ${
+                !widgetOpen ? 'animate-pulse' : ''
+              }`}
+              style={{
+                background: `linear-gradient(135deg, ${selectedColor} 0%, ${selectedColor} 100%)`,
+              }}
+            >
+              {widgetOpen ? (
+                <X className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+              ) : (
+                <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+              )}
+            </button>
+          </div>
         )}
 
         {/* デモ用 hackjpn AI ウィジェット（左下）- resultがない場合のみ */}

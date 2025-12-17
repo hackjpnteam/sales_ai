@@ -74,6 +74,10 @@ export async function findRelevantChunks(companyId: string, question: string): P
     console.log("[RAG] Vector Search failed, using fallback:", error);
   }
 
+  // 会社情報の質問かどうかを判定
+  const companyInfoKeywordsForSearch = ['会社について', '会社を教えて', '企業情報', '会社概要', '御社について', '貴社について', 'どんな会社', 'どういう会社'];
+  const isCompanyInfoQuestionForSearch = companyInfoKeywordsForSearch.some(keyword => question.includes(keyword));
+
   // Vector Searchが失敗またはゼロ件の場合、フォールバック
   if (docResults.length === 0) {
     console.log("[RAG] Using fallback similarity search");
@@ -96,6 +100,38 @@ export async function findRelevantChunks(companyId: string, question: string): P
         }))
         .sort((a, b) => b.score - a.score)
         .slice(0, 10);
+    }
+  }
+
+  // 会社情報の質問の場合、会社概要チャンクを明示的に検索して追加
+  if (isCompanyInfoQuestionForSearch) {
+    const companyInfoDocs = await docsCol
+      .find({
+        companyId,
+        $or: [
+          { title: /会社概要/ },
+          { chunk: /【会社について/ },
+          { chunk: /【会社概要/ },
+          { chunk: /【企業情報/ },
+        ]
+      })
+      .project({ chunk: 1, url: 1, title: 1, embeddings: 1, _id: 0 })
+      .toArray();
+
+    if (companyInfoDocs.length > 0) {
+      console.log(`[RAG] Found ${companyInfoDocs.length} company info chunks explicitly`);
+      // 会社情報チャンクをスコア1.0で先頭に追加（重複除去）
+      const existingUrls = new Set(docResults.map(r => r.chunk));
+      for (const doc of companyInfoDocs) {
+        if (!existingUrls.has(doc.chunk)) {
+          docResults.unshift({
+            chunk: doc.chunk,
+            url: doc.url,
+            title: doc.title,
+            score: 1.0, // 最高スコアを付与
+          });
+        }
+      }
     }
   }
 
@@ -196,12 +232,29 @@ export async function answerWithRAG(params: {
     };
   }
 
+  // 会社情報の質問かどうかを先に判定
+  const companyInfoKeywords = ['会社について', '会社を教えて', '企業情報', '会社概要', '御社について', '貴社について', 'どんな会社', 'どういう会社'];
+  const isCompanyInfoQuestion = companyInfoKeywords.some(keyword => question.includes(keyword));
+
   // 高スコアのチャンクのみ使用
   // カスタムナレッジは閾値を低く設定（ユーザーが追加した情報は優先的に使用）
+  // 会社概要チャンクは会社情報の質問時に閾値を下げる
   const relevantChunks = chunks.filter(c => {
     if (c.isCustomKnowledge) {
       console.log(`[RAG] Custom knowledge "${c.title}" score: ${c.score.toFixed(3)} (threshold: 0.15)`);
       return c.score >= 0.15; // カスタムナレッジは低い閾値
+    }
+    // 会社情報の質問で、会社概要チャンクの場合は閾値を下げる
+    if (isCompanyInfoQuestion) {
+      const titleText = c.title || '';
+      const chunkText = c.chunk || '';
+      if (titleText.includes('会社概要') ||
+          chunkText.includes('【会社について') ||
+          chunkText.includes('【会社概要') ||
+          chunkText.includes('【企業情報')) {
+        console.log(`[RAG] Company info chunk "${titleText}" score: ${c.score.toFixed(3)} (threshold: 0.15)`);
+        return c.score >= 0.15; // 会社概要チャンクは低い閾値
+      }
     }
     return c.score >= 0.3; // 通常のドキュメントは0.3
   });
@@ -321,6 +374,26 @@ ${linkEvalPrompt}
 
     if (filteredChunks.length !== beforeCount) {
       console.log(`[RAG] Service question: filtered from ${beforeCount} to ${filteredChunks.length} chunks`);
+    }
+  }
+
+  // 「会社について」「企業情報」などの質問では、会社概要チャンクを優先
+  if (isCompanyInfoQuestion) {
+    // 会社概要チャンクを最優先にする
+    const companyInfoChunks = filteredChunks.filter(chunk => {
+      const titleText = chunk.title || '';
+      const chunkText = chunk.chunk || '';
+      return titleText.includes('会社概要') ||
+             chunkText.includes('【会社について') ||
+             chunkText.includes('【会社概要') ||
+             chunkText.includes('【企業情報');
+    });
+
+    if (companyInfoChunks.length > 0) {
+      // 会社概要チャンクを先頭に配置
+      const otherChunks = filteredChunks.filter(chunk => !companyInfoChunks.includes(chunk));
+      filteredChunks = [...companyInfoChunks, ...otherChunks];
+      console.log(`[RAG] Company info question: prioritized ${companyInfoChunks.length} company info chunks`);
     }
   }
 

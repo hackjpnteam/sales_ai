@@ -42,7 +42,7 @@ async function updateAgent(
     }
 
     // 許可するフィールドのみ更新
-    const allowedFields = ["welcomeMessage", "name", "themeColor", "voiceEnabled", "avatarUrl", "widgetPosition", "quickButtons"];
+    const allowedFields = ["welcomeMessage", "name", "themeColor", "voiceEnabled", "avatarUrl", "widgetPosition", "quickButtons", "companyInfo"];
     const updateData: Partial<Agent> = {};
 
     for (const field of allowedFields) {

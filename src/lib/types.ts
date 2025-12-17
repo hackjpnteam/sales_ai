@@ -46,19 +46,69 @@ export type QuickButton = {
   query: string;           // クリック時に送信するメッセージ
 };
 
-// クロール時に抽出した基本情報
+// クロールしたページ情報
+export type CrawledPage = {
+  url: string;                   // ページURL
+  title: string;                 // ページタイトル
+  summary: string;               // 内容の概要（50-100文字）
+  category: string;              // カテゴリ（会社情報/サービス/採用等）
+};
+
+// クロール時に抽出した基本情報（詳細版）
 export type CompanyInfo = {
-  companyName?: string;          // 会社名
+  // 基本情報
+  companyName?: string;          // 会社名（正式名称）
+  tradeName?: string;            // 屋号・ブランド名
   representativeName?: string;   // 代表者名
-  establishedYear?: string;      // 設立年
-  address?: string;              // 住所
-  businessDescription?: string;  // 事業内容
+  representativeTitle?: string;  // 代表者肩書（代表取締役社長等）
+  establishedYear?: string;      // 設立年月日
+  address?: string;              // 本社所在地
   phone?: string;                // 電話番号
+  fax?: string;                  // FAX番号
   email?: string;                // メールアドレス
+
+  // 会社規模・財務
   employeeCount?: string;        // 従業員数
   capital?: string;              // 資本金
-  recruitmentInfo?: string;      // 採用情報
+  revenue?: string;              // 売上高
+
+  // 事業内容
+  businessDescription?: string;  // 事業内容（概要）
+  services?: string[];           // 主要サービス・商品リスト
+  industries?: string[];         // 事業分野・業界
+
+  // 企業理念・特徴
+  mission?: string;              // ミッション・企業理念
+  vision?: string;               // ビジョン
+  strengths?: string[];          // 会社の強み・特徴
+
+  // 沿革・実績
+  history?: string[];            // 会社の沿革（主要な出来事）
+  achievements?: string[];       // 実績・受賞歴
+  clients?: string[];            // 主要取引先・導入企業
+
+  // 採用情報
+  recruitmentInfo?: string;      // 採用情報概要
+  recruitmentUrl?: string;       // 採用ページURL
+
+  // ウェブサイト情報
   websiteDescription?: string;   // サイト概要
+  socialLinks?: {                // SNSリンク
+    twitter?: string;
+    facebook?: string;
+    instagram?: string;
+    linkedin?: string;
+    youtube?: string;
+  };
+
+  // ニュース・お知らせ
+  recentNews?: string[];         // 最新ニュース（3-5件）
+
+  // クロール情報
+  crawledPages?: CrawledPage[];  // クロールしたページ一覧
+  totalPagesVisited?: number;    // 訪問ページ数
+  totalChunks?: number;          // 取得チャンク数
+  crawledAt?: string;            // クロール日時
 };
 
 // AIエージェント設定

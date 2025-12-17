@@ -1,52 +1,127 @@
 import * as cheerio from "cheerio";
 import { getOpenAI } from "./openai";
 import { getCollection } from "./mongodb";
-import { DocChunk, CompanyInfo } from "./types";
+import { DocChunk, CompanyInfo, CrawledPage } from "./types";
 import puppeteerCore from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
 
-const MAX_PAGES = 30; // 重要ページを確実に取得するため（サブディレクトリ含む）
+// 本番環境かどうかを判定
+const IS_PRODUCTION = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+
+// Puppeteerの起動オプションを取得
+async function getPuppeteerOptions() {
+  if (IS_PRODUCTION) {
+    // 本番環境（Vercel/AWS Lambda）: @sparticuz/chromiumを使用
+    const executablePath = await chromium.executablePath();
+    return {
+      args: chromium.args,
+      defaultViewport: { width: 1280, height: 720 },
+      executablePath,
+      headless: true,
+    };
+  } else {
+    // ローカル開発環境: puppeteerの組み込みChromiumを使用
+    try {
+      const puppeteer = await import("puppeteer");
+      const browser = await puppeteer.default.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+      // 一旦閉じて、executablePathを取得
+      const execPath = browser.process()?.spawnfile;
+      await browser.close();
+
+      if (execPath) {
+        return {
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+          defaultViewport: { width: 1280, height: 720 },
+          executablePath: execPath,
+          headless: true,
+        };
+      }
+    } catch (e) {
+      console.log("[Crawler] Local puppeteer not available:", e);
+    }
+
+    // フォールバック: @sparticuz/chromiumを試す（エラーになる可能性あり）
+    const executablePath = await chromium.executablePath();
+    return {
+      args: chromium.args,
+      defaultViewport: { width: 1280, height: 720 },
+      executablePath,
+      headless: true,
+    };
+  }
+}
+
+const MAX_PAGES = 50; // より多くのページを取得してナレッジを充実
 const CHUNK_SIZE = 600; // 500〜800文字程度でチャンク分割
 const PARALLEL_LIMIT = 5; // 並列クロール数
-const FETCH_TIMEOUT = 5000; // 5秒タイムアウト
-const MIN_CHUNKS_FOR_EARLY_EXIT = 100; // 十分なコンテンツを確保（早期終了しない）
-const PUPPETEER_TIMEOUT = 15000; // Puppeteer用の長めのタイムアウト
+const FETCH_TIMEOUT = 10000; // 10秒タイムアウト（より確実に取得）
+const MIN_CHUNKS_FOR_EARLY_EXIT = 200; // 十分なコンテンツを確保
+const PUPPETEER_TIMEOUT = 25000; // Puppeteer用の長めのタイムアウト（25秒）
 
-// 優先的にクロールすべき重要ページのパターン
-const PRIORITY_PATHS = [
-  '/company', '/about', '/corporate', '/profile',  // 会社概要
-  '/contact', '/inquiry',  // お問い合わせ
-  '/service', '/services', '/business', '/product',  // サービス・事業内容
-  '/news', '/topics',  // ニュース
-  '/recruit', '/careers', '/jobs',  // 採用
-  '/faq', '/question',  // よくある質問
-  '/case', '/works', '/portfolio',  // 導入事例・実績
-  '/space', '/location',  // 場所・スペース
-  '/price', '/pricing', '/fee',  // 料金
-  '/flow', '/process',  // 流れ
+// 【最重要】会社情報・サービス概要を最優先で取得するパス
+const CRITICAL_PATHS = [
+  // ネストされたパス（会社概要ページによく使われる）
+  '/corporate/overview', '/corporate/profile', '/corporate/about',
+  '/company/overview', '/company/profile', '/company/about', '/company/info',
+  '/about/company', '/about/overview',
+  // 単一パス
+  '/about', '/company', '/corporate', '/profile',  // 会社概要
+  '/service', '/services', '/business',  // サービス・事業内容
+  '/product', '/products',  // 製品・サービス
 ];
 
-// SPAや空ページの場合に試すサブディレクトリパス（WordPressなど）
+// 【重要】カスタマー対応に必要な情報があるページ
+const PRIORITY_PATHS = [
+  // 会社情報（ネストされたパスを先に配置）
+  '/corporate/overview', '/corporate/profile', '/corporate/about', '/corporate/info',
+  '/company/overview', '/company/profile', '/company/about', '/company/info',
+  '/about/company', '/about/overview', '/about/profile',
+  // 会社情報（単一パス）
+  '/about', '/company', '/corporate', '/profile', '/kaisha', '/info', '/aboutus', '/about-us',
+  '/gaiyou', '/outline', '/overview', '/introduction',
+  // サービス・事業内容
+  '/service', '/services', '/business', '/product', '/products', '/jigyou', '/solution', '/solutions',
+  '/what-we-do', '/our-services', '/our-business',
+  // 料金・プラン
+  '/price', '/pricing', '/fee', '/plan', '/plans', '/cost', '/ryoukin',
+  // よくある質問・サポート
+  '/faq', '/faqs', '/question', '/questions', '/help', '/support', '/qa', '/q-and-a',
+  // お問い合わせ
+  '/contact', '/inquiry', '/toiawase', '/contact-us', '/contactus', '/otoiawase',
+  // 導入事例・実績
+  '/case', '/cases', '/case-study', '/works', '/portfolio', '/results', '/achievements', '/jisseki',
+  // 会社の強み・特徴
+  '/feature', '/features', '/strength', '/advantage', '/why-us', '/reason', '/tokuchou',
+  // 流れ・プロセス
+  '/flow', '/process', '/howto', '/how-to', '/step', '/steps', '/nagare',
+  // アクセス・店舗情報
+  '/access', '/location', '/shop', '/store', '/office', '/map', '/akusesu',
+  // 採用情報
+  '/recruit', '/careers', '/jobs', '/hiring', '/saiyo', '/employment',
+  // ニュース・お知らせ
+  '/news', '/topics', '/info', '/information', '/oshirase', '/blog', '/press',
+  // プライバシー・利用規約
+  '/privacy', '/terms', '/legal', '/policy',
+  // その他
+  '/message', '/philosophy', '/vision', '/mission', '/greeting', '/history',
+];
+
+// SPAや空ページの場合に試すサブディレクトリパス
 const FALLBACK_SUBDIRECTORIES = [
-  '/test',      // よくあるテスト/ステージング環境
-  '/test/about',     // テスト環境の会社概要
-  '/test/product',   // テスト環境の事業内容
-  '/test/contact',   // テスト環境のお問い合わせ
-  '/test/faq',       // テスト環境のFAQ
-  '/test/case',      // テスト環境の導入事例
-  '/test/news',      // テスト環境のニュース
-  '/test/space',     // テスト環境のスペース
-  '/wp',        // WordPress
-  '/blog',      // ブログ
-  '/site',      // サイト
-  '/home',      // ホーム
-  '/main',      // メイン
-  '/index',     // インデックス
+  '/test',
+  '/test/about', '/test/company', '/test/service', '/test/product',
+  '/test/contact', '/test/faq', '/test/case', '/test/news',
+  '/test/price', '/test/flow', '/test/access',
+  '/wp', '/blog', '/site', '/home', '/main', '/index',
+  '/lp', '/landing',
 ];
 
 // 進捗イベントの型
 export interface CrawlProgress {
-  type: "discovering" | "crawling" | "embedding" | "saving";
+  type: "discovering" | "crawling" | "embedding" | "saving" | "extracting" | "complete";
   currentUrl?: string;
   currentPage: number;
   totalPages: number;
@@ -63,6 +138,7 @@ export interface CrawlResult {
   themeColor: string;
   companyInfo?: CompanyInfo;
   error?: string;
+  isSPA?: boolean;  // SPAサイトだったかどうか
 }
 
 // URLを正規化・検証する関数
@@ -375,14 +451,8 @@ async function fetchAllSPAViews(url: string): Promise<string[]> {
   try {
     // ブラウザがなければ起動
     if (!browser) {
-      const executablePath = await chromium.executablePath();
-
-      browser = await puppeteerCore.launch({
-        args: chromium.args,
-        defaultViewport: { width: 1280, height: 720 },
-        executablePath,
-        headless: true,
-      });
+      const options = await getPuppeteerOptions();
+      browser = await puppeteerCore.launch(options);
       browserInstance = browser;
     }
 
@@ -499,14 +569,8 @@ async function fetchHtmlWithPuppeteer(url: string): Promise<string | null> {
   try {
     // ブラウザがなければ起動
     if (!browser) {
-      const executablePath = await chromium.executablePath();
-
-      browser = await puppeteerCore.launch({
-        args: chromium.args,
-        defaultViewport: { width: 1280, height: 720 },
-        executablePath,
-        headless: true,
-      });
+      const options = await getPuppeteerOptions();
+      browser = await puppeteerCore.launch(options);
       browserInstance = browser;
     }
 
@@ -559,12 +623,76 @@ async function closeBrowser(): Promise<void> {
   }
 }
 
+// チャンク情報の型（URLも保持）
+interface ChunkWithUrl {
+  text: string;
+  url: string;
+}
+
+// 会社情報ページかどうかを判定
+function isCompanyInfoPage(url: string): boolean {
+  const lowerUrl = url.toLowerCase();
+  return ['/about', '/company', '/corporate', '/profile', '/kaisha', '/gaiyou', '/overview'].some(p => lowerUrl.includes(p));
+}
+
+// 法人名パターン（これらを含むチャンクを最優先）
+const LEGAL_ENTITY_PATTERNS = [
+  /株式会社[^\s、。,．]+/,
+  /[^\s、。,．]+株式会社/,
+  /合同会社[^\s、。,．]+/,
+  /[^\s、。,．]+合同会社/,
+  /有限会社[^\s、。,．]+/,
+  /[^\s、。,．]+有限会社/,
+  /一般社団法人[^\s、。,．]+/,
+  /[^\s、。,．]+弁護士法人/,
+  /弁護士法人[^\s、。,．]+/,
+  /[^\s、。,．]+税理士法人/,
+  /税理士法人[^\s、。,．]+/,
+  /[^\s、。,．]+司法書士法人/,
+  /医療法人[^\s、。,．]+/,
+  /社会福祉法人[^\s、。,．]+/,
+  /NPO法人[^\s、。,．]+/,
+  /特定非営利活動法人[^\s、。,．]+/,
+];
+
+// チャンクが法人名を含むかどうか
+function containsLegalEntityName(text: string): boolean {
+  return LEGAL_ENTITY_PATTERNS.some(pattern => pattern.test(text));
+}
+
 // クロールしたコンテンツから基本情報を抽出する関数
-async function extractCompanyInfo(chunks: string[]): Promise<CompanyInfo> {
+async function extractCompanyInfo(chunks: ChunkWithUrl[]): Promise<CompanyInfo> {
   const openai = getOpenAI();
 
-  // チャンクから最大5000文字を抽出（コスト節約）
-  const combinedText = chunks.slice(0, 20).join("\n").substring(0, 5000);
+  // 優先順位でソート:
+  // 1. 法人名パターンを含むチャンク（最優先）
+  // 2. 会社情報ページ（/about, /company等）のチャンク
+  // 3. その他
+  const sortedChunks = [...chunks].sort((a, b) => {
+    const aHasLegalEntity = containsLegalEntityName(a.text);
+    const bHasLegalEntity = containsLegalEntityName(b.text);
+    const aIsCompanyPage = isCompanyInfoPage(a.url);
+    const bIsCompanyPage = isCompanyInfoPage(b.url);
+
+    // 法人名を含むチャンクを最優先
+    if (aHasLegalEntity && !bHasLegalEntity) return -1;
+    if (!aHasLegalEntity && bHasLegalEntity) return 1;
+
+    // 次に会社情報ページを優先
+    if (aIsCompanyPage && !bIsCompanyPage) return -1;
+    if (!aIsCompanyPage && bIsCompanyPage) return 1;
+
+    return 0;
+  });
+
+  // 法人名を含むチャンク数をログ出力
+  const legalEntityChunks = sortedChunks.filter(c => containsLegalEntityName(c.text));
+  if (legalEntityChunks.length > 0) {
+    console.log(`[Crawler] Found ${legalEntityChunks.length} chunks with legal entity names`);
+  }
+
+  // 法人名を含むチャンクを優先的に抽出（最大80チャンク、より多くのコンテキスト）
+  const combinedText = sortedChunks.slice(0, 80).map(c => c.text).join("\n").substring(0, 20000);
 
   if (combinedText.length < 50) {
     return {};
@@ -572,27 +700,58 @@ async function extractCompanyInfo(chunks: string[]): Promise<CompanyInfo> {
 
   try {
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o",  // より高品質な抽出のため gpt-4o を使用
       messages: [
         {
           role: "system",
-          content: `あなたはウェブサイトから企業情報を抽出するアシスタントです。
-以下のテキストから企業の基本情報を抽出してJSON形式で返してください。
-情報が見つからない場合は空文字を入れてください。
+          content: `あなたはウェブサイトから企業情報を正確に抽出する専門AIです。
 
-必ず以下のJSON形式のみを返してください（説明文は不要）：
+【最重要：絶対に守るべきルール】
+★ テキストに明記されている情報のみを抽出すること
+★ 推測・補完・創作は絶対に禁止
+★ 「〇〇だろう」「〇〇と思われる」という推測は一切しない
+★ テキストに書かれていない情報は省略する（空文字やnullも不要）
+
+【会社名の抽出ルール】
+- 法人格を含む正式名称を抽出：株式会社〇〇、〇〇株式会社、合同会社〇〇 など
+- 屋号・ブランド名・サービス名は除外（tradeNameフィールドに入れる）
+
+【事業内容の抽出ルール】
+- businessDescriptionはテキストに書かれている事業内容のみを記載
+- サイトに記載されていない事業（経営コンサル、不動産等）を追加しない
+- 定款や登記情報を推測して追加しない
+
+【servicesの抽出ルール】
+- サイトで実際に紹介されているサービス名のみを記載
+- 一般的な業種名や推測したサービスは含めない
+
+以下のJSON形式で返してください（説明文は不要）：
 {
-  "companyName": "会社名",
+  "companyName": "法人格を含む正式名称",
+  "tradeName": "屋号・ブランド名（あれば）",
   "representativeName": "代表者名",
-  "establishedYear": "設立年（例：2020年、令和2年）",
-  "address": "住所",
-  "businessDescription": "事業内容（100文字以内）",
+  "representativeTitle": "代表者の肩書（代表取締役社長など）",
+  "establishedYear": "設立年月日",
+  "address": "本社所在地（郵便番号含む）",
   "phone": "電話番号",
+  "fax": "FAX番号",
   "email": "メールアドレス",
   "employeeCount": "従業員数",
   "capital": "資本金",
-  "recruitmentInfo": "採用情報の有無や概要（50文字以内）",
-  "websiteDescription": "サイト全体の概要（100文字以内）"
+  "revenue": "売上高",
+  "businessDescription": "サイトに明記されている事業内容のみ（推測禁止）",
+  "services": ["サイトに明記されているサービス名のみ"],
+  "industries": ["サイトに明記されている事業分野のみ"],
+  "mission": "企業理念・ミッション",
+  "vision": "ビジョン",
+  "strengths": ["サイトに明記されている強みのみ"],
+  "history": ["沿革（サイトに記載がある場合のみ）"],
+  "achievements": ["実績・受賞（サイトに記載がある場合のみ）"],
+  "clients": ["取引先（サイトに記載がある場合のみ）"],
+  "recruitmentInfo": "採用情報の概要",
+  "recruitmentUrl": "採用ページのURL",
+  "websiteDescription": "このサイトの説明（サイトの内容に基づく）",
+  "recentNews": ["ニュース（サイトに記載がある場合のみ）"]
 }`
         },
         {
@@ -601,7 +760,7 @@ async function extractCompanyInfo(chunks: string[]): Promise<CompanyInfo> {
         }
       ],
       temperature: 0.1,
-      max_tokens: 500,
+      max_tokens: 2000,  // より詳細な情報を取得するため増加
     });
 
     const content = response.choices[0]?.message?.content?.trim() || "{}";
@@ -647,7 +806,11 @@ async function fetchHtml(url: string, usePuppeteer: boolean = false): Promise<st
   // Puppeteerモードが指定されている場合
   if (usePuppeteer) {
     console.log(`[Crawler] Using Puppeteer for: ${url}`);
-    return await fetchHtmlWithPuppeteer(url);
+    const puppeteerHtml = await fetchHtmlWithPuppeteer(url);
+    if (puppeteerHtml) return puppeteerHtml;
+    // Puppeteerが失敗した場合はsimple fetchにフォールバック
+    console.log(`[Crawler] Puppeteer failed, falling back to simple fetch: ${url}`);
+    return await fetchHtmlSimple(url);
   }
 
   // まず通常のfetchを試す
@@ -657,7 +820,14 @@ async function fetchHtml(url: string, usePuppeteer: boolean = false): Promise<st
   // SPAかどうかを検出
   if (isSPAHtml(html)) {
     console.log(`[Crawler] SPA detected, retrying with Puppeteer: ${url}`);
-    return await fetchHtmlWithPuppeteer(url);
+    const puppeteerHtml = await fetchHtmlWithPuppeteer(url);
+    // Puppeteerが成功した場合はそれを返す、失敗した場合は静的HTMLを返す
+    if (puppeteerHtml) {
+      return puppeteerHtml;
+    }
+    console.log(`[Crawler] Puppeteer failed for SPA, using static HTML: ${url}`);
+    // SPAでも静的HTMLを返す（何もないよりはまし）
+    return html;
   }
 
   return html;
@@ -672,8 +842,15 @@ async function fetchHtmlForSPA(url: string): Promise<string[] | null> {
   // SPAかどうかを検出
   if (isSPAHtml(html)) {
     console.log(`[Crawler] SPA detected, fetching all views: ${url}`);
-    const views = await fetchAllSPAViews(url);
-    return views.length > 0 ? views : null;
+    try {
+      const views = await fetchAllSPAViews(url);
+      if (views.length > 0) return views;
+    } catch (error) {
+      console.log(`[Crawler] SPA view fetch failed:`, error);
+    }
+    // Puppeteerが失敗した場合は静的HTMLを返す
+    console.log(`[Crawler] SPA: Returning static HTML as fallback`);
+    return [html];
   }
 
   // 通常のサイトは単一のHTMLを返す
@@ -783,6 +960,68 @@ function extractStructuredContent(html: string, baseUrl: string): StructuredSect
             } catch { /* 無効なURL */ }
           }
         });
+        // div内のテーブルを抽出（会社概要等）
+        current.find("table").each((_, table) => {
+          $(table).find("tr").each((_, tr) => {
+            const cells = $(tr).find("th, td");
+            if (cells.length >= 2) {
+              const label = $(cells[0]).text().trim();
+              const value = $(cells[1]).text().trim();
+              if (label && value) {
+                const tableRow = `${label}: ${value}`;
+                if (!section.content.includes(tableRow)) {
+                  section.content.push(tableRow);
+                }
+              }
+            }
+          });
+        });
+        // div内のdl/dt/ddを抽出
+        current.find("dl").each((_, dl) => {
+          $(dl).find("dt").each((idx, dt) => {
+            const label = $(dt).text().trim();
+            const dd = $(dl).find("dd").eq(idx);
+            const value = dd.text().trim();
+            if (label && value) {
+              const dlRow = `${label}: ${value}`;
+              if (!section.content.includes(dlRow)) {
+                section.content.push(dlRow);
+              }
+            }
+          });
+        });
+      }
+
+      // テーブル要素の直接処理（会社概要テーブル等）
+      if (current.is("table")) {
+        current.find("tr").each((_, tr) => {
+          const cells = $(tr).find("th, td");
+          if (cells.length >= 2) {
+            const label = $(cells[0]).text().trim();
+            const value = $(cells[1]).text().trim();
+            if (label && value) {
+              const tableRow = `${label}: ${value}`;
+              if (!section.content.includes(tableRow)) {
+                section.content.push(tableRow);
+              }
+            }
+          }
+        });
+      }
+
+      // dl要素の直接処理（定義リスト形式の会社概要等）
+      if (current.is("dl")) {
+        current.find("dt").each((idx, dt) => {
+          const label = $(dt).text().trim();
+          const dd = current.find("dd").eq(idx);
+          const value = dd.text().trim();
+          if (label && value) {
+            const dlRow = `${label}: ${value}`;
+            if (!section.content.includes(dlRow)) {
+              section.content.push(dlRow);
+            }
+          }
+        });
       }
 
       current = current.next();
@@ -793,6 +1032,51 @@ function extractStructuredContent(html: string, baseUrl: string): StructuredSect
       sections.push(section);
     }
   });
+
+  // 【重要】見出しに属さないテーブル・dl要素も抽出（会社概要等）
+  // 見出しの下にないが重要な情報を含む可能性があるため
+  const standaloneSection: StructuredSection = {
+    sectionTitle: "会社情報・その他",
+    content: [],
+    links: [],
+  };
+
+  // 全てのテーブルを処理
+  $("table").each((_, table) => {
+    $(table).find("tr").each((_, tr) => {
+      const cells = $(tr).find("th, td");
+      if (cells.length >= 2) {
+        const label = $(cells[0]).text().trim();
+        const value = $(cells[1]).text().trim();
+        if (label && value && label.length < 50 && value.length < 500) {
+          const tableRow = `${label}: ${value}`;
+          if (!standaloneSection.content.includes(tableRow)) {
+            standaloneSection.content.push(tableRow);
+          }
+        }
+      }
+    });
+  });
+
+  // 全てのdl/dt/ddを処理
+  $("dl").each((_, dl) => {
+    $(dl).find("dt").each((idx, dt) => {
+      const label = $(dt).text().trim();
+      const dd = $(dl).find("dd").eq(idx);
+      const value = dd.text().trim();
+      if (label && value && label.length < 50 && value.length < 500) {
+        const dlRow = `${label}: ${value}`;
+        if (!standaloneSection.content.includes(dlRow)) {
+          standaloneSection.content.push(dlRow);
+        }
+      }
+    });
+  });
+
+  // スタンドアロンセクションにコンテンツがあれば追加
+  if (standaloneSection.content.length > 0) {
+    sections.push(standaloneSection);
+  }
 
   return sections;
 }
@@ -859,6 +1143,18 @@ function extractLinks(html: string, baseUrl: string): string[] {
 }
 
 // URLが重要ページかどうかを判定
+// 【最重要】会社情報・サービス概要のURL判定
+function isCriticalUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    const path = urlObj.pathname.toLowerCase();
+    return CRITICAL_PATHS.some(p => path.includes(p));
+  } catch {
+    return false;
+  }
+}
+
+// 【重要】カスタマー対応に必要な情報があるURL判定
 function isPriorityUrl(url: string): boolean {
   try {
     const urlObj = new URL(url);
@@ -869,11 +1165,12 @@ function isPriorityUrl(url: string): boolean {
   }
 }
 
-// リンクを優先度でソート（重要ページを前に）
+// リンクを優先度でソート（最重要 > 重要 > その他）
 function sortLinksByPriority(links: string[]): string[] {
   return links.sort((a, b) => {
-    const aPriority = isPriorityUrl(a) ? 0 : 1;
-    const bPriority = isPriorityUrl(b) ? 0 : 1;
+    // 最重要（会社情報・サービス）: 0, 重要: 1, その他: 2
+    const aPriority = isCriticalUrl(a) ? 0 : isPriorityUrl(a) ? 1 : 2;
+    const bPriority = isCriticalUrl(b) ? 0 : isPriorityUrl(b) ? 1 : 2;
     return aPriority - bPriority;
   });
 }
@@ -897,6 +1194,27 @@ interface PageProcessResult {
   docs: Omit<DocChunk, "_id">[];
   links: string[];
   html: string | null;
+  pageMeta: {
+    title: string;
+    description: string;
+    category: string;
+  } | null;
+}
+
+// URLからページカテゴリを推測
+function inferPageCategory(url: string): string {
+  const lowerUrl = url.toLowerCase();
+  if (lowerUrl.includes('/about') || lowerUrl.includes('/company') || lowerUrl.includes('/corporate') || lowerUrl.includes('/profile')) return '会社情報';
+  if (lowerUrl.includes('/service') || lowerUrl.includes('/business') || lowerUrl.includes('/product')) return 'サービス';
+  if (lowerUrl.includes('/recruit') || lowerUrl.includes('/career') || lowerUrl.includes('/job')) return '採用情報';
+  if (lowerUrl.includes('/contact') || lowerUrl.includes('/inquiry')) return 'お問い合わせ';
+  if (lowerUrl.includes('/news') || lowerUrl.includes('/press') || lowerUrl.includes('/blog')) return 'ニュース';
+  if (lowerUrl.includes('/faq') || lowerUrl.includes('/help') || lowerUrl.includes('/support')) return 'サポート';
+  if (lowerUrl.includes('/price') || lowerUrl.includes('/pricing') || lowerUrl.includes('/plan')) return '料金';
+  if (lowerUrl.includes('/case') || lowerUrl.includes('/work') || lowerUrl.includes('/portfolio')) return '実績';
+  if (lowerUrl.includes('/access') || lowerUrl.includes('/location') || lowerUrl.includes('/map')) return 'アクセス';
+  if (lowerUrl.includes('/ir') || lowerUrl.includes('/investor')) return 'IR情報';
+  return 'その他';
 }
 
 // 単一ページを処理する関数
@@ -907,10 +1225,11 @@ async function processPage(
 ): Promise<PageProcessResult> {
   const html = await fetchHtml(url);
   if (!html) {
-    return { url, docs: [], links: [], html: null };
+    return { url, docs: [], links: [], html: null, pageMeta: null };
   }
 
   const pageMeta = extractPageMeta(html, url);
+  const category = inferPageCategory(url);
   const sections = extractStructuredContent(html, url);
   const docsToInsert: Omit<DocChunk, "_id">[] = [];
 
@@ -980,7 +1299,17 @@ async function processPage(
   }
 
   const links = extractLinks(html, url);
-  return { url, docs: docsToInsert, links, html };
+  return {
+    url,
+    docs: docsToInsert,
+    links,
+    html,
+    pageMeta: {
+      title: pageMeta.title,
+      description: pageMeta.description,
+      category,
+    },
+  };
 }
 
 // 複数のHTMLからドキュメントを生成する関数
@@ -1085,7 +1414,8 @@ export async function crawlAndEmbedSiteWithProgress(
   let totalChunks = 0;
   let themeColor = "#2563eb";
   let themeColorExtracted = false;
-  const allChunkTexts: string[] = [];  // 基本情報抽出用にチャンクテキストを収集
+  const allChunkTexts: ChunkWithUrl[] = [];  // 基本情報抽出用にチャンクテキストを収集（URLも保持）
+  const crawledPages: { url: string; title: string; description: string; category: string }[] = [];  // クロールしたページ情報
 
   // 開始通知
   onProgress({
@@ -1135,11 +1465,39 @@ export async function crawlAndEmbedSiteWithProgress(
       const sortedLinks = sortLinksByPriority(links);
       for (const link of sortedLinks) {
         if (!visited.has(link) && !queue.includes(link)) {
-          if (isPriorityUrl(link)) {
-            queue.unshift(link);
+          if (isCriticalUrl(link)) {
+            queue.unshift(link);  // 最重要は先頭
+          } else if (isPriorityUrl(link)) {
+            queue.splice(Math.min(5, queue.length), 0, link);  // 重要は先頭付近
           } else {
             queue.push(link);
           }
+        }
+      }
+
+      // 【最重要】会社情報・サービス概要のパスを最優先で追加
+      const baseUrl = new URL(rootUrl);
+      const rootPath = baseUrl.pathname.replace(/\/$/, '') || '';
+
+      // まずCRITICAL_PATHSを最優先で追加（会社情報・サービス概要）
+      for (const path of CRITICAL_PATHS) {
+        const priorityUrl = `${baseUrl.origin}${rootPath}${path}/`;
+        if (!visited.has(priorityUrl) && !queue.includes(priorityUrl)) {
+          queue.unshift(priorityUrl);
+        }
+        if (rootPath) {
+          const originUrl = `${baseUrl.origin}${path}/`;
+          if (!visited.has(originUrl) && !queue.includes(originUrl)) {
+            queue.unshift(originUrl);
+          }
+        }
+      }
+
+      // 次にPRIORITY_PATHSを追加（カスタマー対応に必要な情報）
+      for (const path of PRIORITY_PATHS.slice(0, 25)) {
+        const priorityUrl = `${baseUrl.origin}${rootPath}${path}/`;
+        if (!visited.has(priorityUrl) && !queue.includes(priorityUrl)) {
+          queue.push(priorityUrl);
         }
       }
 
@@ -1147,14 +1505,23 @@ export async function crawlAndEmbedSiteWithProgress(
       if (queue.length === 0) {
         console.log("[Crawler] No links found, trying fallback subdirectories");
         const baseUrl = new URL(rootUrl);
+        // rootUrlのパスを取得（例: /test/ -> /test）
+        const rootPath = baseUrl.pathname.replace(/\/$/, '') || '';
+
         for (const subdir of FALLBACK_SUBDIRECTORIES) {
           const fallbackUrl = `${baseUrl.origin}${subdir}/`;
           queue.push(fallbackUrl);
         }
-        // 重要パスも追加
+        // 重要パスも追加（rootUrlのパスを基準にする）
         for (const path of PRIORITY_PATHS) {
-          const priorityUrl = `${baseUrl.origin}${path}/`;
+          // rootUrlのパス配下に追加（例: /test/ + /about -> /test/about/）
+          const priorityUrl = `${baseUrl.origin}${rootPath}${path}/`;
           queue.unshift(priorityUrl);
+          // originからの直接パスも追加
+          if (rootPath) {
+            const originPriorityUrl = `${baseUrl.origin}${path}/`;
+            queue.push(originPriorityUrl);
+          }
         }
         console.log(`[Crawler] Added ${queue.length} fallback URLs to try`);
       }
@@ -1188,15 +1555,44 @@ export async function crawlAndEmbedSiteWithProgress(
         const sortedLinks = sortLinksByPriority(links);
         for (const link of sortedLinks) {
           if (!visited.has(link) && !queue.includes(link)) {
-            if (isPriorityUrl(link)) {
-              queue.unshift(link);
+            if (isCriticalUrl(link)) {
+              queue.unshift(link);  // 最重要は先頭
+            } else if (isPriorityUrl(link)) {
+              queue.splice(Math.min(5, queue.length), 0, link);  // 重要は先頭付近
             } else {
               queue.push(link);
             }
           }
         }
       }
-      console.log(`[Crawler] SPA: Extracted ${queue.length} links from SPA views for further crawling`);
+
+      // 【最重要】会社情報・サービス概要のパスを最優先で追加（SPA成功時も！）
+      const baseUrl = new URL(rootUrl);
+      const rootPath = baseUrl.pathname.replace(/\/$/, '') || '';
+
+      // まずCRITICAL_PATHSを最優先で追加
+      for (const path of CRITICAL_PATHS) {
+        const priorityUrl = `${baseUrl.origin}${rootPath}${path}/`;
+        if (!visited.has(priorityUrl) && !queue.includes(priorityUrl)) {
+          queue.unshift(priorityUrl);
+        }
+        if (rootPath) {
+          const originUrl = `${baseUrl.origin}${path}/`;
+          if (!visited.has(originUrl) && !queue.includes(originUrl)) {
+            queue.unshift(originUrl);
+          }
+        }
+      }
+
+      // 次にPRIORITY_PATHSを追加
+      for (const path of PRIORITY_PATHS.slice(0, 25)) {
+        const priorityUrl = `${baseUrl.origin}${rootPath}${path}/`;
+        if (!visited.has(priorityUrl) && !queue.includes(priorityUrl)) {
+          queue.push(priorityUrl);
+        }
+      }
+
+      console.log(`[Crawler] SPA: Extracted ${queue.length} links from SPA views + priority paths for further crawling`);
 
       if (allDocs.length > 0) {
         onProgress({
@@ -1220,21 +1616,12 @@ export async function crawlAndEmbedSiteWithProgress(
             allDocs[i].embeddings = embRes.data[i].embedding;
           }
 
-          onProgress({
-            type: "saving",
-            currentPage: 1,
-            totalPages: MAX_PAGES,
-            percent: 35,
-            chunksFound: allDocs.length,
-            message: `💾 ${allDocs.length}件のSPAデータを保存中...`,
-          });
-
           // MongoDBに保存
           await docsCol.insertMany(allDocs as DocChunk[]);
           totalChunks = allDocs.length;
 
-          // 基本情報抽出用にチャンクテキストを収集
-          allChunkTexts.push(...allDocs.map(d => d.chunk));
+          // 基本情報抽出用にチャンクテキストを収集（URLも保持）
+          allChunkTexts.push(...allDocs.map(d => ({ text: d.chunk, url: d.url })));
         } catch (error) {
           console.error("[Crawler] Error processing SPA content:", error);
         }
@@ -1247,9 +1634,22 @@ export async function crawlAndEmbedSiteWithProgress(
 
   // 通常サイトの処理（SPAからの発見リンクも含めてクロール継続）
 
+  // CRITICAL_PATHSを追跡（早期終了前に必ず処理）
+  const baseUrl = new URL(rootUrl);
+  const criticalUrls = new Set<string>();
+  for (const path of CRITICAL_PATHS) {
+    criticalUrls.add(`${baseUrl.origin}${path}/`);
+  }
+
+  // 未処理のクリティカルURLがあるかチェック
+  const hasPendingCriticalUrls = () => {
+    return queue.some(url => criticalUrls.has(url) && !visited.has(url));
+  };
+
   while (queue.length > 0 && visited.size < MAX_PAGES) {
     // 早期終了チェック: 十分なコンテンツが集まったら終了
-    if (totalChunks >= MIN_CHUNKS_FOR_EARLY_EXIT) {
+    // ただし、クリティカルURLが未処理の場合は続行
+    if (totalChunks >= MIN_CHUNKS_FOR_EARLY_EXIT && !hasPendingCriticalUrls()) {
       console.log(`[Crawler] Early exit: ${totalChunks} chunks collected`);
       break;
     }
@@ -1295,15 +1695,26 @@ export async function crawlAndEmbedSiteWithProgress(
         console.log(`[Crawler] Extracted theme color: ${themeColor}`);
       }
 
+      // ページメタ情報を収集
+      if (result.pageMeta) {
+        crawledPages.push({
+          url: result.url,
+          title: result.pageMeta.title,
+          description: result.pageMeta.description,
+          category: result.pageMeta.category,
+        });
+      }
+
       allDocs.push(...result.docs);
 
-      // リンクをキューに追加（優先ページを先に）
+      // リンクをキューに追加（最重要 > 重要 > その他）
       const sortedLinks = sortLinksByPriority(result.links);
       for (const link of sortedLinks) {
         if (!visited.has(link) && !queue.includes(link) && queue.length + visited.size < MAX_PAGES) {
-          // 重要ページは先頭に、そうでないものは末尾に
-          if (isPriorityUrl(link)) {
-            queue.unshift(link);
+          if (isCriticalUrl(link)) {
+            queue.unshift(link);  // 最重要は先頭
+          } else if (isPriorityUrl(link)) {
+            queue.splice(Math.min(5, queue.length), 0, link);  // 重要は先頭付近
           } else {
             queue.push(link);
           }
@@ -1335,22 +1746,12 @@ export async function crawlAndEmbedSiteWithProgress(
         allDocs[i].embeddings = embRes.data[i].embedding;
       }
 
-      // 保存の進捗通知
-      onProgress({
-        type: "saving",
-        currentPage,
-        totalPages: MAX_PAGES,
-        percent,
-        chunksFound: allDocs.length,
-        message: `💾 ${allDocs.length}件のデータを保存中...`,
-      });
-
-      // MongoDBに保存
+      // MongoDBに保存（進捗メッセージはembeddingの時点で表示済みなので省略）
       await docsCol.insertMany(allDocs as DocChunk[]);
       totalChunks += allDocs.length;
 
-      // 基本情報抽出用にチャンクテキストを収集
-      allChunkTexts.push(...allDocs.map(d => d.chunk));
+      // 基本情報抽出用にチャンクテキストを収集（URLも保持）
+      allChunkTexts.push(...allDocs.map(d => ({ text: d.chunk, url: d.url })));
 
     } catch (error) {
       console.error(`[Crawler] Error processing batch:`, error);
@@ -1362,24 +1763,135 @@ export async function crawlAndEmbedSiteWithProgress(
 
   // 基本情報を抽出
   onProgress({
+    type: "extracting",
+    currentPage: visited.size,
+    totalPages: visited.size,
+    percent: 90,
+    chunksFound: totalChunks,
+    message: `📋 企業情報を解析中...`,
+  });
+
+  const companyInfo = await extractCompanyInfo(allChunkTexts);
+
+  // クロールしたページ情報をcompanyInfoに追加
+  // カテゴリでソートし、重要な情報が先に来るようにする
+  const sortedPages = crawledPages.sort((a, b) => {
+    const categoryOrder: Record<string, number> = {
+      '会社情報': 0,
+      'サービス': 1,
+      '料金': 2,
+      '実績': 3,
+      'サポート': 4,
+      '採用情報': 5,
+      'ニュース': 6,
+      'お問い合わせ': 7,
+      'IR情報': 8,
+      'アクセス': 9,
+      'その他': 10,
+    };
+    return (categoryOrder[a.category] ?? 10) - (categoryOrder[b.category] ?? 10);
+  });
+
+  // CrawledPage形式に変換
+  const crawledPagesForInfo: CrawledPage[] = sortedPages.map(p => ({
+    url: p.url,
+    title: p.title,
+    summary: p.description || '',
+    category: p.category,
+  }));
+
+  // companyInfoに追加情報を付与
+  const enrichedCompanyInfo: CompanyInfo = {
+    ...companyInfo,
+    crawledPages: crawledPagesForInfo,
+    totalPagesVisited: visited.size,
+    totalChunks: totalChunks,
+    crawledAt: new Date().toISOString(),
+  };
+
+  // 会社情報をRAG用ドキュメントとして保存（会社概要の質問に確実に回答できるように）
+  if (companyInfo && Object.keys(companyInfo).length > 0) {
+    try {
+      const companyInfoChunks: string[] = [];
+
+      // 基本情報チャンク（検索キーワードを強化）
+      if (companyInfo.companyName) {
+        const basicInfo = [
+          `【会社について・会社概要・企業情報】`,
+          `当社について、会社の基本情報をご紹介します。`,
+          companyInfo.companyName ? `会社名: ${companyInfo.companyName}` : '',
+          companyInfo.representativeName ? `代表者・社長: ${companyInfo.representativeTitle || ''} ${companyInfo.representativeName}` : '',
+          companyInfo.establishedYear ? `設立年月日: ${companyInfo.establishedYear}` : '',
+          companyInfo.address ? `本社所在地・住所: ${companyInfo.address}` : '',
+          companyInfo.phone ? `電話番号・連絡先: ${companyInfo.phone}` : '',
+          companyInfo.capital ? `資本金: ${companyInfo.capital}` : '',
+          companyInfo.employeeCount ? `従業員数: ${companyInfo.employeeCount}` : '',
+        ].filter(Boolean).join('\n');
+        companyInfoChunks.push(basicInfo);
+      }
+
+      // 事業内容チャンク
+      if (companyInfo.businessDescription || companyInfo.services?.length) {
+        const businessInfo = [
+          `【事業内容】`,
+          companyInfo.businessDescription || '',
+          companyInfo.services?.length ? `主要サービス: ${companyInfo.services.join('、')}` : '',
+          companyInfo.industries?.length ? `事業分野: ${companyInfo.industries.join('、')}` : '',
+        ].filter(Boolean).join('\n');
+        companyInfoChunks.push(businessInfo);
+      }
+
+      // 企業理念・強みチャンク
+      if (companyInfo.mission || companyInfo.vision || companyInfo.strengths?.length) {
+        const missionInfo = [
+          `【企業理念・強み】`,
+          companyInfo.mission ? `ミッション: ${companyInfo.mission}` : '',
+          companyInfo.vision ? `ビジョン: ${companyInfo.vision}` : '',
+          companyInfo.strengths?.length ? `強み: ${companyInfo.strengths.join('、')}` : '',
+        ].filter(Boolean).join('\n');
+        companyInfoChunks.push(missionInfo);
+      }
+
+      // RAG用ドキュメントとして保存
+      if (companyInfoChunks.length > 0) {
+        const companyInfoDocs: Omit<DocChunk, "_id">[] = [];
+        const companyInfoTexts = companyInfoChunks;
+
+        const companyInfoEmbRes = await openai.embeddings.create({
+          model: "text-embedding-3-small",
+          input: companyInfoTexts,
+        });
+
+        for (let i = 0; i < companyInfoChunks.length; i++) {
+          companyInfoDocs.push({
+            companyId,
+            agentId,
+            url: rootUrl,
+            title: '会社概要・基本情報',
+            sectionTitle: i === 0 ? '会社概要' : i === 1 ? '事業内容' : '企業理念',
+            chunk: companyInfoChunks[i],
+            embeddings: companyInfoEmbRes.data[i].embedding,
+            createdAt: new Date(),
+          });
+        }
+
+        await docsCol.insertMany(companyInfoDocs as DocChunk[]);
+        totalChunks += companyInfoDocs.length;
+        console.log(`[Crawler] Added ${companyInfoDocs.length} company info chunks to RAG`);
+      }
+    } catch (error) {
+      console.error('[Crawler] Error adding company info to RAG:', error);
+    }
+  }
+
+  // 完了前の通知（APIが最終的なcompleteイベントを送信する）
+  onProgress({
     type: "saving",
     currentPage: visited.size,
     totalPages: visited.size,
     percent: 95,
     chunksFound: totalChunks,
-    message: `📋 基本情報を抽出中...`,
-  });
-
-  const companyInfo = await extractCompanyInfo(allChunkTexts);
-
-  // 完了通知
-  onProgress({
-    type: "saving",
-    currentPage: visited.size,
-    totalPages: visited.size,
-    percent: 100,
-    chunksFound: totalChunks,
-    message: `✅ 完了！ ${visited.size}ページから${totalChunks}件の情報を学習しました`,
+    message: `💾 ${visited.size}ページから${totalChunks}件の情報を保存中...`,
   });
 
   return {
@@ -1387,7 +1899,8 @@ export async function crawlAndEmbedSiteWithProgress(
     pagesVisited: visited.size,
     totalChunks,
     themeColor,
-    companyInfo,
+    companyInfo: enrichedCompanyInfo,
+    isSPA,
   };
 }
 
