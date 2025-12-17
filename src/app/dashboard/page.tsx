@@ -1320,23 +1320,43 @@ function DashboardContent() {
           }
 
           // エージェント上限を計算
-          // Free/Lite/Pro: それぞれ1エージェント/company
+          // Free: 上限なし
+          // Lite/Pro: それぞれ1エージェント/company
           // Max: maxPlanCount × 5 エージェント（ユーザー全体で共有）
-          const nonMaxAgentLimit = planCounts.free + planCounts.lite + planCounts.pro;
+          const paidAgentLimit = planCounts.lite + planCounts.pro;
           const maxAgentLimit = Math.max(maxPlanCount, planCounts.max > 0 ? 1 : 0) * 5;
-          const agentLimit = nonMaxAgentLimit + maxAgentLimit;
+          const agentLimit = paidAgentLimit + maxAgentLimit;
 
           const currentAgentCount = companies.reduce((sum, c) => sum + c.agents.length, 0);
-          const canCreateMore = currentAgentCount < agentLimit;
+          // 有料プランがある場合のみ上限チェック（Freeのみの場合は無制限）
+          const canCreateMore = agentLimit === 0 || currentAgentCount < agentLimit;
 
-          // プラン表示用のサマリーを作成
-          const planSummary: string[] = [];
-          if (planCounts.max > 0 || maxPlanCount > 0) {
-            planSummary.push(`Max×${Math.max(maxPlanCount, planCounts.max > 0 ? 1 : 0)}`);
+          // プラン表示用のサマリーを作成（有料枠を表示）
+          const maxSlots = maxAgentLimit; // Max枠数
+          const proSlots = planCounts.pro; // Pro枠数
+          const liteSlots = planCounts.lite; // Lite枠数
+          const freeSlots = planCounts.free; // Free枠数
+          const paidSlots = maxSlots + proSlots; // 有料枠合計
+
+          let planSummary = "";
+          if (paidSlots > 0) {
+            const paidParts: string[] = [];
+            if (maxSlots > 0) paidParts.push(`Max ${maxSlots}`);
+            if (proSlots > 0) paidParts.push(`Pro ${proSlots}`);
+            planSummary = `有料枠: ${paidParts.join(" + ")} = ${paidSlots}枠`;
+            if (liteSlots > 0 || freeSlots > 0) {
+              const freeParts: string[] = [];
+              if (liteSlots > 0) freeParts.push(`Lite ${liteSlots}`);
+              if (freeSlots > 0) freeParts.push(`Free ${freeSlots}`);
+              planSummary += ` + ${freeParts.join(" + ")}`;
+            }
+          } else {
+            // 有料枠なし
+            const parts: string[] = [];
+            if (liteSlots > 0) parts.push(`Lite ${liteSlots}枠`);
+            if (freeSlots > 0) parts.push(`Free ${freeSlots}枠`);
+            planSummary = parts.join(", ");
           }
-          if (planCounts.pro > 0) planSummary.push(`Pro×${planCounts.pro}`);
-          if (planCounts.lite > 0) planSummary.push(`Lite×${planCounts.lite}`);
-          if (planCounts.free > 0) planSummary.push(`Free×${planCounts.free}`);
 
           return (
             <>
@@ -1344,11 +1364,11 @@ function DashboardContent() {
               <div className="flex flex-wrap items-center gap-4 mb-3">
                 <div className="flex items-center gap-2 text-sm text-slate-600">
                   <span className="font-medium">エージェント:</span>
-                  <span className={`font-bold ${currentAgentCount >= agentLimit ? "text-red-500" : "text-slate-800"}`}>
-                    {currentAgentCount} / {agentLimit}
+                  <span className={`font-bold ${!canCreateMore ? "text-red-500" : "text-slate-800"}`}>
+                    {currentAgentCount} / {agentLimit === 0 ? "無制限" : agentLimit}
                   </span>
                   <span className="text-xs text-slate-400">
-                    ({planSummary.join(", ")})
+                    ({planSummary})
                   </span>
                 </div>
                 {!canCreateMore && maxPlanCount === 0 && (

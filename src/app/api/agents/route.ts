@@ -6,14 +6,6 @@ import { auth } from "@/lib/auth";
 import { randomUUID } from "crypto";
 import { getGeoFromIP, formatGeoLocation } from "@/lib/geoip";
 
-// プランごとのエージェント作成上限
-const AGENT_LIMITS: Record<string, number> = {
-  free: 1,
-  lite: 1,
-  pro: 1,
-  max: 5,
-};
-
 export async function POST(req: NextRequest) {
   // Get authenticated user (optional - agent creation works without auth too)
   const session = await auth();
@@ -87,11 +79,29 @@ export async function POST(req: NextRequest) {
         companyId: { $in: user.companyIds },
       });
 
-      const limit = AGENT_LIMITS[highestPlan] || 1;
-      if (currentAgentCount >= limit) {
+      // プランごとのcompany数をカウント
+      const planCounts = { free: 0, lite: 0, pro: 0, max: 0 };
+      for (const company of userCompanies) {
+        const plan = (company.plan || "free") as keyof typeof planCounts;
+        if (plan in planCounts) {
+          planCounts[plan]++;
+        }
+      }
+
+      // エージェント上限を計算
+      // Free: 上限なし
+      // Lite/Pro: 各company × 1エージェント
+      // Max: maxPlanCount × 5エージェント
+      const maxPlanCount = user.maxPlanCount || 0;
+      const paidAgentLimit = planCounts.lite + planCounts.pro;
+      const maxAgentLimit = Math.max(maxPlanCount, planCounts.max > 0 ? 1 : 0) * 5;
+      const limit = paidAgentLimit + maxAgentLimit;
+
+      // 有料プランがある場合のみ上限チェック（Freeのみの場合は無制限）
+      if (limit > 0 && currentAgentCount >= limit) {
         return new Response(
           JSON.stringify({
-            error: `現在のプラン（${highestPlan}）ではエージェントは${limit}つまでです。Maxプランにアップグレードすると最大5つまで作成できます。`,
+            error: "エージェント上限に達しているため作成できません。Maxプランを追加購入するとさらに作成できます。",
             code: "AGENT_LIMIT_REACHED",
             currentCount: currentAgentCount,
             limit,
