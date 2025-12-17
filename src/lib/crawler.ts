@@ -21,6 +21,17 @@ const PRIORITY_PATHS = [
   '/recruit', '/careers', '/jobs',  // 採用
 ];
 
+// SPAや空ページの場合に試すサブディレクトリパス（WordPressなど）
+const FALLBACK_SUBDIRECTORIES = [
+  '/test',      // よくあるテスト/ステージング環境
+  '/wp',        // WordPress
+  '/blog',      // ブログ
+  '/site',      // サイト
+  '/home',      // ホーム
+  '/main',      // メイン
+  '/index',     // インデックス
+];
+
 // 進捗イベントの型
 export interface CrawlProgress {
   type: "discovering" | "crawling" | "embedding" | "saving";
@@ -1026,10 +1037,59 @@ export async function crawlAndEmbedSiteWithProgress(
       message: "🔄 SPAサイトを検出しました。全ページを取得中...",
     });
 
-    // SPAの全ビューを取得
-    const spaViews = await fetchAllSPAViews(rootUrl);
+    // SPAの全ビューを取得（Puppeteerが失敗した場合は空配列）
+    let spaViews: string[] = [];
+    try {
+      spaViews = await fetchAllSPAViews(rootUrl);
+    } catch (error) {
+      console.error("[Crawler] Puppeteer failed, will use fallback:", error);
+    }
 
-    if (spaViews && spaViews.length > 0) {
+    // Puppeteerが失敗した場合のフォールバック: initialHtmlからリンクを抽出
+    if (spaViews.length === 0 && initialHtml) {
+      console.log("[Crawler] SPA: Puppeteer failed, using fallback link extraction from static HTML");
+      onProgress({
+        type: "crawling",
+        currentPage: 1,
+        totalPages: MAX_PAGES,
+        percent: 15,
+        message: "📄 静的HTMLからリンクを抽出中...",
+      });
+
+      // 静的HTMLからリンクを抽出してキューに追加
+      const links = extractLinks(initialHtml, rootUrl);
+      const sortedLinks = sortLinksByPriority(links);
+      for (const link of sortedLinks) {
+        if (!visited.has(link) && !queue.includes(link)) {
+          if (isPriorityUrl(link)) {
+            queue.unshift(link);
+          } else {
+            queue.push(link);
+          }
+        }
+      }
+
+      // リンクが見つからない場合、フォールバックサブディレクトリを試す
+      if (queue.length === 0) {
+        console.log("[Crawler] No links found, trying fallback subdirectories");
+        const baseUrl = new URL(rootUrl);
+        for (const subdir of FALLBACK_SUBDIRECTORIES) {
+          const fallbackUrl = `${baseUrl.origin}${subdir}/`;
+          queue.push(fallbackUrl);
+        }
+        // 重要パスも追加
+        for (const path of PRIORITY_PATHS) {
+          const priorityUrl = `${baseUrl.origin}${path}/`;
+          queue.unshift(priorityUrl);
+        }
+        console.log(`[Crawler] Added ${queue.length} fallback URLs to try`);
+      }
+
+      console.log(`[Crawler] SPA fallback: Queue has ${queue.length} URLs to crawl`);
+
+      // ルートURLを訪問済みに追加
+      visited.add(rootUrl);
+    } else if (spaViews.length > 0) {
       onProgress({
         type: "embedding",
         currentPage: 1,
