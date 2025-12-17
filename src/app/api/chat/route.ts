@@ -63,7 +63,8 @@ export async function POST(req: NextRequest) {
     let promptSettings: PromptSettings | undefined;
     if (agentId) {
       const agentsCol = await getCollection<Agent>("agents");
-      const agent = await agentsCol.findOne({ agentId });
+      // セキュリティ: agentIdとcompanyIdの両方でフィルタリング
+      const agent = await agentsCol.findOne({ agentId, companyId });
       if (agent && (agent.systemPrompt || agent.knowledge || agent.style || agent.ngResponses)) {
         promptSettings = {
           systemPrompt: agent.systemPrompt,

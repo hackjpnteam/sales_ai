@@ -217,7 +217,7 @@ export async function answerWithRAG(params: {
   if (urlChunks.length > 0) {
     try {
       const linkEvalPrompt = urlChunks.map((u, i) =>
-        `【URL${i + 1}】${u.title}\n内容: ${u.chunk.substring(0, 200)}`
+        `【URL${i + 1}】${u.title}\n内容: ${[...u.chunk].slice(0, 200).join("")}`
       ).join('\n\n');
 
       const evalRes = await openai.chat.completions.create({
@@ -418,7 +418,7 @@ ${linkEvalPrompt}
   // デバッグ: 取得されたチャンクの内容をログ出力
   console.log(`[RAG] Selected ${selectedChunks.length} chunks for context:`);
   selectedChunks.slice(0, 3).forEach((c, i) => {
-    console.log(`[RAG] Chunk ${i + 1} (score: ${c.score.toFixed(3)}): ${c.title} - ${c.chunk.substring(0, 100)}...`);
+    console.log(`[RAG] Chunk ${i + 1} (score: ${c.score.toFixed(3)}): ${c.title} - ${[...c.chunk].slice(0, 100).join("")}...`);
   });
 
   const contextText = selectedChunks
@@ -489,7 +489,7 @@ ${linkEvalPrompt}
 - 参考情報に記載されていない人名・役職・具体的な数字を勝手に作り出すこと
 
 ■情報がない場合の対応
-- 参考情報に記載がない内容（社長名、具体的な人名、設立年など）は「申し訳ございませんが、その情報は把握しておりません。詳細は広報部（team@hackjpn.com）までお問い合わせください」と案内する
+- 参考情報に記載がない内容（社長名、具体的な人名、設立年など）は「申し訳ございませんが、その情報は把握しておりません」と回答する
 - 絶対に架空の人名や情報を生成しない`,
 
       en: `You are our customer support representative. Build trust with warm, caring interactions while remaining professional.
@@ -521,7 +521,7 @@ ${linkEvalPrompt}
 - Make up names, titles, or specific numbers not in the reference info
 
 ■ When Information is Missing
-- If asked about something not in the reference info (CEO name, specific people, founding year), say "I don't have that information. Please contact our PR team at team@hackjpn.com for details."
+- If asked about something not in the reference info (CEO name, specific people, founding year), say "I don't have that information. Please check the official website's contact form for details."
 - NEVER generate fictional names or information
 
 IMPORTANT: Respond ONLY in English.`,
@@ -555,7 +555,7 @@ IMPORTANT: Respond ONLY in English.`,
 - 编造参考信息中没有的人名、职位或具体数字
 
 ■ 信息缺失时的处理
-- 如果被问到参考信息中没有的内容（如CEO姓名、具体人员、成立年份），请回答"很抱歉，我没有这方面的信息。详情请联系我们的公关部门：team@hackjpn.com"
+- 如果被问到参考信息中没有的内容（如CEO姓名、具体人员、成立年份），请回答"很抱歉，我没有这方面的信息。请通过官方网站的联系表单查询详情。"
 - 绝对不要生成虚构的姓名或信息
 
 重要：请只用中文回复。`,
