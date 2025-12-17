@@ -312,14 +312,20 @@ function isSPAHtml(html: string): boolean {
 // Puppeteerブラウザインスタンス（再利用）
 let browserInstance: Awaited<ReturnType<typeof puppeteerCore.launch>> | null = null;
 
-// SPAナビゲーション要素を検出するセレクタ
+// SPAナビゲーション要素を検出するセレクタ（a要素とbutton要素の両方）
 const NAV_SELECTORS = [
   "nav a",
+  "nav button",
   "header a",
+  "header button",
   "[role='navigation'] a",
+  "[role='navigation'] button",
   ".nav a",
+  ".nav button",
   ".menu a",
+  ".menu button",
   ".navbar a",
+  ".navbar button",
 ];
 
 // クリックすべきでないリンクのパターン
