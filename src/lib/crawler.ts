@@ -2,12 +2,15 @@ import * as cheerio from "cheerio";
 import { getOpenAI } from "./openai";
 import { getCollection } from "./mongodb";
 import { DocChunk } from "./types";
+import puppeteerCore from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 
 const MAX_PAGES = 15; // 重要ページを確実に取得するため
 const CHUNK_SIZE = 600; // 500〜800文字程度でチャンク分割
 const PARALLEL_LIMIT = 5; // 並列クロール数
 const FETCH_TIMEOUT = 5000; // 5秒タイムアウト
 const MIN_CHUNKS_FOR_EARLY_EXIT = 50; // 十分なコンテンツを確保
+const PUPPETEER_TIMEOUT = 15000; // Puppeteer用の長めのタイムアウト
 
 // 優先的にクロールすべき重要ページのパターン
 const PRIORITY_PATHS = [
@@ -278,7 +281,118 @@ interface StructuredSection {
   links: string[];       // 「リンク: ラベル → URL」形式
 }
 
-async function fetchHtml(url: string): Promise<string | null> {
+// SPAフレームワークを検出する関数
+function isSPAHtml(html: string): boolean {
+  // SPAの特徴的なパターンを検出
+  const spaPatterns = [
+    /<div\s+id=["']root["']\s*><\/div>/i,           // React
+    /<div\s+id=["']app["']\s*><\/div>/i,            // Vue
+    /<div\s+id=["']__next["']\s*><\/div>/i,         // Next.js
+    /<app-root[^>]*><\/app-root>/i,                 // Angular
+    /type=["']module["'][^>]*src=["'][^"']*\.(js|mjs)["']/i, // ES modules
+  ];
+
+  // HTMLの本文が非常に短い場合もSPAの可能性が高い
+  const $ = cheerio.load(html);
+  $("script, style, link, meta, head").remove();
+  const bodyText = $("body").text().trim();
+
+  // 本文が100文字未満でSPAパターンがある場合
+  if (bodyText.length < 100) {
+    for (const pattern of spaPatterns) {
+      if (pattern.test(html)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+// Puppeteerブラウザインスタンス（再利用）
+let browserInstance: Awaited<ReturnType<typeof puppeteerCore.launch>> | null = null;
+
+// Puppeteerでページを取得する関数
+async function fetchHtmlWithPuppeteer(url: string): Promise<string | null> {
+  let browser = browserInstance;
+  let page = null;
+
+  try {
+    // ブラウザがなければ起動
+    if (!browser) {
+      const executablePath = await chromium.executablePath();
+
+      browser = await puppeteerCore.launch({
+        args: chromium.args,
+        defaultViewport: { width: 1280, height: 720 },
+        executablePath,
+        headless: true,
+      });
+      browserInstance = browser;
+    }
+
+    page = await browser.newPage();
+
+    // ユーザーエージェントを設定
+    await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+    // 不要なリソースをブロックして高速化
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+      const resourceType = req.resourceType();
+      if (["image", "stylesheet", "font", "media"].includes(resourceType)) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
+
+    // ページにアクセス
+    await page.goto(url, {
+      waitUntil: "networkidle2",
+      timeout: PUPPETEER_TIMEOUT,
+    });
+
+    // JavaScriptの実行完了を待つ
+    await page.waitForFunction(() => {
+      return document.readyState === "complete";
+    }, { timeout: 5000 }).catch(() => {
+      // タイムアウトは無視
+    });
+
+    // 少し待ってからHTMLを取得
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const html = await page.content();
+    return html;
+  } catch (error) {
+    console.error("[Crawler] Puppeteer error:", error);
+    return null;
+  } finally {
+    if (page) {
+      try {
+        await page.close();
+      } catch {
+        // ページクローズエラーは無視
+      }
+    }
+  }
+}
+
+// ブラウザを閉じる関数（クロール終了時に呼び出し）
+async function closeBrowser(): Promise<void> {
+  if (browserInstance) {
+    try {
+      await browserInstance.close();
+    } catch {
+      // エラーは無視
+    }
+    browserInstance = null;
+  }
+}
+
+// 通常のfetchでHTMLを取得
+async function fetchHtmlSimple(url: string): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
@@ -287,7 +401,7 @@ async function fetchHtml(url: string): Promise<string | null> {
       cache: "no-store",
       signal: controller.signal,
       headers: {
-        "User-Agent": "hackjpn-ai-crawler/1.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     });
 
@@ -298,6 +412,27 @@ async function fetchHtml(url: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+// HTMLを取得する統合関数（SPA検出付き）
+async function fetchHtml(url: string, usePuppeteer: boolean = false): Promise<string | null> {
+  // Puppeteerモードが指定されている場合
+  if (usePuppeteer) {
+    console.log(`[Crawler] Using Puppeteer for: ${url}`);
+    return await fetchHtmlWithPuppeteer(url);
+  }
+
+  // まず通常のfetchを試す
+  const html = await fetchHtmlSimple(url);
+  if (!html) return null;
+
+  // SPAかどうかを検出
+  if (isSPAHtml(html)) {
+    console.log(`[Crawler] SPA detected, retrying with Puppeteer: ${url}`);
+    return await fetchHtmlWithPuppeteer(url);
+  }
+
+  return html;
 }
 
 // 構造化コンテンツ抽出（仕様準拠: h1/h2/h3ごとにセクション分割）
@@ -738,6 +873,9 @@ export async function crawlAndEmbedSiteWithProgress(
       console.error(`[Crawler] Error processing batch:`, error);
     }
   }
+
+  // Puppeteerブラウザを閉じる
+  await closeBrowser();
 
   // 完了通知
   onProgress({
