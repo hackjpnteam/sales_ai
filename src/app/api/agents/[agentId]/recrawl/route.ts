@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
 import { Company, Agent, User } from "@/lib/types";
-import { crawlWebsite } from "@/lib/crawler";
+import { crawlAndEmbedSite } from "@/lib/crawler";
 
 // POST: サイトを再クロールして基本情報のみ更新（プロンプト・ナレッジは保持）
 export async function POST(
@@ -53,7 +53,11 @@ export async function POST(
     console.log(`[Recrawl] Starting recrawl for agent ${agentId}, URL: ${rootUrl}`);
 
     // クロールを実行（ストリーミングなし、同期的に実行）
-    const result = await crawlWebsite(rootUrl, agent.companyId, company.language || "ja");
+    const result = await crawlAndEmbedSite({
+      companyId: agent.companyId,
+      agentId,
+      rootUrl,
+    });
 
     // 基本情報のみ更新（プロンプト・ナレッジは保持）
     if (result.companyInfo && Object.keys(result.companyInfo).length > 0) {
