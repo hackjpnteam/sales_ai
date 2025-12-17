@@ -1015,14 +1015,14 @@ export async function crawlAndEmbedSiteWithProgress(
   const initialHtml = await fetchHtmlSimple(rootUrl);
   const isSPA = initialHtml ? isSPAHtml(initialHtml) : false;
 
-  // SPAサイトの場合は特別な処理
+  // SPAサイトの場合は特別な処理（ただしリンク抽出して通常クロールも継続）
   if (isSPA) {
-    console.log("[Crawler] SPA site detected, using navigation-based crawling");
+    console.log("[Crawler] SPA site detected, using navigation-based crawling + link extraction");
     onProgress({
       type: "crawling",
       currentPage: 1,
-      totalPages: 1,
-      percent: 30,
+      totalPages: MAX_PAGES,
+      percent: 10,
       message: "🔄 SPAサイトを検出しました。全ページを取得中...",
     });
 
@@ -1033,8 +1033,8 @@ export async function crawlAndEmbedSiteWithProgress(
       onProgress({
         type: "embedding",
         currentPage: 1,
-        totalPages: 1,
-        percent: 60,
+        totalPages: MAX_PAGES,
+        percent: 20,
         message: `🧠 ${spaViews.length}ビューからコンテンツを抽出中...`,
       });
 
@@ -1046,13 +1046,30 @@ export async function crawlAndEmbedSiteWithProgress(
         agentId
       );
       themeColor = extractedColor;
+      themeColorExtracted = true;
+
+      // 全ビューからリンクを抽出してキューに追加（重要！）
+      for (const html of spaViews) {
+        const links = extractLinks(html, rootUrl);
+        const sortedLinks = sortLinksByPriority(links);
+        for (const link of sortedLinks) {
+          if (!visited.has(link) && !queue.includes(link)) {
+            if (isPriorityUrl(link)) {
+              queue.unshift(link);
+            } else {
+              queue.push(link);
+            }
+          }
+        }
+      }
+      console.log(`[Crawler] SPA: Extracted ${queue.length} links from SPA views for further crawling`);
 
       if (allDocs.length > 0) {
         onProgress({
           type: "embedding",
           currentPage: 1,
-          totalPages: 1,
-          percent: 70,
+          totalPages: MAX_PAGES,
+          percent: 30,
           chunksFound: allDocs.length,
           message: `🧠 ${allDocs.length}件のコンテンツをAI学習用に変換中...`,
         });
@@ -1072,10 +1089,10 @@ export async function crawlAndEmbedSiteWithProgress(
           onProgress({
             type: "saving",
             currentPage: 1,
-            totalPages: 1,
-            percent: 90,
+            totalPages: MAX_PAGES,
+            percent: 35,
             chunksFound: allDocs.length,
-            message: `💾 ${allDocs.length}件のデータを保存中...`,
+            message: `💾 ${allDocs.length}件のSPAデータを保存中...`,
           });
 
           // MongoDBに保存
@@ -1086,29 +1103,12 @@ export async function crawlAndEmbedSiteWithProgress(
         }
       }
 
-      // Puppeteerブラウザを閉じる
-      await closeBrowser();
-
-      // 完了通知
-      onProgress({
-        type: "saving",
-        currentPage: 1,
-        totalPages: 1,
-        percent: 100,
-        chunksFound: totalChunks,
-        message: `✅ 完了！ SPAサイトから${totalChunks}件の情報を学習しました`,
-      });
-
-      return {
-        success: totalChunks > 0,
-        pagesVisited: spaViews.length,
-        totalChunks,
-        themeColor,
-      };
+      // ルートURLを訪問済みに追加
+      visited.add(rootUrl);
     }
   }
 
-  // 通常サイトの処理（従来のクロール）
+  // 通常サイトの処理（SPAからの発見リンクも含めてクロール継続）
 
   while (queue.length > 0 && visited.size < MAX_PAGES) {
     // 早期終了チェック: 十分なコンテンツが集まったら終了
