@@ -44,6 +44,7 @@ export type SharedUser = {
 export type QuickButton = {
   label: string;           // ボタンに表示するテキスト（例: "会社について"）
   query: string;           // クリック時に送信するメッセージ
+  response?: string;       // カスタム返答（設定されていればAIを使わずこの返答を表示）
 };
 
 // クロールしたページ情報

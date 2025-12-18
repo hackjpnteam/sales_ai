@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
       welcomeMessage: agent.welcomeMessage || "いらっしゃいませ。ご質問があれば何でもお聞きください。",
       voiceEnabled: agent.voiceEnabled !== false,
       companyName: company.name || "",
+      quickButtons: agent.quickButtons || [], // クイックボタン（カスタム返答含む）
     };
 
     // CORSヘッダーを追加（外部サイトからのアクセスを許可）

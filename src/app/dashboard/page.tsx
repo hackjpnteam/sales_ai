@@ -62,6 +62,7 @@ type SharedUser = {
 type QuickButton = {
   label: string;
   query: string;
+  response?: string;
 };
 
 type Agent = {
@@ -337,11 +338,11 @@ function DashboardContent() {
   // クイックボタン編集（Pro機能）
   const [editingQuickButtons, setEditingQuickButtons] = useState<string | null>(null);
   const [quickButtonsForm, setQuickButtonsForm] = useState<QuickButton[]>([
-    { label: "", query: "" },
-    { label: "", query: "" },
-    { label: "", query: "" },
-    { label: "", query: "" },
-    { label: "", query: "" },
+    { label: "", query: "", response: "" },
+    { label: "", query: "", response: "" },
+    { label: "", query: "", response: "" },
+    { label: "", query: "", response: "" },
+    { label: "", query: "", response: "" },
   ]);
   const [savingQuickButtons, setSavingQuickButtons] = useState(false);
 
@@ -628,16 +629,16 @@ function DashboardContent() {
   // クイックボタン編集開始
   const startEditingQuickButtons = (agent: Agent) => {
     const defaultButtons: QuickButton[] = [
-      { label: "会社について", query: "会社について教えてください" },
-      { label: "採用について", query: "採用情報について教えてください" },
-      { label: "サービスについて", query: "提供しているサービスについて教えてください" },
+      { label: "会社について", query: "会社について教えてください", response: "" },
+      { label: "採用について", query: "採用情報について教えてください", response: "" },
+      { label: "サービスについて", query: "提供しているサービスについて教えてください", response: "" },
     ];
     const buttons = agent.quickButtons && agent.quickButtons.length > 0
-      ? [...agent.quickButtons]
+      ? agent.quickButtons.map(b => ({ ...b, response: b.response || "" }))
       : defaultButtons;
     // 5つに揃える
     while (buttons.length < 5) {
-      buttons.push({ label: "", query: "" });
+      buttons.push({ label: "", query: "", response: "" });
     }
     setQuickButtonsForm(buttons.slice(0, 5));
     setEditingQuickButtons(agent.agentId);
@@ -2562,6 +2563,17 @@ function DashboardContent() {
                                   setQuickButtonsForm(newButtons);
                                 }}
                                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+                              />
+                              <textarea
+                                placeholder="カスタム返答（任意：空欄ならAIが回答）"
+                                value={btn.response || ""}
+                                onChange={(e) => {
+                                  const newButtons = [...quickButtonsForm];
+                                  newButtons[idx].response = e.target.value;
+                                  setQuickButtonsForm(newButtons);
+                                }}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 resize-none"
+                                rows={2}
                               />
                             </div>
                           ))}

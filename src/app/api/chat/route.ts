@@ -61,29 +61,54 @@ export async function POST(req: NextRequest) {
 
     // エージェントのプロンプト設定を取得
     let promptSettings: PromptSettings | undefined;
+    let customResponse: string | null = null;
+
     if (agentId) {
       const agentsCol = await getCollection<Agent>("agents");
       // セキュリティ: agentIdとcompanyIdの両方でフィルタリング
       const agent = await agentsCol.findOne({ agentId, companyId });
-      if (agent && (agent.systemPrompt || agent.knowledge || agent.style || agent.ngResponses)) {
-        promptSettings = {
-          systemPrompt: agent.systemPrompt,
-          knowledge: agent.knowledge,
-          style: agent.style,
-          ngResponses: agent.ngResponses,
-          guardrails: agent.guardrails,
-        };
+      if (agent) {
+        // クイックボタンのカスタム返答をチェック
+        if (agent.quickButtons && agent.quickButtons.length > 0) {
+          const matchingButton = agent.quickButtons.find(
+            btn => btn.query === message && btn.response && btn.response.trim()
+          );
+          if (matchingButton) {
+            customResponse = matchingButton.response!;
+          }
+        }
+
+        // プロンプト設定を取得
+        if (agent.systemPrompt || agent.knowledge || agent.style || agent.ngResponses) {
+          promptSettings = {
+            systemPrompt: agent.systemPrompt,
+            knowledge: agent.knowledge,
+            style: agent.style,
+            ngResponses: agent.ngResponses,
+            guardrails: agent.guardrails,
+          };
+        }
       }
     }
 
-    // RAGで回答を生成（会話履歴を渡す）
-    const { reply, relatedLinks } = await answerWithRAG({
-      companyId,
-      question: message,
-      language: language || "ja",
-      promptSettings,
-      conversationHistory,
-    });
+    let reply: string;
+    let relatedLinks: { url: string; title: string }[] = [];
+
+    if (customResponse) {
+      // カスタム返答がある場合はそれを使用（AIを呼ばない）
+      reply = customResponse;
+    } else {
+      // RAGで回答を生成（会話履歴を渡す）
+      const ragResult = await answerWithRAG({
+        companyId,
+        question: message,
+        language: language || "ja",
+        promptSettings,
+        conversationHistory,
+      });
+      reply = ragResult.reply;
+      relatedLinks = ragResult.relatedLinks;
+    }
 
     // アシスタントメッセージを保存
     await chatLogsCol.insertOne({
