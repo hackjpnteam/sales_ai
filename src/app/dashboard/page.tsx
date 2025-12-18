@@ -252,6 +252,7 @@ function DashboardContent() {
     themeColor: string;
     widgetPosition: string;
     widgetStyle?: string;
+    avatarUrl?: string;
   } | null>(null);
 
   // ウィジェットプレビュー（実際の埋め込み形式）
@@ -2273,6 +2274,7 @@ function DashboardContent() {
                               themeColor: agent.themeColor,
                               widgetPosition: agent.widgetPosition || "bottom-right",
                               widgetStyle: agent.widgetStyle || "bubble",
+                              avatarUrl: agent.avatarUrl,
                             });
                             setChatWindowOpen(false);
                             setShowWidget(true);
@@ -2433,14 +2435,16 @@ function DashboardContent() {
                               <Check className="w-4 h-4 text-rose-500" />
                             </div>
                           )}
-                          {/* アイコンプレビュー */}
-                          <div className="w-12 h-12 flex items-center justify-center mb-2">
-                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={agent.themeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                            </svg>
+                          {/* アイコンプレビュー（アバター画像） */}
+                          <div className="w-12 h-12 rounded-full overflow-hidden shadow-md mb-2 border-2 border-white">
+                            <img
+                              src={agent.avatarUrl || "/agent-avatar.png"}
+                              alt="Avatar"
+                              className="w-full h-full object-cover"
+                            />
                           </div>
                           <span className="font-medium text-slate-700">アイコン</span>
-                          <span className="text-xs text-slate-500">アイコンのみ</span>
+                          <span className="text-xs text-slate-500">アバター画像</span>
                         </button>
                       </div>
                     </div>
@@ -3077,6 +3081,7 @@ function DashboardContent() {
                                     themeColor: agent.themeColor,
                                     widgetPosition: agent.widgetPosition || "bottom-right",
                                     widgetStyle: agent.widgetStyle || "bubble",
+                                    avatarUrl: agent.avatarUrl,
                                   });
                                   setChatWindowOpen(false);
                                   setShowWidget(true);
@@ -3216,13 +3221,16 @@ function DashboardContent() {
                                     <Check className="w-4 h-4 text-blue-500" />
                                   </div>
                                 )}
-                                <div className="w-12 h-12 flex items-center justify-center mb-2">
-                                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={agent.themeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                                  </svg>
+                                {/* アイコンプレビュー（アバター画像） */}
+                                <div className="w-12 h-12 rounded-full overflow-hidden shadow-md mb-2 border-2 border-white">
+                                  <img
+                                    src={agent.avatarUrl || "/agent-avatar.png"}
+                                    alt="Avatar"
+                                    className="w-full h-full object-cover"
+                                  />
                                 </div>
                                 <span className="font-medium text-slate-700">アイコン</span>
-                                <span className="text-xs text-slate-500">アイコンのみ</span>
+                                <span className="text-xs text-slate-500">アバター画像</span>
                               </button>
                             </div>
                           </div>
@@ -3296,11 +3304,13 @@ function DashboardContent() {
                 className="transition-transform hover:scale-110"
               >
                 {createdAgent.widgetStyle === "icon" ? (
-                  /* アイコンスタイル */
-                  <div className="w-14 h-14 flex items-center justify-center">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={createdAgent.themeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                    </svg>
+                  /* アイコンスタイル（アバター画像） */
+                  <div className="w-14 h-14 rounded-full overflow-hidden shadow-lg border-2 border-white">
+                    <img
+                      src={createdAgent.avatarUrl || "/agent-avatar.png"}
+                      alt="AI Assistant"
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                 ) : (
                   /* バブルスタイル（デフォルト） */

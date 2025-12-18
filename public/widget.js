@@ -138,6 +138,7 @@
           themeColor: settings.themeColor || "#D86672",
           widgetPosition: settings.widgetPosition || "bottom-right",
           widgetStyle: settings.widgetStyle || "bubble",
+          avatarUrl: settings.avatarUrl || null,
           widgetBase: widgetBase,
           apiBase: apiBase,
           visitorId: visitorId,
@@ -153,6 +154,7 @@
           themeColor: scriptTag.getAttribute("data-theme-color") || "#D86672",
           widgetPosition: scriptTag.getAttribute("data-widget-position") || "bottom-right",
           widgetStyle: scriptTag.getAttribute("data-widget-style") || "bubble",
+          avatarUrl: scriptTag.getAttribute("data-avatar-url") || null,
           widgetBase: widgetBase,
           apiBase: apiBase,
           visitorId: visitorId,
@@ -168,6 +170,7 @@
     var themeColor = config.themeColor;
     var widgetPosition = config.widgetPosition;
     var widgetStyle = config.widgetStyle || "bubble"; // "bubble" or "icon"
+    var avatarUrl = config.avatarUrl; // アバター画像URL
     var widgetBase = config.widgetBase;
     var apiBase = config.apiBase;
     var visitorId = config.visitorId;
@@ -328,23 +331,25 @@
 
     // スタイルに応じたボタンデザイン
     if (widgetStyle === "icon") {
-      // アイコンのみ（背景なし）
+      // アイコンスタイル（アバター画像を表示）
+      var avatarSrc = avatarUrl || (apiBase + "/agent-avatar.png");
       Object.assign(button.style, {
-        width: "48px",
-        height: "48px",
-        borderRadius: "12px",
-        border: "none",
-        backgroundColor: "transparent",
-        color: themeColor,
-        boxShadow: "none",
+        width: "56px",
+        height: "56px",
+        borderRadius: "50%",
+        border: "3px solid #fff",
+        backgroundColor: "#fff",
+        padding: "0",
+        boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
         cursor: "pointer",
         transition: "all 0.2s ease",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center"
+        justifyContent: "center",
+        overflow: "hidden"
       });
-      // アイコンサイズを大きく
-      button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`;
+      // アバター画像を表示
+      button.innerHTML = `<img src="${avatarSrc}" alt="AI Assistant" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
     } else {
       // バブル（円形背景）- デフォルト
       Object.assign(button.style, {
@@ -376,12 +381,12 @@
 
     if (widgetStyle === "icon") {
       button.onmouseover = function () {
-        button.style.backgroundColor = "rgba(0,0,0,0.05)";
         button.style.transform = "scale(1.1)";
+        button.style.boxShadow = "0 6px 20px rgba(0,0,0,0.3)";
       };
       button.onmouseout = function () {
-        button.style.backgroundColor = "transparent";
         button.style.transform = "scale(1)";
+        button.style.boxShadow = "0 4px 14px rgba(0,0,0,0.25)";
       };
     } else {
       button.onmouseover = function () {
@@ -430,10 +435,22 @@
 
     iframeWrapper.appendChild(iframe);
 
+    // アイコンスタイル用のアバター画像HTML
+    var avatarSrc = avatarUrl || (apiBase + "/agent-avatar.png");
+    var avatarHtml = `<img src="${avatarSrc}" alt="AI Assistant" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+
     button.addEventListener("click", function () {
       var isHidden = iframeWrapper.style.display === "none";
       iframeWrapper.style.display = isHidden ? "block" : "none";
-      button.innerHTML = isHidden ? closeIconSvg : chatIconSvg;
+
+      // スタイルに応じてアイコン切り替え
+      if (widgetStyle === "icon") {
+        // アイコンスタイル: 開くとき閉じるアイコン、閉じるときアバター画像
+        button.innerHTML = isHidden ? closeIconSvg : avatarHtml;
+      } else {
+        // バブルスタイル: 開くとき閉じるアイコン、閉じるときチャットアイコン
+        button.innerHTML = isHidden ? closeIconSvg : chatIconSvg;
+      }
 
       // チャット開いたらツールチップを非表示 & パルスアニメーション停止
       if (isHidden) {
