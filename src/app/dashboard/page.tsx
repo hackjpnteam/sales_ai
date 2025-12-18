@@ -1981,8 +1981,45 @@ function DashboardContent() {
                           <div>
                             <label className="block text-sm text-slate-600 mb-2 flex items-center gap-2">
                               <Image className="w-4 h-4" />
-                              アイコン画像
+                              アイコン（画像/動画）
                             </label>
+
+                            {/* アップロード済み動画がある場合 */}
+                            {agent.iconVideoUrl && (
+                              <div className="mb-3 p-3 bg-rose-50 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-rose-300 shadow-md flex-shrink-0">
+                                    <video
+                                      src={agent.iconVideoUrl}
+                                      autoPlay
+                                      loop
+                                      muted
+                                      playsInline
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-xs text-rose-700 font-medium flex items-center gap-1">
+                                      <Video className="w-3 h-3" />
+                                      動画を使用中
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleVideoDelete(agent.agentId, company.companyId)}
+                                      disabled={uploadingVideo === agent.agentId}
+                                      className="text-xs text-red-600 hover:text-red-700 mt-1 flex items-center gap-1"
+                                    >
+                                      {uploadingVideo === agent.agentId ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="w-3 h-3" />
+                                      )}
+                                      削除して画像に戻す
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             {/* アバター選択エリア */}
                             <div className="flex flex-wrap gap-3 items-start">
@@ -1991,7 +2028,7 @@ function DashboardContent() {
                                 type="button"
                                 onClick={() => setEditAvatarUrl("/agent-avatar.png")}
                                 className={`relative w-14 h-14 rounded-full overflow-hidden border-2 transition-all flex-shrink-0 ${
-                                  editAvatarUrl === "/agent-avatar.png"
+                                  editAvatarUrl === "/agent-avatar.png" && !agent.iconVideoUrl
                                     ? "border-rose-500 ring-2 ring-rose-200"
                                     : "border-slate-200 hover:border-slate-300"
                                 }`}
@@ -2016,7 +2053,7 @@ function DashboardContent() {
                                       type="button"
                                       onClick={() => setEditAvatarUrl(avatar.dataUrl)}
                                       className={`w-14 h-14 rounded-full overflow-hidden border-2 transition-all ${
-                                        editAvatarUrl === avatar.dataUrl
+                                        editAvatarUrl === avatar.dataUrl && !agent.iconVideoUrl
                                           ? "border-rose-500 ring-2 ring-rose-200"
                                           : "border-slate-200 hover:border-slate-300"
                                       }`}
@@ -2041,9 +2078,9 @@ function DashboardContent() {
                                 ))
                               )}
 
-                              {/* アップロードボタン */}
+                              {/* 画像アップロードボタン */}
                               <label
-                                className={`w-14 h-14 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center cursor-pointer hover:border-rose-400 hover:bg-rose-50 transition-all ${
+                                className={`w-14 h-14 rounded-full border-2 border-dashed border-slate-300 flex flex-col items-center justify-center cursor-pointer hover:border-rose-400 hover:bg-rose-50 transition-all ${
                                   uploadingAvatar ? "opacity-50 cursor-not-allowed" : ""
                                 }`}
                                 title="画像をアップロード"
@@ -2051,7 +2088,10 @@ function DashboardContent() {
                                 {uploadingAvatar ? (
                                   <Loader2 className="w-5 h-5 animate-spin text-rose-500" />
                                 ) : (
-                                  <Upload className="w-5 h-5 text-slate-400" />
+                                  <>
+                                    <Image className="w-4 h-4 text-slate-400" />
+                                    <span className="text-[8px] text-slate-400 mt-0.5">画像</span>
+                                  </>
                                 )}
                                 <input
                                   type="file"
@@ -2067,10 +2107,40 @@ function DashboardContent() {
                                   }}
                                 />
                               </label>
+
+                              {/* 動画アップロードボタン */}
+                              <label
+                                className={`w-14 h-14 rounded-full border-2 border-dashed border-slate-300 flex flex-col items-center justify-center cursor-pointer hover:border-rose-400 hover:bg-rose-50 transition-all ${
+                                  uploadingVideo === agent.agentId ? "opacity-50 cursor-not-allowed" : ""
+                                }`}
+                                title="動画をアップロード（5秒以内）"
+                              >
+                                {uploadingVideo === agent.agentId ? (
+                                  <Loader2 className="w-5 h-5 animate-spin text-rose-500" />
+                                ) : (
+                                  <>
+                                    <Video className="w-4 h-4 text-slate-400" />
+                                    <span className="text-[8px] text-slate-400 mt-0.5">動画</span>
+                                  </>
+                                )}
+                                <input
+                                  type="file"
+                                  accept="video/*,.mp4,.webm,.mov,.MOV"
+                                  className="hidden"
+                                  disabled={uploadingVideo === agent.agentId}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      handleVideoUpload(agent.agentId, company.companyId, file);
+                                    }
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
                             </div>
 
                             <p className="text-xs text-slate-500 mt-2">
-                              画像をアップロードするか、デフォルトを選択してください（1MB以下）
+                              画像（1MB以下）または動画（5秒以内・15MB以下）をアップロード
                             </p>
                           </div>
 
@@ -2611,75 +2681,6 @@ function DashboardContent() {
                           <span className="text-xs text-slate-500">アバター画像</span>
                         </button>
                       </div>
-
-                      {/* アイコン動画アップロード（アイコンスタイル選択時のみ表示） */}
-                      {agent.widgetStyle === "icon" && (
-                        <div className="mt-4 p-3 bg-slate-50 rounded-xl">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Video className="w-4 h-4 text-rose-500" />
-                            <span className="text-sm font-medium text-slate-700">アイコン動画</span>
-                            <span className="text-xs text-slate-500">（5秒以内）</span>
-                          </div>
-                          {agent.iconVideoUrl ? (
-                            <div className="space-y-2">
-                              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white shadow-md mx-auto">
-                                <video
-                                  src={agent.iconVideoUrl}
-                                  autoPlay
-                                  loop
-                                  muted
-                                  playsInline
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                              <button
-                                onClick={() => handleVideoDelete(agent.agentId, company.companyId)}
-                                disabled={uploadingVideo === agent.agentId}
-                                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-all disabled:opacity-50"
-                              >
-                                {uploadingVideo === agent.agentId ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  <Trash2 className="w-3 h-3" />
-                                )}
-                                動画を削除
-                              </button>
-                            </div>
-                          ) : (
-                            <label className="block cursor-pointer">
-                              <input
-                                type="file"
-                                accept="video/*,.mp4,.webm,.mov,.MOV"
-                                className="hidden"
-                                onChange={(e) => {
-                                  const file = e.target.files?.[0];
-                                  if (file) {
-                                    handleVideoUpload(agent.agentId, company.companyId, file);
-                                  }
-                                  e.target.value = '';
-                                }}
-                                disabled={uploadingVideo === agent.agentId}
-                              />
-                              <div className={`flex items-center justify-center gap-2 px-3 py-2 text-xs text-slate-600 bg-white border border-dashed border-slate-300 rounded-lg hover:bg-slate-50 transition-all ${uploadingVideo === agent.agentId ? 'opacity-50' : ''}`}>
-                                {uploadingVideo === agent.agentId ? (
-                                  <>
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                    アップロード中...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Upload className="w-3 h-3" />
-                                    動画をアップロード
-                                  </>
-                                )}
-                              </div>
-                            </label>
-                          )}
-                          <p className="text-xs text-slate-400 mt-2 text-center">
-                            MP4/WebM/MOV形式・15MB以下
-                          </p>
-                        </div>
-                      )}
 
                       {/* アイコンサイズ設定 */}
                       <div className="mt-4">
