@@ -344,9 +344,10 @@
     button.className = "saleschat-pulse";
 
     // スタイルに応じたボタンデザイン
-    if (widgetStyle === "icon") {
-      // アイコンスタイル（動画またはアバター画像を表示）
-      var avatarSrc = avatarUrl || (apiBase + "/agent-avatar.png");
+    var avatarSrc = avatarUrl || (apiBase + "/agent-avatar.png");
+
+    if (iconVideoUrl) {
+      // 動画がある場合は動画を表示（widgetStyleに関わらず）
       Object.assign(button.style, {
         width: buttonSize + "px",
         height: buttonSize + "px",
@@ -362,12 +363,25 @@
         justifyContent: "center",
         overflow: "hidden"
       });
-      // 動画があれば動画を表示、なければアバター画像
-      if (iconVideoUrl) {
-        button.innerHTML = `<video src="${iconVideoUrl}" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;"></video>`;
-      } else {
-        button.innerHTML = `<img src="${avatarSrc}" alt="AI Assistant" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
-      }
+      button.innerHTML = `<video src="${iconVideoUrl}" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;"></video>`;
+    } else if (widgetStyle === "icon") {
+      // アイコンスタイル（アバター画像を表示）
+      Object.assign(button.style, {
+        width: buttonSize + "px",
+        height: buttonSize + "px",
+        borderRadius: "50%",
+        border: "3px solid #fff",
+        backgroundColor: "#fff",
+        padding: "0",
+        boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+        cursor: "pointer",
+        transition: "all 0.2s ease",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden"
+      });
+      button.innerHTML = `<img src="${avatarSrc}" alt="AI Assistant" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
     } else {
       // バブル（円形背景）- デフォルト
       Object.assign(button.style, {
@@ -397,7 +411,8 @@
       return `rgb(${darkerR}, ${darkerG}, ${darkerB})`;
     };
 
-    if (widgetStyle === "icon") {
+    if (iconVideoUrl || widgetStyle === "icon") {
+      // 動画またはアイコンスタイルの場合
       button.onmouseover = function () {
         button.style.transform = "scale(1.1)";
         button.style.boxShadow = "0 6px 20px rgba(0,0,0,0.3)";
@@ -407,6 +422,7 @@
         button.style.boxShadow = "0 4px 14px rgba(0,0,0,0.25)";
       };
     } else {
+      // バブルスタイルの場合
       button.onmouseover = function () {
         button.style.backgroundColor = darkenColor(themeColor);
         button.style.transform = "scale(1.1)";
@@ -470,8 +486,8 @@
       iframeWrapper.style.display = isHidden ? "block" : "none";
 
       // スタイルに応じてアイコン切り替え
-      if (widgetStyle === "icon") {
-        // アイコンスタイル: 開くとき閉じるアイコン、閉じるとき動画/アバター
+      if (iconVideoUrl || widgetStyle === "icon") {
+        // 動画またはアイコンスタイル: 開くとき閉じるアイコン、閉じるとき動画/アバター
         button.innerHTML = isHidden ? closeIconSvg : iconHtml;
       } else {
         // バブルスタイル: 開くとき閉じるアイコン、閉じるときチャットアイコン

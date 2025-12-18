@@ -3591,8 +3591,8 @@ function DashboardContent() {
                 onClick={() => setChatWindowOpen(true)}
                 className="transition-transform hover:scale-110"
               >
-                {createdAgent.widgetStyle === "icon" ? (
-                  /* アイコンスタイル（動画またはアバター画像） */
+                {createdAgent.iconVideoUrl ? (
+                  /* 動画がある場合は動画を表示 */
                   <div
                     className="rounded-full overflow-hidden shadow-lg border-2 border-white"
                     style={{
@@ -3600,22 +3600,29 @@ function DashboardContent() {
                       height: createdAgent.iconSize === "xlarge" ? "84px" : createdAgent.iconSize === "large" ? "70px" : "56px",
                     }}
                   >
-                    {createdAgent.iconVideoUrl ? (
-                      <video
-                        src={createdAgent.iconVideoUrl}
-                        autoPlay
-                        loop
-                        muted
-                        playsInline
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <img
-                        src={createdAgent.avatarUrl || "/agent-avatar.png"}
-                        alt="AI Assistant"
-                        className="w-full h-full object-cover"
-                      />
-                    )}
+                    <video
+                      src={createdAgent.iconVideoUrl}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : createdAgent.widgetStyle === "icon" ? (
+                  /* アイコンスタイル（アバター画像） */
+                  <div
+                    className="rounded-full overflow-hidden shadow-lg border-2 border-white"
+                    style={{
+                      width: createdAgent.iconSize === "xlarge" ? "84px" : createdAgent.iconSize === "large" ? "70px" : "56px",
+                      height: createdAgent.iconSize === "xlarge" ? "84px" : createdAgent.iconSize === "large" ? "70px" : "56px",
+                    }}
+                  >
+                    <img
+                      src={createdAgent.avatarUrl || "/agent-avatar.png"}
+                      alt="AI Assistant"
+                      className="w-full h-full object-cover"
+                    />
                   </div>
                 ) : (
                   /* バブルスタイル（デフォルト） */
