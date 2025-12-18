@@ -6,6 +6,7 @@ import type { CompanyInfo } from "@/lib/types";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
+import Script from "next/script";
 import type { PlanType } from "@/lib/stripe";
 
 // Color scheme
@@ -1739,33 +1740,14 @@ export default function Home() {
           </div>
         )}
 
-        {/* デモ用 hackjpn AI ウィジェット（左下）- resultがない場合のみ */}
-        {!result && widgetOpen && (
-          <div className="fixed bottom-20 sm:bottom-24 left-2 sm:left-6 right-2 sm:right-auto z-50 sm:w-[380px] h-[70vh] sm:h-[600px] max-h-[600px] rounded-2xl shadow-2xl overflow-hidden border border-rose-200">
-            <iframe
-              key={`widget-demo-hackjpn`}
-              src="https://saleschat.me/widget?companyId=e2c748ed-b950-4774-8591-06836b2e430c"
-              className="w-full h-full"
-              title="hackjpn AI Chat Widget"
-            />
-          </div>
-        )}
-
-        {/* デモ用フローティングボタン（左下）- resultがない場合のみ */}
+        {/* デモ用 hackjpn AI ウィジェット - widget.jsで表示 */}
         {!result && (
-          <button
-            onClick={() => setWidgetOpen(!widgetOpen)}
-            className="fixed bottom-4 sm:bottom-6 left-4 sm:left-6 z-50 w-12 h-12 sm:w-14 sm:h-14 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110"
-            style={{
-              background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.primary} 100%)`,
-            }}
-          >
-            {widgetOpen ? (
-              <X className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-            ) : (
-              <MessageCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-            )}
-          </button>
+          <Script
+            src="https://saleschat.me/widget.js"
+            data-company-id="e2c748ed-b950-4774-8591-06836b2e430c"
+            data-widget-base-url="https://saleschat.me/widget"
+            strategy="lazyOnload"
+          />
         )}
       </>
     </div>
