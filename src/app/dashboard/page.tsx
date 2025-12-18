@@ -2266,6 +2266,56 @@ function DashboardContent() {
                             )}
                           </div>
 
+                          {/* プレビュー */}
+                          <div className="pt-3 border-t border-slate-100">
+                            <label className="block text-sm text-slate-600 mb-2 flex items-center gap-2">
+                              <ExternalLink className="w-4 h-4" />
+                              プレビュー
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCreatedAgent({
+                                    companyId: company.companyId,
+                                    agentId: agent.agentId,
+                                    agentName: agent.name,
+                                    themeColor: agent.themeColor,
+                                    widgetPosition: agent.widgetPosition || "bottom-right",
+                                    widgetStyle: agent.widgetStyle || "bubble",
+                                    avatarUrl: agent.avatarUrl,
+                                    iconVideoUrl: agent.iconVideoUrl,
+                                    iconSize: agent.iconSize || "medium",
+                                  });
+                                  setChatWindowOpen(false);
+                                  setShowWidget(true);
+                                }}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all hover:shadow-md"
+                                style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
+                              >
+                                <MessageCircle className="w-3 h-3" />
+                                チャットを試す
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPreviewAgent({
+                                    companyId: company.companyId,
+                                    agentId: agent.agentId,
+                                    agentName: agent.name,
+                                    themeColor: agent.themeColor,
+                                    widgetPosition: agent.widgetPosition || "bottom-right",
+                                  });
+                                  setShowWidgetPreview(true);
+                                }}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 transition-all border border-slate-200"
+                              >
+                                <Globe className="w-3 h-3" />
+                                ウィジェットで試す
+                              </button>
+                            </div>
+                          </div>
+
                           {/* 保存・キャンセルボタン */}
                           <div className="flex gap-2 pt-2">
                             <button
@@ -2540,54 +2590,6 @@ function DashboardContent() {
                           </div>
                         </div>
                       )}
-                    </div>
-
-                    {/* プレビュー（基本設定の直下） */}
-                    <div className="bg-gradient-to-r from-rose-50 to-pink-50 rounded-xl p-4">
-                      <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
-                        <ExternalLink className="w-4 h-4 text-rose-500" />
-                        プレビュー
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => {
-                            setCreatedAgent({
-                              companyId: company.companyId,
-                              agentId: agent.agentId,
-                              agentName: agent.name,
-                              themeColor: agent.themeColor,
-                              widgetPosition: agent.widgetPosition || "bottom-right",
-                              widgetStyle: agent.widgetStyle || "bubble",
-                              avatarUrl: agent.avatarUrl,
-                              iconVideoUrl: agent.iconVideoUrl,
-                              iconSize: agent.iconSize || "medium",
-                            });
-                            setChatWindowOpen(false);
-                            setShowWidget(true);
-                          }}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all hover:shadow-lg"
-                          style={{ background: "linear-gradient(135deg, #D86672 0%, #D86672 100%)" }}
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                          チャットを試す
-                        </button>
-                        <button
-                          onClick={() => {
-                            setPreviewAgent({
-                              companyId: company.companyId,
-                              agentId: agent.agentId,
-                              agentName: agent.name,
-                              themeColor: agent.themeColor,
-                              widgetPosition: agent.widgetPosition || "bottom-right",
-                            });
-                            setShowWidgetPreview(true);
-                          }}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-all border border-slate-200"
-                        >
-                          <Globe className="w-4 h-4" />
-                          ウィジェットで試す
-                        </button>
-                      </div>
                     </div>
 
                     {/* カラー選択 */}
