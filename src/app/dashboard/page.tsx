@@ -2142,6 +2142,58 @@ function DashboardContent() {
                             <p className="text-xs text-slate-500 mt-2">
                               画像（1MB以下）または動画（5秒以内・15MB以下）をアップロード
                             </p>
+
+                            {/* アイコンサイズ */}
+                            <div className="mt-3 pt-3 border-t border-slate-100">
+                              <label className="block text-xs text-slate-500 mb-2">サイズ</label>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleIconSizeChange(agent.agentId, company.companyId, "medium")}
+                                  disabled={updatingColor === agent.agentId}
+                                  className={`flex-1 px-2 py-1.5 text-xs rounded-lg border-2 transition-all ${
+                                    (!agent.iconSize || agent.iconSize === "medium")
+                                      ? "border-rose-500 bg-rose-50 text-rose-700"
+                                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                  } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                                >
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    <div className="w-5 h-5 rounded-full bg-slate-300"></div>
+                                    <span>標準</span>
+                                  </div>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleIconSizeChange(agent.agentId, company.companyId, "large")}
+                                  disabled={updatingColor === agent.agentId}
+                                  className={`flex-1 px-2 py-1.5 text-xs rounded-lg border-2 transition-all ${
+                                    agent.iconSize === "large"
+                                      ? "border-rose-500 bg-rose-50 text-rose-700"
+                                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                  } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                                >
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    <div className="w-6 h-6 rounded-full bg-slate-300"></div>
+                                    <span>大</span>
+                                  </div>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleIconSizeChange(agent.agentId, company.companyId, "xlarge")}
+                                  disabled={updatingColor === agent.agentId}
+                                  className={`flex-1 px-2 py-1.5 text-xs rounded-lg border-2 transition-all ${
+                                    agent.iconSize === "xlarge"
+                                      ? "border-rose-500 bg-rose-50 text-rose-700"
+                                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                  } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                                >
+                                  <div className="flex flex-col items-center gap-0.5">
+                                    <div className="w-8 h-8 rounded-full bg-slate-300"></div>
+                                    <span>特大</span>
+                                  </div>
+                                </button>
+                              </div>
+                            </div>
                           </div>
 
                           {/* チャットタイトル（エージェント名） */}
@@ -2682,56 +2734,6 @@ function DashboardContent() {
                         </button>
                       </div>
 
-                      {/* アイコンサイズ設定 */}
-                      <div className="mt-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-sm font-medium text-slate-700">アイコンサイズ</span>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleIconSizeChange(agent.agentId, company.companyId, "medium")}
-                            disabled={updatingColor === agent.agentId}
-                            className={`flex-1 px-3 py-2 text-xs rounded-lg border-2 transition-all ${
-                              (!agent.iconSize || agent.iconSize === "medium")
-                                ? "border-rose-500 bg-rose-50 text-rose-700"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                            } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
-                          >
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="w-7 h-7 rounded-full bg-slate-300"></div>
-                              <span>標準</span>
-                            </div>
-                          </button>
-                          <button
-                            onClick={() => handleIconSizeChange(agent.agentId, company.companyId, "large")}
-                            disabled={updatingColor === agent.agentId}
-                            className={`flex-1 px-3 py-2 text-xs rounded-lg border-2 transition-all ${
-                              agent.iconSize === "large"
-                                ? "border-rose-500 bg-rose-50 text-rose-700"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                            } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
-                          >
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="w-9 h-9 rounded-full bg-slate-300"></div>
-                              <span>大</span>
-                            </div>
-                          </button>
-                          <button
-                            onClick={() => handleIconSizeChange(agent.agentId, company.companyId, "xlarge")}
-                            disabled={updatingColor === agent.agentId}
-                            className={`flex-1 px-3 py-2 text-xs rounded-lg border-2 transition-all ${
-                              agent.iconSize === "xlarge"
-                                ? "border-rose-500 bg-rose-50 text-rose-700"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                            } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
-                          >
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="w-11 h-11 rounded-full bg-slate-300"></div>
-                              <span>特大</span>
-                            </div>
-                          </button>
-                        </div>
-                      </div>
                     </div>
 
                     {/* クイックボタン - Lite以上で利用可能 */}
