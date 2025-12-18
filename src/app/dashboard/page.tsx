@@ -2601,7 +2601,7 @@ function DashboardContent() {
                             <label className="block cursor-pointer">
                               <input
                                 type="file"
-                                accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"
+                                accept="video/*,.mp4,.webm,.mov,.MOV"
                                 className="hidden"
                                 onChange={(e) => {
                                   const file = e.target.files?.[0];
