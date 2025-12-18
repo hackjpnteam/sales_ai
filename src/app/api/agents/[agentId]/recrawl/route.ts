@@ -69,11 +69,8 @@ export async function POST(
               rootUrl,
             },
             (progress: CrawlProgress) => {
-              // 進捗をSSEで送信
-              sendEvent({
-                type: "progress",
-                ...progress,
-              });
+              // 進捗をSSEで送信（progressにはtypeが含まれている）
+              sendEvent(progress);
             }
           );
 
