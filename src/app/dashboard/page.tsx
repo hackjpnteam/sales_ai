@@ -2628,7 +2628,7 @@ function DashboardContent() {
                             </label>
                           )}
                           <p className="text-xs text-slate-400 mt-2 text-center">
-                            MP4/WebM/MOV形式・5MB以下
+                            MP4/WebM/MOV形式・15MB以下
                           </p>
                         </div>
                       )}
