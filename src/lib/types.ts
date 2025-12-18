@@ -124,6 +124,7 @@ export type Agent = {
   avatarUrl?: string;
   widgetPosition?: "bottom-right" | "bottom-left" | "bottom-center";
   widgetStyle?: "bubble" | "icon"; // バブル（円形背景）またはアイコンのみ
+  iconVideoUrl?: string; // アイコンスタイル用の動画URL（5秒以内、ループ）
   // クイックボタン（Pro機能）
   quickButtons?: QuickButton[];
   // プロンプト設定（Pro機能）

@@ -44,6 +44,8 @@ import {
   Building2,
   Info,
   RefreshCw,
+  Video,
+  Play,
 } from "lucide-react";
 import Link from "next/link";
 import type { CompanyInfo } from "@/lib/types";
@@ -72,6 +74,7 @@ type Agent = {
   avatarUrl?: string;
   widgetPosition?: "bottom-right" | "bottom-left" | "bottom-center" | "middle-right" | "middle-left";
   widgetStyle?: "bubble" | "icon";
+  iconVideoUrl?: string; // アイコン動画URL
   // クイックボタン（Pro機能）
   quickButtons?: QuickButton[];
   // プロンプト設定（Pro機能）
@@ -253,6 +256,7 @@ function DashboardContent() {
     widgetPosition: string;
     widgetStyle?: string;
     avatarUrl?: string;
+    iconVideoUrl?: string;
   } | null>(null);
 
   // ウィジェットプレビュー（実際の埋め込み形式）
@@ -294,6 +298,9 @@ function DashboardContent() {
   const [uploadedAvatars, setUploadedAvatars] = useState<UploadedAvatar[]>([]);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [loadingAvatars, setLoadingAvatars] = useState(false);
+
+  // アイコン動画管理
+  const [uploadingVideo, setUploadingVideo] = useState<string | null>(null);
 
   // エージェント削除
   const [deletingAgent, setDeletingAgent] = useState<string | null>(null);
@@ -1070,6 +1077,114 @@ function DashboardContent() {
       alert("エラーが発生しました");
     } finally {
       setUpdatingColor(null);
+    }
+  };
+
+  // アイコン動画アップロード
+  const handleVideoUpload = async (agentId: string, companyId: string, file: File) => {
+    // クライアント側で動画の長さをチェック
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+
+    const durationCheck = new Promise<boolean>((resolve) => {
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src);
+        if (video.duration > 5) {
+          alert('動画は5秒以内にしてください');
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      };
+      video.onerror = () => {
+        alert('動画ファイルの読み込みに失敗しました');
+        resolve(false);
+      };
+    });
+
+    video.src = URL.createObjectURL(file);
+    const isValid = await durationCheck;
+    if (!isValid) return;
+
+    setUploadingVideo(agentId);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('agentId', agentId);
+
+      const res = await fetch('/api/icon-video', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // ローカルの状態を更新
+        setCompanies((prev) =>
+          prev.map((company) =>
+            company.companyId === companyId
+              ? {
+                  ...company,
+                  agents: company.agents.map((agent) =>
+                    agent.agentId === agentId
+                      ? { ...agent, iconVideoUrl: data.iconVideoUrl }
+                      : agent
+                  ),
+                }
+              : company
+          )
+        );
+      } else {
+        const data = await res.json();
+        alert(data.error || '動画のアップロードに失敗しました');
+      }
+    } catch (error) {
+      console.error('Video upload error:', error);
+      alert('エラーが発生しました');
+    } finally {
+      setUploadingVideo(null);
+    }
+  };
+
+  // アイコン動画削除
+  const handleVideoDelete = async (agentId: string, companyId: string) => {
+    if (!confirm('動画を削除しますか？')) return;
+
+    setUploadingVideo(agentId);
+
+    try {
+      const res = await fetch('/api/icon-video', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId }),
+      });
+
+      if (res.ok) {
+        // ローカルの状態を更新
+        setCompanies((prev) =>
+          prev.map((company) =>
+            company.companyId === companyId
+              ? {
+                  ...company,
+                  agents: company.agents.map((agent) =>
+                    agent.agentId === agentId
+                      ? { ...agent, iconVideoUrl: undefined }
+                      : agent
+                  ),
+                }
+              : company
+          )
+        );
+      } else {
+        const data = await res.json();
+        alert(data.error || '動画の削除に失敗しました');
+      }
+    } catch (error) {
+      console.error('Video delete error:', error);
+      alert('エラーが発生しました');
+    } finally {
+      setUploadingVideo(null);
     }
   };
 
@@ -2275,6 +2390,7 @@ function DashboardContent() {
                               widgetPosition: agent.widgetPosition || "bottom-right",
                               widgetStyle: agent.widgetStyle || "bubble",
                               avatarUrl: agent.avatarUrl,
+                              iconVideoUrl: agent.iconVideoUrl,
                             });
                             setChatWindowOpen(false);
                             setShowWidget(true);
@@ -2447,6 +2563,75 @@ function DashboardContent() {
                           <span className="text-xs text-slate-500">アバター画像</span>
                         </button>
                       </div>
+
+                      {/* アイコン動画アップロード（アイコンスタイル選択時のみ表示） */}
+                      {agent.widgetStyle === "icon" && (
+                        <div className="mt-4 p-3 bg-slate-50 rounded-xl">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Video className="w-4 h-4 text-rose-500" />
+                            <span className="text-sm font-medium text-slate-700">アイコン動画</span>
+                            <span className="text-xs text-slate-500">（5秒以内）</span>
+                          </div>
+                          {agent.iconVideoUrl ? (
+                            <div className="space-y-2">
+                              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-white shadow-md mx-auto">
+                                <video
+                                  src={agent.iconVideoUrl}
+                                  autoPlay
+                                  loop
+                                  muted
+                                  playsInline
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <button
+                                onClick={() => handleVideoDelete(agent.agentId, company.companyId)}
+                                disabled={uploadingVideo === agent.agentId}
+                                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-all disabled:opacity-50"
+                              >
+                                {uploadingVideo === agent.agentId ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-3 h-3" />
+                                )}
+                                動画を削除
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="block cursor-pointer">
+                              <input
+                                type="file"
+                                accept="video/mp4,video/webm,video/quicktime"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    handleVideoUpload(agent.agentId, company.companyId, file);
+                                  }
+                                  e.target.value = '';
+                                }}
+                                disabled={uploadingVideo === agent.agentId}
+                              />
+                              <div className={`flex items-center justify-center gap-2 px-3 py-2 text-xs text-slate-600 bg-white border border-dashed border-slate-300 rounded-lg hover:bg-slate-50 transition-all ${uploadingVideo === agent.agentId ? 'opacity-50' : ''}`}>
+                                {uploadingVideo === agent.agentId ? (
+                                  <>
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    アップロード中...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Upload className="w-3 h-3" />
+                                    動画をアップロード
+                                  </>
+                                )}
+                              </div>
+                            </label>
+                          )}
+                          <p className="text-xs text-slate-400 mt-2 text-center">
+                            MP4/WebM/MOV形式・5MB以下
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* クイックボタン - Lite以上で利用可能 */}
@@ -3082,6 +3267,7 @@ function DashboardContent() {
                                     widgetPosition: agent.widgetPosition || "bottom-right",
                                     widgetStyle: agent.widgetStyle || "bubble",
                                     avatarUrl: agent.avatarUrl,
+                                    iconVideoUrl: agent.iconVideoUrl,
                                   });
                                   setChatWindowOpen(false);
                                   setShowWidget(true);
@@ -3304,13 +3490,24 @@ function DashboardContent() {
                 className="transition-transform hover:scale-110"
               >
                 {createdAgent.widgetStyle === "icon" ? (
-                  /* アイコンスタイル（アバター画像） */
+                  /* アイコンスタイル（動画またはアバター画像） */
                   <div className="w-14 h-14 rounded-full overflow-hidden shadow-lg border-2 border-white">
-                    <img
-                      src={createdAgent.avatarUrl || "/agent-avatar.png"}
-                      alt="AI Assistant"
-                      className="w-full h-full object-cover"
-                    />
+                    {createdAgent.iconVideoUrl ? (
+                      <video
+                        src={createdAgent.iconVideoUrl}
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <img
+                        src={createdAgent.avatarUrl || "/agent-avatar.png"}
+                        alt="AI Assistant"
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </div>
                 ) : (
                   /* バブルスタイル（デフォルト） */

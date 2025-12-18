@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
       widgetPosition: agent.widgetPosition || "bottom-right",
       widgetStyle: agent.widgetStyle || "bubble", // "bubble" or "icon"
       avatarUrl: agent.avatarUrl || "/agent-avatar.png",
+      iconVideoUrl: agent.iconVideoUrl || null, // アイコン動画URL
       welcomeMessage: agent.welcomeMessage || "いらっしゃいませ。ご質問があれば何でもお聞きください。",
       voiceEnabled: agent.voiceEnabled !== false,
       companyName: company.name || "",

@@ -139,6 +139,7 @@
           widgetPosition: settings.widgetPosition || "bottom-right",
           widgetStyle: settings.widgetStyle || "bubble",
           avatarUrl: settings.avatarUrl || null,
+          iconVideoUrl: settings.iconVideoUrl || null,
           widgetBase: widgetBase,
           apiBase: apiBase,
           visitorId: visitorId,
@@ -155,6 +156,7 @@
           widgetPosition: scriptTag.getAttribute("data-widget-position") || "bottom-right",
           widgetStyle: scriptTag.getAttribute("data-widget-style") || "bubble",
           avatarUrl: scriptTag.getAttribute("data-avatar-url") || null,
+          iconVideoUrl: scriptTag.getAttribute("data-icon-video-url") || null,
           widgetBase: widgetBase,
           apiBase: apiBase,
           visitorId: visitorId,
@@ -171,6 +173,7 @@
     var widgetPosition = config.widgetPosition;
     var widgetStyle = config.widgetStyle || "bubble"; // "bubble" or "icon"
     var avatarUrl = config.avatarUrl; // アバター画像URL
+    var iconVideoUrl = config.iconVideoUrl; // アイコン動画URL（5秒以内、ループ）
     var widgetBase = config.widgetBase;
     var apiBase = config.apiBase;
     var visitorId = config.visitorId;
@@ -331,7 +334,7 @@
 
     // スタイルに応じたボタンデザイン
     if (widgetStyle === "icon") {
-      // アイコンスタイル（アバター画像を表示）
+      // アイコンスタイル（動画またはアバター画像を表示）
       var avatarSrc = avatarUrl || (apiBase + "/agent-avatar.png");
       Object.assign(button.style, {
         width: "56px",
@@ -348,8 +351,12 @@
         justifyContent: "center",
         overflow: "hidden"
       });
-      // アバター画像を表示
-      button.innerHTML = `<img src="${avatarSrc}" alt="AI Assistant" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+      // 動画があれば動画を表示、なければアバター画像
+      if (iconVideoUrl) {
+        button.innerHTML = `<video src="${iconVideoUrl}" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;"></video>`;
+      } else {
+        button.innerHTML = `<img src="${avatarSrc}" alt="AI Assistant" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+      }
     } else {
       // バブル（円形背景）- デフォルト
       Object.assign(button.style, {
@@ -435,9 +442,11 @@
 
     iframeWrapper.appendChild(iframe);
 
-    // アイコンスタイル用のアバター画像HTML
+    // アイコンスタイル用のHTML（動画またはアバター画像）
     var avatarSrc = avatarUrl || (apiBase + "/agent-avatar.png");
-    var avatarHtml = `<img src="${avatarSrc}" alt="AI Assistant" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+    var iconHtml = iconVideoUrl
+      ? `<video src="${iconVideoUrl}" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;"></video>`
+      : `<img src="${avatarSrc}" alt="AI Assistant" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
 
     button.addEventListener("click", function () {
       var isHidden = iframeWrapper.style.display === "none";
@@ -445,8 +454,8 @@
 
       // スタイルに応じてアイコン切り替え
       if (widgetStyle === "icon") {
-        // アイコンスタイル: 開くとき閉じるアイコン、閉じるときアバター画像
-        button.innerHTML = isHidden ? closeIconSvg : avatarHtml;
+        // アイコンスタイル: 開くとき閉じるアイコン、閉じるとき動画/アバター
+        button.innerHTML = isHidden ? closeIconSvg : iconHtml;
       } else {
         // バブルスタイル: 開くとき閉じるアイコン、閉じるときチャットアイコン
         button.innerHTML = isHidden ? closeIconSvg : chatIconSvg;
