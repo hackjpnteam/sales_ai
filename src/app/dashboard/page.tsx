@@ -2386,25 +2386,59 @@ function DashboardContent() {
                           無料
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {widgetStyleOptions.map((styleOption) => (
-                          <button
-                            key={styleOption.value}
-                            onClick={() => handleStyleChange(agent.agentId, company.companyId, styleOption.value)}
-                            disabled={updatingColor === agent.agentId}
-                            className={`flex flex-col items-center justify-center px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                              (agent.widgetStyle || "bubble") === styleOption.value
-                                ? "bg-rose-500 text-white shadow-md"
-                                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                            } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* バブルスタイル */}
+                        <button
+                          onClick={() => handleStyleChange(agent.agentId, company.companyId, "bubble")}
+                          disabled={updatingColor === agent.agentId}
+                          className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                            (agent.widgetStyle || "bubble") === "bubble"
+                              ? "border-rose-500 bg-rose-50"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                        >
+                          {(agent.widgetStyle || "bubble") === "bubble" && (
+                            <div className="absolute top-2 right-2">
+                              <Check className="w-4 h-4 text-rose-500" />
+                            </div>
+                          )}
+                          {/* バブルプレビュー */}
+                          <div
+                            className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg mb-2"
+                            style={{ backgroundColor: agent.themeColor }}
                           >
-                            <span className="text-lg mb-1">{styleOption.icon}</span>
-                            <span>{styleOption.name}</span>
-                            <span className={`text-xs mt-0.5 ${(agent.widgetStyle || "bubble") === styleOption.value ? "text-rose-200" : "text-slate-500"}`}>
-                              {styleOption.description}
-                            </span>
-                          </button>
-                        ))}
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                          </div>
+                          <span className="font-medium text-slate-700">バブル</span>
+                          <span className="text-xs text-slate-500">円形背景付き</span>
+                        </button>
+
+                        {/* アイコンスタイル */}
+                        <button
+                          onClick={() => handleStyleChange(agent.agentId, company.companyId, "icon")}
+                          disabled={updatingColor === agent.agentId}
+                          className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                            agent.widgetStyle === "icon"
+                              ? "border-rose-500 bg-rose-50"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                        >
+                          {agent.widgetStyle === "icon" && (
+                            <div className="absolute top-2 right-2">
+                              <Check className="w-4 h-4 text-rose-500" />
+                            </div>
+                          )}
+                          {/* アイコンプレビュー */}
+                          <div className="w-12 h-12 flex items-center justify-center mb-2">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={agent.themeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            </svg>
+                          </div>
+                          <span className="font-medium text-slate-700">アイコン</span>
+                          <span className="text-xs text-slate-500">アイコンのみ</span>
+                        </button>
                       </div>
                     </div>
 
@@ -3134,25 +3168,57 @@ function DashboardContent() {
                               <MessageCircle className="w-4 h-4 text-blue-500" />
                               ウィジェットスタイル
                             </h4>
-                            <div className="grid grid-cols-2 gap-3">
-                              {widgetStyleOptions.map((styleOption) => (
-                                <button
-                                  key={styleOption.value}
-                                  onClick={() => handleStyleChange(agent.agentId, company.companyId, styleOption.value)}
-                                  disabled={updatingColor === agent.agentId}
-                                  className={`flex flex-col items-center justify-center px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                                    (agent.widgetStyle || "bubble") === styleOption.value
-                                      ? "bg-blue-500 text-white shadow-md"
-                                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                                  } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                            <div className="grid grid-cols-2 gap-4">
+                              {/* バブルスタイル */}
+                              <button
+                                onClick={() => handleStyleChange(agent.agentId, company.companyId, "bubble")}
+                                disabled={updatingColor === agent.agentId}
+                                className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                                  (agent.widgetStyle || "bubble") === "bubble"
+                                    ? "border-blue-500 bg-blue-50"
+                                    : "border-slate-200 bg-white hover:border-slate-300"
+                                } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                              >
+                                {(agent.widgetStyle || "bubble") === "bubble" && (
+                                  <div className="absolute top-2 right-2">
+                                    <Check className="w-4 h-4 text-blue-500" />
+                                  </div>
+                                )}
+                                <div
+                                  className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg mb-2"
+                                  style={{ backgroundColor: agent.themeColor }}
                                 >
-                                  <span className="text-lg mb-1">{styleOption.icon}</span>
-                                  <span>{styleOption.name}</span>
-                                  <span className={`text-xs mt-0.5 ${(agent.widgetStyle || "bubble") === styleOption.value ? "text-blue-200" : "text-slate-500"}`}>
-                                    {styleOption.description}
-                                  </span>
-                                </button>
-                              ))}
+                                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                  </svg>
+                                </div>
+                                <span className="font-medium text-slate-700">バブル</span>
+                                <span className="text-xs text-slate-500">円形背景付き</span>
+                              </button>
+
+                              {/* アイコンスタイル */}
+                              <button
+                                onClick={() => handleStyleChange(agent.agentId, company.companyId, "icon")}
+                                disabled={updatingColor === agent.agentId}
+                                className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                                  agent.widgetStyle === "icon"
+                                    ? "border-blue-500 bg-blue-50"
+                                    : "border-slate-200 bg-white hover:border-slate-300"
+                                } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                              >
+                                {agent.widgetStyle === "icon" && (
+                                  <div className="absolute top-2 right-2">
+                                    <Check className="w-4 h-4 text-blue-500" />
+                                  </div>
+                                )}
+                                <div className="w-12 h-12 flex items-center justify-center mb-2">
+                                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={agent.themeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                  </svg>
+                                </div>
+                                <span className="font-medium text-slate-700">アイコン</span>
+                                <span className="text-xs text-slate-500">アイコンのみ</span>
+                              </button>
                             </div>
                           </div>
                         </div>
