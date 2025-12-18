@@ -93,12 +93,6 @@
     if (!scriptTag) return;
 
     var companyId = scriptTag.getAttribute("data-company-id");
-    var agentName =
-      scriptTag.getAttribute("data-agent-name") || "AIコンシェルジュ";
-    var themeColor =
-      scriptTag.getAttribute("data-theme-color") || "#D86672";
-    var widgetPosition =
-      scriptTag.getAttribute("data-widget-position") || "bottom-right";
     var widgetBase =
       scriptTag.getAttribute("data-widget-base-url") ||
       window.NEXT_PUBLIC_WIDGET_BASE_URL ||
@@ -109,15 +103,15 @@
       return;
     }
 
-    // [Analytics] トラッキング初期化
-    var visitorId = getOrCreateVisitorId();
-    var sessionId = getOrCreateSessionId();
-
     // APIベースURLを抽出（widget URLから）
     var apiBase = widgetBase.replace('/widget', '');
     if (apiBase.endsWith('/')) {
       apiBase = apiBase.slice(0, -1);
     }
+
+    // [Analytics] トラッキング初期化
+    var visitorId = getOrCreateVisitorId();
+    var sessionId = getOrCreateSessionId();
 
     // グローバルコンテキストを設定
     _trackingContext = {
@@ -132,6 +126,49 @@
 
     // ページビューイベント
     sendTrackingEvent({ type: 'page_view' }, apiBase, companyId, visitorId, sessionId);
+
+    // サーバーから設定を取得して初期化
+    fetch(apiBase + '/api/widget/settings?companyId=' + encodeURIComponent(companyId))
+      .then(function(res) { return res.json(); })
+      .then(function(settings) {
+        // 設定を取得成功
+        initWidget({
+          companyId: companyId,
+          agentName: settings.agentName || "AIコンシェルジュ",
+          themeColor: settings.themeColor || "#D86672",
+          widgetPosition: settings.widgetPosition || "bottom-right",
+          widgetBase: widgetBase,
+          apiBase: apiBase,
+          visitorId: visitorId,
+          sessionId: sessionId
+        });
+      })
+      .catch(function(err) {
+        console.warn("[AI Widget] Failed to fetch settings, using defaults:", err);
+        // フォールバック: data属性または デフォルト値を使用
+        initWidget({
+          companyId: companyId,
+          agentName: scriptTag.getAttribute("data-agent-name") || "AIコンシェルジュ",
+          themeColor: scriptTag.getAttribute("data-theme-color") || "#D86672",
+          widgetPosition: scriptTag.getAttribute("data-widget-position") || "bottom-right",
+          widgetBase: widgetBase,
+          apiBase: apiBase,
+          visitorId: visitorId,
+          sessionId: sessionId
+        });
+      });
+  }
+
+  // ウィジェットを初期化
+  function initWidget(config) {
+    var companyId = config.companyId;
+    var agentName = config.agentName;
+    var themeColor = config.themeColor;
+    var widgetPosition = config.widgetPosition;
+    var widgetBase = config.widgetBase;
+    var apiBase = config.apiBase;
+    var visitorId = config.visitorId;
+    var sessionId = config.sessionId;
 
     // SPA対応：履歴変更を検知
     var lastUrl = window.location.href;

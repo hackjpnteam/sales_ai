@@ -1331,19 +1331,15 @@ function DashboardContent() {
     }
   };
 
-  const getEmbedCode = (company: Company, agent: Agent) => {
+  const getEmbedCode = (company: Company) => {
     const widgetBaseUrl = typeof window !== "undefined"
       ? window.location.origin + "/widget"
       : "http://localhost:4000/widget";
 
-    const position = agent.widgetPosition || "bottom-right";
-
+    // 設定はサーバーから動的に取得されるため、companyIdとwidgetBaseUrlのみ必要
     return `<script
   src="${typeof window !== "undefined" ? window.location.origin : "http://localhost:4000"}/widget.js"
   data-company-id="${company.companyId}"
-  data-agent-name="${agent.name}"
-  data-theme-color="${agent.themeColor}"
-  data-widget-position="${position}"
   data-widget-base-url="${widgetBaseUrl}"
   defer
 ></script>`;
@@ -2584,10 +2580,10 @@ function DashboardContent() {
                       {isPaid ? (
                         <>
                           <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl text-xs overflow-x-auto whitespace-pre-wrap">
-                            {getEmbedCode(company, agent)}
+                            {getEmbedCode(company)}
                           </pre>
                           <button
-                            onClick={() => handleCopy(company.companyId, getEmbedCode(company, agent))}
+                            onClick={() => handleCopy(company.companyId, getEmbedCode(company))}
                             className="mt-3 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all flex items-center gap-2"
                             style={{
                               background: copiedId === company.companyId
