@@ -1936,8 +1936,8 @@ function DashboardContent() {
                       <Globe className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: agent?.themeColor }} />
                     </div>
                     <div className="text-left min-w-0 flex-1">
-                      <h3 className="font-semibold text-slate-800 truncate">{company.name}</h3>
-                      <p className="text-xs sm:text-sm text-slate-500 truncate">{company.rootUrl}</p>
+                      <h3 className="font-semibold text-slate-800 truncate">{agent?.name || company.name + " AI"}</h3>
+                      <p className="text-xs sm:text-sm text-slate-500 truncate">{company.name}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
@@ -3279,13 +3279,13 @@ function DashboardContent() {
                           </div>
                           <div className="text-left">
                             <h2 className="font-semibold text-slate-800 flex items-center gap-2">
-                              {company.name || company.rootUrl}
+                              {agent?.name || company.name + " AI"}
                               <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full">
                                 共有
                               </span>
                             </h2>
                             <p className="text-sm text-slate-500 truncate max-w-[200px] sm:max-w-none">
-                              {company.rootUrl}
+                              {company.name}
                             </p>
                           </div>
                         </div>
