@@ -1282,7 +1282,9 @@ function DashboardContent() {
             try {
               const data = JSON.parse(line.slice(6));
 
-              if (data.type === "progress") {
+              // CrawlProgressのtype: "discovering" | "crawling" | "embedding" | "saving" | "extracting" | "complete"
+              const progressTypes = ["discovering", "crawling", "embedding", "saving", "extracting"];
+              if (progressTypes.includes(data.type)) {
                 setRecrawlProgress({
                   percent: data.percent || 0,
                   currentUrl: data.currentUrl,
