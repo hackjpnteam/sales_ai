@@ -45,6 +45,8 @@ export async function GET(req: NextRequest) {
       avatarUrl: agent.avatarUrl || "/agent-avatar.png",
       iconVideoUrl: agent.iconVideoUrl || null, // アイコン動画URL
       iconSize: agent.iconSize || "medium", // アイコンサイズ（medium=56px, large=70px, xlarge=84px）
+      tooltipText: agent.tooltipText || "AIアシスタントが対応します", // ツールチップテキスト
+      tooltipDuration: agent.tooltipDuration ?? 5, // ツールチップ表示時間（秒）
       welcomeMessage: agent.welcomeMessage || "いらっしゃいませ。ご質問があれば何でもお聞きください。",
       voiceEnabled: agent.voiceEnabled !== false,
       companyName: company.name || "",

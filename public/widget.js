@@ -141,6 +141,8 @@
           avatarUrl: settings.avatarUrl || null,
           iconVideoUrl: settings.iconVideoUrl || null,
           iconSize: settings.iconSize || "medium",
+          tooltipText: settings.tooltipText || "AIアシスタントが対応します",
+          tooltipDuration: typeof settings.tooltipDuration === 'number' ? settings.tooltipDuration : 5,
           widgetBase: widgetBase,
           apiBase: apiBase,
           visitorId: visitorId,
@@ -159,6 +161,8 @@
           avatarUrl: scriptTag.getAttribute("data-avatar-url") || null,
           iconVideoUrl: scriptTag.getAttribute("data-icon-video-url") || null,
           iconSize: scriptTag.getAttribute("data-icon-size") || "medium",
+          tooltipText: scriptTag.getAttribute("data-tooltip-text") || "AIアシスタントが対応します",
+          tooltipDuration: parseInt(scriptTag.getAttribute("data-tooltip-duration") || "5", 10),
           widgetBase: widgetBase,
           apiBase: apiBase,
           visitorId: visitorId,
@@ -177,6 +181,8 @@
     var avatarUrl = config.avatarUrl; // アバター画像URL
     var iconVideoUrl = config.iconVideoUrl; // アイコン動画URL（5秒以内、ループ）
     var iconSize = config.iconSize || "medium"; // "medium", "large", "xlarge"
+    var tooltipText = config.tooltipText || "AIアシスタントが対応します";
+    var tooltipDuration = typeof config.tooltipDuration === 'number' ? config.tooltipDuration : 5; // 秒（0=非表示, -1=常に表示）
     var widgetBase = config.widgetBase;
     var apiBase = config.apiBase;
     var visitorId = config.visitorId;
@@ -300,9 +306,9 @@
       ...positionStyles.button
     });
 
-    // ツールチップ（5秒後に消える）
+    // ツールチップ（設定に応じて表示/非表示）
     const tooltip = document.createElement("div");
-    tooltip.innerHTML = `<span style="font-weight: 500;">AIアシスタントが対応します</span>`;
+    tooltip.innerHTML = `<span style="font-weight: 500;">${tooltipText}</span>`;
     Object.assign(tooltip.style, {
       backgroundColor: "#fff",
       color: "#374151",
@@ -311,7 +317,8 @@
       fontSize: "13px",
       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
       whiteSpace: "nowrap",
-      opacity: "1",
+      opacity: tooltipDuration === 0 ? "0" : "1",
+      display: tooltipDuration === 0 ? "none" : "block",
       transition: "opacity 0.3s ease",
       position: "relative"
     });
@@ -330,13 +337,15 @@
     });
     tooltip.appendChild(tooltipArrow);
 
-    // 5秒後にツールチップをフェードアウト
-    setTimeout(function() {
-      tooltip.style.opacity = "0";
+    // 指定秒後にツールチップをフェードアウト（-1の場合は常に表示、0の場合は非表示）
+    if (tooltipDuration > 0) {
       setTimeout(function() {
-        tooltip.style.display = "none";
-      }, 300);
-    }, 5000);
+        tooltip.style.opacity = "0";
+        setTimeout(function() {
+          tooltip.style.display = "none";
+        }, 300);
+      }, tooltipDuration * 1000);
+    }
 
     // フローティングボタン
     const button = document.createElement("button");

@@ -77,6 +77,9 @@ type Agent = {
   widgetStyle?: "bubble" | "icon";
   iconVideoUrl?: string; // アイコン動画URL
   iconSize?: "medium" | "large" | "xlarge"; // アイコンサイズ
+  // ツールチップ設定
+  tooltipText?: string;
+  tooltipDuration?: number;
   // クイックボタン（Pro機能）
   quickButtons?: QuickButton[];
   // プロンプト設定（Pro機能）
@@ -260,6 +263,8 @@ function DashboardContent() {
     avatarUrl?: string;
     iconVideoUrl?: string;
     iconSize?: "medium" | "large" | "xlarge";
+    tooltipText?: string;
+    tooltipDuration?: number;
   } | null>(null);
 
   // ウィジェットプレビュー（実際の埋め込み形式）
@@ -286,6 +291,8 @@ function DashboardContent() {
   const [editWelcomeMessage, setEditWelcomeMessage] = useState("");
   const [editVoiceEnabled, setEditVoiceEnabled] = useState(true);
   const [editAvatarUrl, setEditAvatarUrl] = useState("/agent-avatar.png");
+  const [editTooltipText, setEditTooltipText] = useState("AIアシスタントが対応します");
+  const [editTooltipDuration, setEditTooltipDuration] = useState(5);
   const [savingSettings, setSavingSettings] = useState(false);
 
   // 基本情報編集
@@ -1350,6 +1357,8 @@ function DashboardContent() {
     setEditWelcomeMessage(agent.welcomeMessage || "いらっしゃいませ。ご質問があれば何でもお聞きください。");
     setEditVoiceEnabled(agent.voiceEnabled !== false);
     setEditAvatarUrl(agent.avatarUrl || "/agent-avatar.png");
+    setEditTooltipText(agent.tooltipText || "AIアシスタントが対応します");
+    setEditTooltipDuration(agent.tooltipDuration ?? 5);
     // アバター一覧を取得
     await fetchAvatars(agent.agentId);
   };
@@ -1372,6 +1381,8 @@ function DashboardContent() {
           welcomeMessage: editWelcomeMessage,
           voiceEnabled: voiceEnabledValue,
           avatarUrl: editAvatarUrl,
+          tooltipText: editTooltipText,
+          tooltipDuration: editTooltipDuration,
         }),
       });
 
@@ -1390,6 +1401,8 @@ function DashboardContent() {
                           welcomeMessage: editWelcomeMessage,
                           voiceEnabled: voiceEnabledValue,
                           avatarUrl: editAvatarUrl,
+                          tooltipText: editTooltipText,
+                          tooltipDuration: editTooltipDuration,
                         }
                       : agent
                   ),
@@ -2228,6 +2241,38 @@ function DashboardContent() {
                             />
                           </div>
 
+                          {/* ツールチップ設定 */}
+                          <div>
+                            <label className="block text-sm text-slate-600 mb-2">
+                              ツールチップ（吹き出し）
+                            </label>
+                            <input
+                              type="text"
+                              value={editTooltipText}
+                              onChange={(e) => setEditTooltipText(e.target.value)}
+                              className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300"
+                              placeholder="AIアシスタントが対応します"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                              チャットボタンの横に表示されるメッセージです
+                            </p>
+                            <div className="mt-3 flex items-center gap-3">
+                              <label className="text-xs text-slate-500">表示時間</label>
+                              <select
+                                value={editTooltipDuration}
+                                onChange={(e) => setEditTooltipDuration(Number(e.target.value))}
+                                className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300"
+                              >
+                                <option value={0}>非表示</option>
+                                <option value={3}>3秒</option>
+                                <option value={5}>5秒</option>
+                                <option value={10}>10秒</option>
+                                <option value={15}>15秒</option>
+                                <option value={-1}>常に表示</option>
+                              </select>
+                            </div>
+                          </div>
+
                           {/* 音声モード（Proプラン以上限定） */}
                           <div className="flex items-center justify-between">
                             <label className="text-sm text-slate-600 flex items-center gap-2">
@@ -2287,6 +2332,8 @@ function DashboardContent() {
                                     avatarUrl: agent.avatarUrl,
                                     iconVideoUrl: agent.iconVideoUrl,
                                     iconSize: agent.iconSize || "medium",
+                                    tooltipText: agent.tooltipText || "AIアシスタントが対応します",
+                                    tooltipDuration: agent.tooltipDuration ?? 5,
                                   });
                                   setChatWindowOpen(false);
                                   setShowWidget(true);
@@ -3384,6 +3431,9 @@ function DashboardContent() {
                                     widgetStyle: agent.widgetStyle || "bubble",
                                     avatarUrl: agent.avatarUrl,
                                     iconVideoUrl: agent.iconVideoUrl,
+                                    iconSize: agent.iconSize || "medium",
+                                    tooltipText: agent.tooltipText || "AIアシスタントが対応します",
+                                    tooltipDuration: agent.tooltipDuration ?? 5,
                                   });
                                   setChatWindowOpen(false);
                                   setShowWidget(true);
@@ -3565,28 +3615,30 @@ function DashboardContent() {
           {!chatWindowOpen ? (
             /* バブル表示（クリックでチャット開く） */
             <div className="relative">
-              {/* ツールチップ */}
-              <div
-                className={`absolute bottom-full mb-3 whitespace-nowrap bg-white rounded-xl px-4 py-2 shadow-lg border border-slate-200 text-sm text-slate-700 ${
-                  createdAgent.widgetPosition === "bottom-left" || createdAgent.widgetPosition === "middle-left"
-                    ? "left-0"
-                    : createdAgent.widgetPosition === "bottom-center"
-                    ? "left-1/2 -translate-x-1/2"
-                    : "right-0"
-                }`}
-              >
-                <span>AIアシスタントが対応します</span>
-                {/* 矢印 */}
+              {/* ツールチップ（tooltipDurationが0の場合は非表示） */}
+              {createdAgent.tooltipDuration !== 0 && (
                 <div
-                  className={`absolute top-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-white ${
+                  className={`absolute bottom-full mb-3 whitespace-nowrap bg-white rounded-xl px-4 py-2 shadow-lg border border-slate-200 text-sm text-slate-700 ${
                     createdAgent.widgetPosition === "bottom-left" || createdAgent.widgetPosition === "middle-left"
-                      ? "left-5"
+                      ? "left-0"
                       : createdAgent.widgetPosition === "bottom-center"
                       ? "left-1/2 -translate-x-1/2"
-                      : "right-5"
+                      : "right-0"
                   }`}
-                />
-              </div>
+                >
+                  <span>{createdAgent.tooltipText || "AIアシスタントが対応します"}</span>
+                  {/* 矢印 */}
+                  <div
+                    className={`absolute top-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-white ${
+                      createdAgent.widgetPosition === "bottom-left" || createdAgent.widgetPosition === "middle-left"
+                        ? "left-5"
+                        : createdAgent.widgetPosition === "bottom-center"
+                        ? "left-1/2 -translate-x-1/2"
+                        : "right-5"
+                    }`}
+                  />
+                </div>
+              )}
 
               {/* 閉じるボタン */}
               <button

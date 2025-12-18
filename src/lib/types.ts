@@ -127,6 +127,9 @@ export type Agent = {
   widgetStyle?: "bubble" | "icon"; // バブル（円形背景）またはアイコンのみ
   iconVideoUrl?: string; // アイコンスタイル用の動画URL（5秒以内、ループ）
   iconSize?: "medium" | "large" | "xlarge"; // アイコンサイズ（デフォルト: medium = 56px）
+  // ツールチップ設定
+  tooltipText?: string; // ツールチップテキスト（デフォルト: "AIアシスタントが対応します"）
+  tooltipDuration?: number; // ツールチップ表示時間（秒）（デフォルト: 5秒、0で非表示）
   // クイックボタン（Pro機能）
   quickButtons?: QuickButton[];
   // プロンプト設定（Pro機能）
