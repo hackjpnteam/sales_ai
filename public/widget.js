@@ -137,6 +137,7 @@
           agentName: settings.agentName || "AIコンシェルジュ",
           themeColor: settings.themeColor || "#D86672",
           widgetPosition: settings.widgetPosition || "bottom-right",
+          widgetStyle: settings.widgetStyle || "bubble",
           widgetBase: widgetBase,
           apiBase: apiBase,
           visitorId: visitorId,
@@ -151,6 +152,7 @@
           agentName: scriptTag.getAttribute("data-agent-name") || "AIコンシェルジュ",
           themeColor: scriptTag.getAttribute("data-theme-color") || "#D86672",
           widgetPosition: scriptTag.getAttribute("data-widget-position") || "bottom-right",
+          widgetStyle: scriptTag.getAttribute("data-widget-style") || "bubble",
           widgetBase: widgetBase,
           apiBase: apiBase,
           visitorId: visitorId,
@@ -165,6 +167,7 @@
     var agentName = config.agentName;
     var themeColor = config.themeColor;
     var widgetPosition = config.widgetPosition;
+    var widgetStyle = config.widgetStyle || "bubble"; // "bubble" or "icon"
     var widgetBase = config.widgetBase;
     var apiBase = config.apiBase;
     var visitorId = config.visitorId;
@@ -318,24 +321,47 @@
       }, 300);
     }, 5000);
 
-    // フローティングボタン（円形バブル）
+    // フローティングボタン
     const button = document.createElement("button");
     button.innerHTML = chatIconSvg;
     button.className = "saleschat-pulse";
-    Object.assign(button.style, {
-      width: "56px",
-      height: "56px",
-      borderRadius: "50%",
-      border: "none",
-      backgroundColor: themeColor,
-      color: "#fff",
-      boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
-      cursor: "pointer",
-      transition: "all 0.2s ease",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center"
-    });
+
+    // スタイルに応じたボタンデザイン
+    if (widgetStyle === "icon") {
+      // アイコンのみ（背景なし）
+      Object.assign(button.style, {
+        width: "48px",
+        height: "48px",
+        borderRadius: "12px",
+        border: "none",
+        backgroundColor: "transparent",
+        color: themeColor,
+        boxShadow: "none",
+        cursor: "pointer",
+        transition: "all 0.2s ease",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      });
+      // アイコンサイズを大きく
+      button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`;
+    } else {
+      // バブル（円形背景）- デフォルト
+      Object.assign(button.style, {
+        width: "56px",
+        height: "56px",
+        borderRadius: "50%",
+        border: "none",
+        backgroundColor: themeColor,
+        color: "#fff",
+        boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+        cursor: "pointer",
+        transition: "all 0.2s ease",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      });
+    }
 
     // ホバーで少し暗くする
     const darkenColor = (color) => {
@@ -348,14 +374,25 @@
       return `rgb(${darkerR}, ${darkerG}, ${darkerB})`;
     };
 
-    button.onmouseover = function () {
-      button.style.backgroundColor = darkenColor(themeColor);
-      button.style.transform = "scale(1.1)";
-    };
-    button.onmouseout = function () {
-      button.style.backgroundColor = themeColor;
-      button.style.transform = "scale(1)";
-    };
+    if (widgetStyle === "icon") {
+      button.onmouseover = function () {
+        button.style.backgroundColor = "rgba(0,0,0,0.05)";
+        button.style.transform = "scale(1.1)";
+      };
+      button.onmouseout = function () {
+        button.style.backgroundColor = "transparent";
+        button.style.transform = "scale(1)";
+      };
+    } else {
+      button.onmouseover = function () {
+        button.style.backgroundColor = darkenColor(themeColor);
+        button.style.transform = "scale(1.1)";
+      };
+      button.onmouseout = function () {
+        button.style.backgroundColor = themeColor;
+        button.style.transform = "scale(1)";
+      };
+    }
 
     // コンテナに追加
     buttonContainer.appendChild(tooltip);

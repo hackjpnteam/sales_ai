@@ -10,7 +10,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { agentId, name, welcomeMessage, voiceEnabled, avatarUrl, widgetPosition } = await req.json();
+    const { agentId, name, welcomeMessage, voiceEnabled, avatarUrl, widgetPosition, widgetStyle } = await req.json();
 
     if (!agentId) {
       return NextResponse.json(
@@ -65,6 +65,10 @@ export async function PUT(req: NextRequest) {
       updateFields.widgetPosition = widgetPosition;
     }
 
+    if (widgetStyle !== undefined && ["bubble", "icon"].includes(widgetStyle)) {
+      updateFields.widgetStyle = widgetStyle;
+    }
+
     // Update the agent
     await agentsCol.updateOne(
       { agentId },
@@ -78,6 +82,7 @@ export async function PUT(req: NextRequest) {
       voiceEnabled: updateFields.voiceEnabled,
       avatarUrl: updateFields.avatarUrl,
       widgetPosition: updateFields.widgetPosition,
+      widgetStyle: updateFields.widgetStyle,
     });
   } catch (error) {
     console.error("Settings update error:", error);

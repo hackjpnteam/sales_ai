@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
       agentName: agent.name || "AIコンシェルジュ",
       themeColor: agent.themeColor || "#D86672",
       widgetPosition: agent.widgetPosition || "bottom-right",
+      widgetStyle: agent.widgetStyle || "bubble", // "bubble" or "icon"
       avatarUrl: agent.avatarUrl || "/agent-avatar.png",
       welcomeMessage: agent.welcomeMessage || "いらっしゃいませ。ご質問があれば何でもお聞きください。",
       voiceEnabled: agent.voiceEnabled !== false,

@@ -71,6 +71,7 @@ type Agent = {
   themeColor: string;
   avatarUrl?: string;
   widgetPosition?: "bottom-right" | "bottom-left" | "bottom-center" | "middle-right" | "middle-left";
+  widgetStyle?: "bubble" | "icon";
   // クイックボタン（Pro機能）
   quickButtons?: QuickButton[];
   // プロンプト設定（Pro機能）
@@ -152,6 +153,12 @@ const positionOptions = [
   { name: "中央下", value: "bottom-center", icon: "↓" },
   { name: "右中央", value: "middle-right", icon: "→" },
   { name: "左中央", value: "middle-left", icon: "←" },
+] as const;
+
+// ウィジェットスタイルオプション
+const widgetStyleOptions = [
+  { name: "バブル", value: "bubble", icon: "●", description: "円形背景付き" },
+  { name: "アイコン", value: "icon", icon: "💬", description: "アイコンのみ" },
 ] as const;
 
 // プランごとのエージェント作成上限
@@ -243,6 +250,7 @@ function DashboardContent() {
     agentName: string;
     themeColor: string;
     widgetPosition: string;
+    widgetStyle?: string;
   } | null>(null);
 
   // ウィジェットプレビュー（実際の埋め込み形式）
@@ -1010,6 +1018,53 @@ function DashboardContent() {
       }
     } catch (error) {
       console.error("Position update error:", error);
+      alert("エラーが発生しました");
+    } finally {
+      setUpdatingColor(null);
+    }
+  };
+
+  // ウィジェットスタイル変更ハンドラー
+  const handleStyleChange = async (agentId: string, companyId: string, newStyle: "bubble" | "icon") => {
+    setUpdatingColor(agentId); // 同じローディング状態を共有
+
+    try {
+      const res = await fetch("/api/agents/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId,
+          widgetStyle: newStyle,
+        }),
+      });
+
+      if (res.ok) {
+        // ローカルの状態を更新
+        setCompanies((prev) =>
+          prev.map((company) =>
+            company.companyId === companyId
+              ? {
+                  ...company,
+                  agents: company.agents.map((agent) =>
+                    agent.agentId === agentId
+                      ? { ...agent, widgetStyle: newStyle }
+                      : agent
+                  ),
+                }
+              : company
+          )
+        );
+
+        // チャットプレビューのスタイルも更新
+        if (createdAgent?.agentId === agentId) {
+          setCreatedAgent({ ...createdAgent, widgetStyle: newStyle });
+        }
+      } else {
+        const data = await res.json();
+        alert(data.error || "スタイルの更新に失敗しました");
+      }
+    } catch (error) {
+      console.error("Style update error:", error);
       alert("エラーが発生しました");
     } finally {
       setUpdatingColor(null);
@@ -2320,6 +2375,39 @@ function DashboardContent() {
                       </p>
                     </div>
 
+                    {/* ウィジェットスタイル */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2">
+                          <MessageCircle className="w-4 h-4 text-rose-500" />
+                          ウィジェットスタイル
+                        </h4>
+                        <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+                          無料
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {widgetStyleOptions.map((styleOption) => (
+                          <button
+                            key={styleOption.value}
+                            onClick={() => handleStyleChange(agent.agentId, company.companyId, styleOption.value)}
+                            disabled={updatingColor === agent.agentId}
+                            className={`flex flex-col items-center justify-center px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                              (agent.widgetStyle || "bubble") === styleOption.value
+                                ? "bg-rose-500 text-white shadow-md"
+                                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                            } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                          >
+                            <span className="text-lg mb-1">{styleOption.icon}</span>
+                            <span>{styleOption.name}</span>
+                            <span className={`text-xs mt-0.5 ${(agent.widgetStyle || "bubble") === styleOption.value ? "text-rose-200" : "text-slate-500"}`}>
+                              {styleOption.description}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     {/* クイックボタン - Lite以上で利用可能 */}
                     <div>
                       <div className="flex items-center gap-2 mb-3">
@@ -3035,6 +3123,34 @@ function DashboardContent() {
                                 >
                                   <span className="text-base sm:text-lg mb-0.5">{pos.icon}</span>
                                   <span className="whitespace-nowrap">{pos.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* ウィジェットスタイル */}
+                          <div>
+                            <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
+                              <MessageCircle className="w-4 h-4 text-blue-500" />
+                              ウィジェットスタイル
+                            </h4>
+                            <div className="grid grid-cols-2 gap-3">
+                              {widgetStyleOptions.map((styleOption) => (
+                                <button
+                                  key={styleOption.value}
+                                  onClick={() => handleStyleChange(agent.agentId, company.companyId, styleOption.value)}
+                                  disabled={updatingColor === agent.agentId}
+                                  className={`flex flex-col items-center justify-center px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                                    (agent.widgetStyle || "bubble") === styleOption.value
+                                      ? "bg-blue-500 text-white shadow-md"
+                                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                                  } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                                >
+                                  <span className="text-lg mb-1">{styleOption.icon}</span>
+                                  <span>{styleOption.name}</span>
+                                  <span className={`text-xs mt-0.5 ${(agent.widgetStyle || "bubble") === styleOption.value ? "text-blue-200" : "text-slate-500"}`}>
+                                    {styleOption.description}
+                                  </span>
                                 </button>
                               ))}
                             </div>
