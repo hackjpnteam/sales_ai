@@ -184,6 +184,13 @@ function WidgetContent() {
     return `linear-gradient(135deg, ${baseColor} 0%, ${darker} 50%, ${lighter} 100%)`;
   };
 
+  // 動画ファイルかどうかを判定
+  const isVideoUrl = (url: string) => {
+    const videoExtensions = ['.mp4', '.webm', '.mov', '.avi', '.m4v'];
+    const lowerUrl = url.toLowerCase();
+    return videoExtensions.some(ext => lowerUrl.includes(ext));
+  };
+
   // Next.js useSearchParams を使用
   useEffect(() => {
     const initializeWidget = async () => {
@@ -688,14 +695,25 @@ function WidgetContent() {
       >
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-white/30 flex-shrink-0">
-            <img
-              src={avatarUrl}
-              alt="AI Agent"
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                e.currentTarget.src = "/agent-avatar.png";
-              }}
-            />
+            {isVideoUrl(avatarUrl) ? (
+              <video
+                src={avatarUrl}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <img
+                src={avatarUrl}
+                alt="AI Agent"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = "/agent-avatar.png";
+                }}
+              />
+            )}
           </div>
           <h1 className="text-white font-semibold text-base tracking-tight flex-1 truncate">
             {agentName ? `${agentName} コンシェルジュ` : t.defaultAgentName}
@@ -849,7 +867,7 @@ function WidgetContent() {
               <div className={`flex items-end gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
                 {/* Avatar */}
                 <div
-                  className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                  className={`flex-shrink-0 w-8 h-8 rounded-full overflow-hidden flex items-center justify-center ${
                     msg.role === "user"
                       ? ""
                       : "bg-white shadow-sm"
@@ -862,8 +880,24 @@ function WidgetContent() {
                 >
                   {msg.role === "user" ? (
                     <span className="text-white text-xs font-medium">U</span>
+                  ) : isVideoUrl(avatarUrl) ? (
+                    <video
+                      src={avatarUrl}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
-                    <Sparkles className="w-4 h-4" style={{ color: themeColor }} />
+                    <img
+                      src={avatarUrl}
+                      alt="AI"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
                   )}
                 </div>
 
@@ -948,8 +982,26 @@ function WidgetContent() {
         {loading && (
           <div className="flex justify-start">
             <div className="flex items-end gap-2">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center" style={{ border: `1px solid ${themeColor}30` }}>
-                <Sparkles className="w-4 h-4" style={{ color: themeColor }} />
+              <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-white shadow-sm flex items-center justify-center" style={{ border: `1px solid ${themeColor}30` }}>
+                {isVideoUrl(avatarUrl) ? (
+                  <video
+                    src={avatarUrl}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <img
+                    src={avatarUrl}
+                    alt="AI"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                )}
               </div>
               <div className="px-4 py-3 rounded-2xl rounded-bl-md bg-white shadow-sm" style={{ border: `1px solid ${themeColor}20` }}>
                 <div className="flex items-center gap-1.5">
