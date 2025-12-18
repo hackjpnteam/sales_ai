@@ -244,6 +244,7 @@ function DashboardContent() {
 
   // 作成完了後のウィジェット表示
   const [showWidget, setShowWidget] = useState(false);
+  const [chatWindowOpen, setChatWindowOpen] = useState(false); // バブルクリック後にチャット表示
   const [createdAgent, setCreatedAgent] = useState<{
     companyId: string;
     agentId: string;
@@ -2271,7 +2272,9 @@ function DashboardContent() {
                               agentName: agent.name,
                               themeColor: agent.themeColor,
                               widgetPosition: agent.widgetPosition || "bottom-right",
+                              widgetStyle: agent.widgetStyle || "bubble",
                             });
+                            setChatWindowOpen(false);
                             setShowWidget(true);
                           }}
                           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white transition-all hover:shadow-lg"
@@ -3073,7 +3076,9 @@ function DashboardContent() {
                                     agentName: agent.name,
                                     themeColor: agent.themeColor,
                                     widgetPosition: agent.widgetPosition || "bottom-right",
+                                    widgetStyle: agent.widgetStyle || "bubble",
                                   });
+                                  setChatWindowOpen(false);
                                   setShowWidget(true);
                                 }}
                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 transition-all"
@@ -3247,34 +3252,103 @@ function DashboardContent() {
               : "bottom-6 right-6"
           }`}
         >
-          <div className="relative">
-            {/* 閉じるボタン */}
-            <button
-              onClick={() => setShowWidget(false)}
-              className={`absolute -top-2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-100 transition-all z-10 border border-slate-200 ${
-                createdAgent.widgetPosition === "bottom-left" || createdAgent.widgetPosition === "middle-left"
-                  ? "-left-2"
-                  : "-right-2"
-              }`}
-            >
-              <X className="w-4 h-4 text-slate-600" />
-            </button>
+          {!chatWindowOpen ? (
+            /* バブル表示（クリックでチャット開く） */
+            <div className="relative">
+              {/* ツールチップ */}
+              <div
+                className={`absolute bottom-full mb-3 whitespace-nowrap bg-white rounded-xl px-4 py-2 shadow-lg border border-slate-200 text-sm text-slate-700 ${
+                  createdAgent.widgetPosition === "bottom-left" || createdAgent.widgetPosition === "middle-left"
+                    ? "left-0"
+                    : createdAgent.widgetPosition === "bottom-center"
+                    ? "left-1/2 -translate-x-1/2"
+                    : "right-0"
+                }`}
+              >
+                <span>AIアシスタントが対応します</span>
+                {/* 矢印 */}
+                <div
+                  className={`absolute top-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-white ${
+                    createdAgent.widgetPosition === "bottom-left" || createdAgent.widgetPosition === "middle-left"
+                      ? "left-5"
+                      : createdAgent.widgetPosition === "bottom-center"
+                      ? "left-1/2 -translate-x-1/2"
+                      : "right-5"
+                  }`}
+                />
+              </div>
 
-            {/* ウィジェットiframe */}
-            <div
-              className="rounded-2xl overflow-hidden shadow-2xl border-2"
-              style={{ borderColor: createdAgent.themeColor }}
-            >
-              <iframe
-                key={`widget-${createdAgent.agentId}-${createdAgent.themeColor}`}
-                src={`/widget?companyId=${createdAgent.companyId}&agentName=${encodeURIComponent(createdAgent.agentName)}&themeColor=${encodeURIComponent(createdAgent.themeColor)}`}
-                width="380"
-                height="600"
-                className="bg-white max-h-[80vh]"
-                title="Chat Widget"
-              />
+              {/* 閉じるボタン */}
+              <button
+                onClick={() => setShowWidget(false)}
+                className={`absolute -top-2 w-6 h-6 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-100 transition-all z-10 border border-slate-200 ${
+                  createdAgent.widgetPosition === "bottom-left" || createdAgent.widgetPosition === "middle-left"
+                    ? "-left-2"
+                    : "-right-2"
+                }`}
+              >
+                <X className="w-3 h-3 text-slate-600" />
+              </button>
+
+              {/* バブル/アイコン */}
+              <button
+                onClick={() => setChatWindowOpen(true)}
+                className="transition-transform hover:scale-110"
+              >
+                {createdAgent.widgetStyle === "icon" ? (
+                  /* アイコンスタイル */
+                  <div className="w-14 h-14 flex items-center justify-center">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={createdAgent.themeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                  </div>
+                ) : (
+                  /* バブルスタイル（デフォルト） */
+                  <div
+                    className="w-14 h-14 rounded-full flex items-center justify-center shadow-lg"
+                    style={{ backgroundColor: createdAgent.themeColor }}
+                  >
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                  </div>
+                )}
+              </button>
             </div>
-          </div>
+          ) : (
+            /* チャットウィンドウ表示 */
+            <div className="relative">
+              {/* 閉じるボタン */}
+              <button
+                onClick={() => {
+                  setChatWindowOpen(false);
+                  setShowWidget(false);
+                }}
+                className={`absolute -top-2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-100 transition-all z-10 border border-slate-200 ${
+                  createdAgent.widgetPosition === "bottom-left" || createdAgent.widgetPosition === "middle-left"
+                    ? "-left-2"
+                    : "-right-2"
+                }`}
+              >
+                <X className="w-4 h-4 text-slate-600" />
+              </button>
+
+              {/* ウィジェットiframe */}
+              <div
+                className="rounded-2xl overflow-hidden shadow-2xl border-2"
+                style={{ borderColor: createdAgent.themeColor }}
+              >
+                <iframe
+                  key={`widget-${createdAgent.agentId}-${createdAgent.themeColor}`}
+                  src={`/widget?companyId=${createdAgent.companyId}&agentName=${encodeURIComponent(createdAgent.agentName)}&themeColor=${encodeURIComponent(createdAgent.themeColor)}`}
+                  width="380"
+                  height="600"
+                  className="bg-white max-h-[80vh]"
+                  title="Chat Widget"
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
