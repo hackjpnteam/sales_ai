@@ -2377,221 +2377,6 @@ function DashboardContent() {
                       )}
                     </div>
 
-                    {/* 基本情報（自動取得） */}
-                    <div className="bg-blue-50 rounded-xl p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="font-medium text-slate-700 flex items-center gap-2">
-                          <Building2 className="w-4 h-4 text-blue-500" />
-                          基本情報
-                        </h4>
-                        <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
-                          自動取得
-                        </span>
-                      </div>
-
-                      {editingCompanyInfo === agent.agentId ? (
-                        <div className="space-y-3">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs text-slate-600 mb-1">会社名</label>
-                              <input
-                                type="text"
-                                value={editCompanyInfo.companyName || ""}
-                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, companyName: e.target.value })}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                                placeholder="株式会社〇〇"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-slate-600 mb-1">代表者</label>
-                              <input
-                                type="text"
-                                value={editCompanyInfo.representativeName || ""}
-                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, representativeName: e.target.value })}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                                placeholder="山田 太郎"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-slate-600 mb-1">設立年</label>
-                              <input
-                                type="text"
-                                value={editCompanyInfo.establishedYear || ""}
-                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, establishedYear: e.target.value })}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                                placeholder="2020年"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-slate-600 mb-1">従業員数</label>
-                              <input
-                                type="text"
-                                value={editCompanyInfo.employeeCount || ""}
-                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, employeeCount: e.target.value })}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                                placeholder="50名"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-slate-600 mb-1">電話番号</label>
-                              <input
-                                type="text"
-                                value={editCompanyInfo.phone || ""}
-                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, phone: e.target.value })}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                                placeholder="03-1234-5678"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-slate-600 mb-1">メールアドレス</label>
-                              <input
-                                type="text"
-                                value={editCompanyInfo.email || ""}
-                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, email: e.target.value })}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                                placeholder="info@example.com"
-                              />
-                            </div>
-                            <div className="sm:col-span-2">
-                              <label className="block text-xs text-slate-600 mb-1">住所</label>
-                              <input
-                                type="text"
-                                value={editCompanyInfo.address || ""}
-                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, address: e.target.value })}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                                placeholder="東京都渋谷区〇〇1-2-3"
-                              />
-                            </div>
-                            <div className="sm:col-span-2">
-                              <label className="block text-xs text-slate-600 mb-1">事業内容</label>
-                              <textarea
-                                value={editCompanyInfo.businessDescription || ""}
-                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, businessDescription: e.target.value })}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
-                                rows={2}
-                                placeholder="Webサービスの企画・開発・運営"
-                              />
-                            </div>
-                            <div className="sm:col-span-2">
-                              <label className="block text-xs text-slate-600 mb-1">採用情報</label>
-                              <textarea
-                                value={editCompanyInfo.recruitmentInfo || ""}
-                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, recruitmentInfo: e.target.value })}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
-                                rows={2}
-                                placeholder="積極採用中。詳しくは採用ページをご覧ください。"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex gap-2 pt-2">
-                            <button
-                              onClick={() => saveCompanyInfo(agent.agentId, company.companyId)}
-                              disabled={savingCompanyInfo}
-                              className="flex-1 py-2 rounded-xl font-medium text-white text-sm bg-blue-500 hover:bg-blue-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                            >
-                              {savingCompanyInfo ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Save className="w-4 h-4" />
-                              )}
-                              保存
-                            </button>
-                            <button
-                              onClick={() => setEditingCompanyInfo(null)}
-                              disabled={savingCompanyInfo}
-                              className="px-4 py-2 rounded-xl font-medium text-slate-600 text-sm bg-white border border-slate-200 hover:bg-slate-50 transition-all disabled:opacity-50"
-                            >
-                              キャンセル
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {agent.companyInfo && Object.values(agent.companyInfo).some(v => v) ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                              {agent.companyInfo.companyName && (
-                                <div className="flex items-start gap-2">
-                                  <span className="text-slate-500 min-w-[4rem]">会社名:</span>
-                                  <span className="text-slate-700">{agent.companyInfo.companyName}</span>
-                                </div>
-                              )}
-                              {agent.companyInfo.representativeName && (
-                                <div className="flex items-start gap-2">
-                                  <span className="text-slate-500 min-w-[4rem]">代表者:</span>
-                                  <span className="text-slate-700">{agent.companyInfo.representativeName}</span>
-                                </div>
-                              )}
-                              {agent.companyInfo.establishedYear && (
-                                <div className="flex items-start gap-2">
-                                  <span className="text-slate-500 min-w-[4rem]">設立年:</span>
-                                  <span className="text-slate-700">{agent.companyInfo.establishedYear}</span>
-                                </div>
-                              )}
-                              {agent.companyInfo.employeeCount && (
-                                <div className="flex items-start gap-2">
-                                  <span className="text-slate-500 min-w-[4rem]">従業員数:</span>
-                                  <span className="text-slate-700">{agent.companyInfo.employeeCount}</span>
-                                </div>
-                              )}
-                              {agent.companyInfo.phone && (
-                                <div className="flex items-start gap-2">
-                                  <span className="text-slate-500 min-w-[4rem]">電話番号:</span>
-                                  <span className="text-slate-700">{agent.companyInfo.phone}</span>
-                                </div>
-                              )}
-                              {agent.companyInfo.email && (
-                                <div className="flex items-start gap-2">
-                                  <span className="text-slate-500 min-w-[4rem]">メール:</span>
-                                  <span className="text-slate-700">{agent.companyInfo.email}</span>
-                                </div>
-                              )}
-                              {agent.companyInfo.address && (
-                                <div className="flex items-start gap-2 sm:col-span-2">
-                                  <span className="text-slate-500 min-w-[4rem]">住所:</span>
-                                  <span className="text-slate-700">{agent.companyInfo.address}</span>
-                                </div>
-                              )}
-                              {agent.companyInfo.businessDescription && (
-                                <div className="flex items-start gap-2 sm:col-span-2">
-                                  <span className="text-slate-500 min-w-[4rem]">事業内容:</span>
-                                  <span className="text-slate-700">{agent.companyInfo.businessDescription}</span>
-                                </div>
-                              )}
-                              {agent.companyInfo.recruitmentInfo && (
-                                <div className="flex items-start gap-2 sm:col-span-2">
-                                  <span className="text-slate-500 min-w-[4rem]">採用情報:</span>
-                                  <span className="text-slate-700">{agent.companyInfo.recruitmentInfo}</span>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <p className="text-sm text-slate-500">
-                              サイトから基本情報を取得できませんでした。編集ボタンから手動で追加できます。
-                            </p>
-                          )}
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => startEditingCompanyInfo(agent)}
-                              className="flex-1 py-2 rounded-xl font-medium text-blue-600 text-sm border border-blue-200 hover:bg-blue-50 transition-all"
-                            >
-                              基本情報を編集
-                            </button>
-                            <button
-                              onClick={() => recrawlAgent(agent.agentId, company.companyId)}
-                              disabled={recrawlingAgent === agent.agentId}
-                              className="flex items-center justify-center gap-1 px-4 py-2 rounded-xl font-medium text-emerald-600 text-sm border border-emerald-200 hover:bg-emerald-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="サイトを再クロールして基本情報を更新"
-                            >
-                              <RefreshCw className={`w-4 h-4 ${recrawlingAgent === agent.agentId ? "animate-spin" : ""}`} />
-                              {recrawlingAgent === agent.agentId
-                                ? `取得中... ${recrawlProgress?.percent ?? 0}%`
-                                : "再取得"}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
                     {/* カラー選択 */}
                     <div>
                       <div className="flex items-center justify-between mb-3">
@@ -2828,6 +2613,221 @@ function DashboardContent() {
                             <Edit3 className="w-3 h-3" />
                             編集
                           </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 基本情報（自動取得） */}
+                    <div className="bg-blue-50 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-medium text-slate-700 flex items-center gap-2">
+                          <Building2 className="w-4 h-4 text-blue-500" />
+                          基本情報
+                        </h4>
+                        <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                          自動取得
+                        </span>
+                      </div>
+
+                      {editingCompanyInfo === agent.agentId ? (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">会社名</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.companyName || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, companyName: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="株式会社〇〇"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">代表者</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.representativeName || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, representativeName: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="山田 太郎"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">設立年</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.establishedYear || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, establishedYear: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="2020年"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">従業員数</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.employeeCount || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, employeeCount: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="50名"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">電話番号</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.phone || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, phone: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="03-1234-5678"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-slate-600 mb-1">メールアドレス</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.email || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, email: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="info@example.com"
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs text-slate-600 mb-1">住所</label>
+                              <input
+                                type="text"
+                                value={editCompanyInfo.address || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, address: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                placeholder="東京都渋谷区〇〇1-2-3"
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs text-slate-600 mb-1">事業内容</label>
+                              <textarea
+                                value={editCompanyInfo.businessDescription || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, businessDescription: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                                rows={2}
+                                placeholder="Webサービスの企画・開発・運営"
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs text-slate-600 mb-1">採用情報</label>
+                              <textarea
+                                value={editCompanyInfo.recruitmentInfo || ""}
+                                onChange={(e) => setEditCompanyInfo({ ...editCompanyInfo, recruitmentInfo: e.target.value })}
+                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                                rows={2}
+                                placeholder="積極採用中。詳しくは採用ページをご覧ください。"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2 pt-2">
+                            <button
+                              onClick={() => saveCompanyInfo(agent.agentId, company.companyId)}
+                              disabled={savingCompanyInfo}
+                              className="flex-1 py-2 rounded-xl font-medium text-white text-sm bg-blue-500 hover:bg-blue-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                              {savingCompanyInfo ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Save className="w-4 h-4" />
+                              )}
+                              保存
+                            </button>
+                            <button
+                              onClick={() => setEditingCompanyInfo(null)}
+                              disabled={savingCompanyInfo}
+                              className="px-4 py-2 rounded-xl font-medium text-slate-600 text-sm bg-white border border-slate-200 hover:bg-slate-50 transition-all disabled:opacity-50"
+                            >
+                              キャンセル
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {agent.companyInfo && Object.values(agent.companyInfo).some(v => v) ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                              {agent.companyInfo.companyName && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-slate-500 min-w-[4rem]">会社名:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.companyName}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.representativeName && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-slate-500 min-w-[4rem]">代表者:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.representativeName}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.establishedYear && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-slate-500 min-w-[4rem]">設立年:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.establishedYear}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.employeeCount && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-slate-500 min-w-[4rem]">従業員数:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.employeeCount}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.phone && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-slate-500 min-w-[4rem]">電話番号:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.phone}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.email && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-slate-500 min-w-[4rem]">メール:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.email}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.address && (
+                                <div className="flex items-start gap-2 sm:col-span-2">
+                                  <span className="text-slate-500 min-w-[4rem]">住所:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.address}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.businessDescription && (
+                                <div className="flex items-start gap-2 sm:col-span-2">
+                                  <span className="text-slate-500 min-w-[4rem]">事業内容:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.businessDescription}</span>
+                                </div>
+                              )}
+                              {agent.companyInfo.recruitmentInfo && (
+                                <div className="flex items-start gap-2 sm:col-span-2">
+                                  <span className="text-slate-500 min-w-[4rem]">採用情報:</span>
+                                  <span className="text-slate-700">{agent.companyInfo.recruitmentInfo}</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-slate-500">
+                              サイトから基本情報を取得できませんでした。編集ボタンから手動で追加できます。
+                            </p>
+                          )}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => startEditingCompanyInfo(agent)}
+                              className="flex-1 py-2 rounded-xl font-medium text-blue-600 text-sm border border-blue-200 hover:bg-blue-50 transition-all"
+                            >
+                              基本情報を編集
+                            </button>
+                            <button
+                              onClick={() => recrawlAgent(agent.agentId, company.companyId)}
+                              disabled={recrawlingAgent === agent.agentId}
+                              className="flex items-center justify-center gap-1 px-4 py-2 rounded-xl font-medium text-emerald-600 text-sm border border-emerald-200 hover:bg-emerald-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="サイトを再クロールして基本情報を更新"
+                            >
+                              <RefreshCw className={`w-4 h-4 ${recrawlingAgent === agent.agentId ? "animate-spin" : ""}`} />
+                              {recrawlingAgent === agent.agentId
+                                ? `取得中... ${recrawlProgress?.percent ?? 0}%`
+                                : "再取得"}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
