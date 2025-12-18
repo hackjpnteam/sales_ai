@@ -140,6 +140,7 @@
           widgetStyle: settings.widgetStyle || "bubble",
           avatarUrl: settings.avatarUrl || null,
           iconVideoUrl: settings.iconVideoUrl || null,
+          iconSize: settings.iconSize || "medium",
           widgetBase: widgetBase,
           apiBase: apiBase,
           visitorId: visitorId,
@@ -157,6 +158,7 @@
           widgetStyle: scriptTag.getAttribute("data-widget-style") || "bubble",
           avatarUrl: scriptTag.getAttribute("data-avatar-url") || null,
           iconVideoUrl: scriptTag.getAttribute("data-icon-video-url") || null,
+          iconSize: scriptTag.getAttribute("data-icon-size") || "medium",
           widgetBase: widgetBase,
           apiBase: apiBase,
           visitorId: visitorId,
@@ -174,10 +176,19 @@
     var widgetStyle = config.widgetStyle || "bubble"; // "bubble" or "icon"
     var avatarUrl = config.avatarUrl; // アバター画像URL
     var iconVideoUrl = config.iconVideoUrl; // アイコン動画URL（5秒以内、ループ）
+    var iconSize = config.iconSize || "medium"; // "medium", "large", "xlarge"
     var widgetBase = config.widgetBase;
     var apiBase = config.apiBase;
     var visitorId = config.visitorId;
     var sessionId = config.sessionId;
+
+    // サイズに応じたピクセル値を取得
+    var iconSizeMap = {
+      "medium": 56,
+      "large": 70,
+      "xlarge": 84
+    };
+    var buttonSize = iconSizeMap[iconSize] || 56;
 
     // SPA対応：履歴変更を検知
     var lastUrl = window.location.href;
@@ -337,8 +348,8 @@
       // アイコンスタイル（動画またはアバター画像を表示）
       var avatarSrc = avatarUrl || (apiBase + "/agent-avatar.png");
       Object.assign(button.style, {
-        width: "56px",
-        height: "56px",
+        width: buttonSize + "px",
+        height: buttonSize + "px",
         borderRadius: "50%",
         border: "3px solid #fff",
         backgroundColor: "#fff",
@@ -360,8 +371,8 @@
     } else {
       // バブル（円形背景）- デフォルト
       Object.assign(button.style, {
-        width: "56px",
-        height: "56px",
+        width: buttonSize + "px",
+        height: buttonSize + "px",
         borderRadius: "50%",
         border: "none",
         backgroundColor: themeColor,
@@ -412,6 +423,12 @@
 
     // iframe コンテナ
     const iframeWrapper = document.createElement("div");
+    // iframeの位置をボタンサイズに応じて調整（ボタン下端から14pxの余白）
+    var iframeBottomOffset = buttonSize + 14;
+    var iframePositionStyle = Object.assign({}, positionStyles.iframe);
+    if (iframePositionStyle.bottom) {
+      iframePositionStyle.bottom = iframeBottomOffset + "px";
+    }
     Object.assign(iframeWrapper.style, {
       position: "fixed",
       width: "360px",
@@ -424,7 +441,7 @@
       overflow: "hidden",
       display: "none",
       transition: "all 0.3s ease",
-      ...positionStyles.iframe
+      ...iframePositionStyle
     });
 
     const iframe = document.createElement("iframe");
@@ -482,7 +499,12 @@
       resizeTimeout = setTimeout(function() {
         var newStyles = getPositionStyles(widgetPosition);
         Object.assign(buttonContainer.style, newStyles.button);
-        Object.assign(iframeWrapper.style, newStyles.iframe);
+        // iframeの位置をボタンサイズに応じて調整
+        var newIframeStyle = Object.assign({}, newStyles.iframe);
+        if (newIframeStyle.bottom) {
+          newIframeStyle.bottom = (buttonSize + 14) + "px";
+        }
+        Object.assign(iframeWrapper.style, newIframeStyle);
       }, 100);
     });
 

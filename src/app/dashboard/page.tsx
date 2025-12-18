@@ -75,6 +75,7 @@ type Agent = {
   widgetPosition?: "bottom-right" | "bottom-left" | "bottom-center" | "middle-right" | "middle-left";
   widgetStyle?: "bubble" | "icon";
   iconVideoUrl?: string; // アイコン動画URL
+  iconSize?: "medium" | "large" | "xlarge"; // アイコンサイズ
   // クイックボタン（Pro機能）
   quickButtons?: QuickButton[];
   // プロンプト設定（Pro機能）
@@ -257,6 +258,7 @@ function DashboardContent() {
     widgetStyle?: string;
     avatarUrl?: string;
     iconVideoUrl?: string;
+    iconSize?: "medium" | "large" | "xlarge";
   } | null>(null);
 
   // ウィジェットプレビュー（実際の埋め込み形式）
@@ -1074,6 +1076,51 @@ function DashboardContent() {
       }
     } catch (error) {
       console.error("Style update error:", error);
+      alert("エラーが発生しました");
+    } finally {
+      setUpdatingColor(null);
+    }
+  };
+
+  // アイコンサイズ変更ハンドラー
+  const handleIconSizeChange = async (agentId: string, companyId: string, newSize: "medium" | "large" | "xlarge") => {
+    setUpdatingColor(agentId);
+
+    try {
+      const res = await fetch("/api/agents/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId,
+          iconSize: newSize,
+        }),
+      });
+
+      if (res.ok) {
+        setCompanies((prev) =>
+          prev.map((company) =>
+            company.companyId === companyId
+              ? {
+                  ...company,
+                  agents: company.agents.map((agent) =>
+                    agent.agentId === agentId
+                      ? { ...agent, iconSize: newSize }
+                      : agent
+                  ),
+                }
+              : company
+          )
+        );
+
+        if (createdAgent?.agentId === agentId) {
+          setCreatedAgent({ ...createdAgent, iconSize: newSize });
+        }
+      } else {
+        const data = await res.json();
+        alert(data.error || "サイズの更新に失敗しました");
+      }
+    } catch (error) {
+      console.error("Icon size update error:", error);
       alert("エラーが発生しました");
     } finally {
       setUpdatingColor(null);
@@ -2391,6 +2438,7 @@ function DashboardContent() {
                               widgetStyle: agent.widgetStyle || "bubble",
                               avatarUrl: agent.avatarUrl,
                               iconVideoUrl: agent.iconVideoUrl,
+                              iconSize: agent.iconSize || "medium",
                             });
                             setChatWindowOpen(false);
                             setShowWidget(true);
@@ -2632,6 +2680,57 @@ function DashboardContent() {
                           </p>
                         </div>
                       )}
+
+                      {/* アイコンサイズ設定 */}
+                      <div className="mt-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm font-medium text-slate-700">アイコンサイズ</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleIconSizeChange(agent.agentId, company.companyId, "medium")}
+                            disabled={updatingColor === agent.agentId}
+                            className={`flex-1 px-3 py-2 text-xs rounded-lg border-2 transition-all ${
+                              (!agent.iconSize || agent.iconSize === "medium")
+                                ? "border-rose-500 bg-rose-50 text-rose-700"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                            } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                          >
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="w-7 h-7 rounded-full bg-slate-300"></div>
+                              <span>標準</span>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => handleIconSizeChange(agent.agentId, company.companyId, "large")}
+                            disabled={updatingColor === agent.agentId}
+                            className={`flex-1 px-3 py-2 text-xs rounded-lg border-2 transition-all ${
+                              agent.iconSize === "large"
+                                ? "border-rose-500 bg-rose-50 text-rose-700"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                            } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                          >
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="w-9 h-9 rounded-full bg-slate-300"></div>
+                              <span>大</span>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => handleIconSizeChange(agent.agentId, company.companyId, "xlarge")}
+                            disabled={updatingColor === agent.agentId}
+                            className={`flex-1 px-3 py-2 text-xs rounded-lg border-2 transition-all ${
+                              agent.iconSize === "xlarge"
+                                ? "border-rose-500 bg-rose-50 text-rose-700"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                            } ${updatingColor === agent.agentId ? "opacity-50" : ""}`}
+                          >
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="w-11 h-11 rounded-full bg-slate-300"></div>
+                              <span>特大</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     {/* クイックボタン - Lite以上で利用可能 */}
@@ -3491,7 +3590,13 @@ function DashboardContent() {
               >
                 {createdAgent.widgetStyle === "icon" ? (
                   /* アイコンスタイル（動画またはアバター画像） */
-                  <div className="w-14 h-14 rounded-full overflow-hidden shadow-lg border-2 border-white">
+                  <div
+                    className="rounded-full overflow-hidden shadow-lg border-2 border-white"
+                    style={{
+                      width: createdAgent.iconSize === "xlarge" ? "84px" : createdAgent.iconSize === "large" ? "70px" : "56px",
+                      height: createdAgent.iconSize === "xlarge" ? "84px" : createdAgent.iconSize === "large" ? "70px" : "56px",
+                    }}
+                  >
                     {createdAgent.iconVideoUrl ? (
                       <video
                         src={createdAgent.iconVideoUrl}
@@ -3512,8 +3617,12 @@ function DashboardContent() {
                 ) : (
                   /* バブルスタイル（デフォルト） */
                   <div
-                    className="w-14 h-14 rounded-full flex items-center justify-center shadow-lg"
-                    style={{ backgroundColor: createdAgent.themeColor }}
+                    className="rounded-full flex items-center justify-center shadow-lg"
+                    style={{
+                      backgroundColor: createdAgent.themeColor,
+                      width: createdAgent.iconSize === "xlarge" ? "84px" : createdAgent.iconSize === "large" ? "70px" : "56px",
+                      height: createdAgent.iconSize === "xlarge" ? "84px" : createdAgent.iconSize === "large" ? "70px" : "56px",
+                    }}
                   >
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>

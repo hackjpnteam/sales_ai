@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
       widgetStyle: agent.widgetStyle || "bubble", // "bubble" or "icon"
       avatarUrl: agent.avatarUrl || "/agent-avatar.png",
       iconVideoUrl: agent.iconVideoUrl || null, // アイコン動画URL
+      iconSize: agent.iconSize || "medium", // アイコンサイズ（medium=56px, large=70px, xlarge=84px）
       welcomeMessage: agent.welcomeMessage || "いらっしゃいませ。ご質問があれば何でもお聞きください。",
       voiceEnabled: agent.voiceEnabled !== false,
       companyName: company.name || "",
