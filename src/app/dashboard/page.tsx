@@ -3612,6 +3612,18 @@ function DashboardContent() {
               : "bottom-6 right-6"
           }`}
         >
+          {/* エージェント名ラベル（プレビュー識別用） */}
+          <div
+            className={`absolute text-[10px] text-white bg-slate-700/90 px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap ${
+              createdAgent.widgetPosition === "bottom-left" || createdAgent.widgetPosition === "middle-left"
+                ? "left-0 -top-6"
+                : createdAgent.widgetPosition === "bottom-center"
+                ? "left-1/2 -translate-x-1/2 -top-6"
+                : "right-0 -top-6"
+            }`}
+          >
+            プレビュー: {createdAgent.agentName}
+          </div>
           {!chatWindowOpen ? (
             /* バブル表示（クリックでチャット開く） */
             <div className="relative">

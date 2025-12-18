@@ -777,7 +777,7 @@ function WidgetContent() {
       </div>
 
       {/* Message area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 space-y-4">
         {messages.map((msg) => (
           <div key={msg.id}>
           {/* Link cards message */}
@@ -869,7 +869,7 @@ function WidgetContent() {
 
                 {/* Message bubble */}
                 <div
-                  className={`px-4 py-3 rounded-2xl ${
+                  className={`px-4 py-3 rounded-2xl min-w-0 overflow-hidden ${
                     msg.role === "user"
                       ? "rounded-br-md text-white shadow-lg"
                       : "rounded-bl-md bg-white shadow-sm"
@@ -886,7 +886,7 @@ function WidgetContent() {
                   }
                 >
                   <div
-                    className={`text-sm leading-relaxed ${
+                    className={`text-sm leading-relaxed break-words overflow-hidden ${
                       msg.role === "user"
                         ? ""
                         : "prose prose-sm max-w-none prose-a:underline prose-headings:font-semibold prose-headings:mt-2 prose-headings:mb-1 prose-p:my-1 prose-ul:my-1 prose-li:my-0"
