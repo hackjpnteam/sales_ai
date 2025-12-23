@@ -62,19 +62,44 @@ export async function POST(req: NextRequest) {
     // エージェントのプロンプト設定を取得
     let promptSettings: PromptSettings | undefined;
     let customResponse: string | null = null;
+    let followUpButtons: { id?: string; label: string; query: string; response?: string; followUpButtons?: unknown[] }[] | null = null;
 
     if (agentId) {
       const agentsCol = await getCollection<Agent>("agents");
       // セキュリティ: agentIdとcompanyIdの両方でフィルタリング
       const agent = await agentsCol.findOne({ agentId, companyId });
       if (agent) {
-        // クイックボタンのカスタム返答をチェック
+        // クイックボタンのカスタム返答をチェック（5階層までのフォローアップボタンも含む）
         if (agent.quickButtons && agent.quickButtons.length > 0) {
-          const matchingButton = agent.quickButtons.find(
-            btn => btn.query === message && btn.response && btn.response.trim()
-          );
+          // 再帰的にボタンを検索する関数（最大5階層）
+          const findMatchingButton = (
+            buttons: typeof agent.quickButtons,
+            depth: number = 0
+          ): typeof agent.quickButtons[0] | null => {
+            if (depth > 5) return null; // 5階層まで
+
+            for (const btn of buttons) {
+              // このボタンがマッチするかチェック
+              if (btn.query === message && btn.response && btn.response.trim()) {
+                return btn;
+              }
+              // フォローアップボタンを再帰的に検索
+              if (btn.followUpButtons && btn.followUpButtons.length > 0) {
+                const found = findMatchingButton(btn.followUpButtons, depth + 1);
+                if (found) return found;
+              }
+            }
+            return null;
+          };
+
+          const matchingButton = findMatchingButton(agent.quickButtons);
+
           if (matchingButton) {
             customResponse = matchingButton.response!;
+            // フォローアップボタンがあれば設定
+            if (matchingButton.followUpButtons && matchingButton.followUpButtons.length > 0) {
+              followUpButtons = matchingButton.followUpButtons;
+            }
           }
         }
 
@@ -120,7 +145,7 @@ export async function POST(req: NextRequest) {
       createdAt: new Date(),
     });
 
-    return NextResponse.json({ reply, sessionId, relatedLinks });
+    return NextResponse.json({ reply, sessionId, relatedLinks, followUpButtons });
   } catch (error) {
     console.error("[Chat] Error:", error);
     return NextResponse.json(

@@ -60,9 +60,11 @@ type SharedUser = {
 };
 
 type QuickButton = {
+  id?: string;
   label: string;
   query: string;
   response?: string;
+  followUpButtons?: QuickButton[];
 };
 
 type Agent = {
@@ -220,6 +222,116 @@ const plans = {
   },
 };
 
+// 再帰的なフォローアップボタン編集コンポーネント（5階層まで対応）
+function FollowUpButtonEditor({
+  followUps,
+  path,
+  depth,
+  expandedPaths,
+  onTogglePath,
+  onUpdateField,
+  onAdd,
+  onRemove,
+}: {
+  followUps: QuickButton[];
+  path: number[];
+  depth: number;
+  expandedPaths: Set<string>;
+  onTogglePath: (path: string) => void;
+  onUpdateField: (path: number[], idx: number, field: keyof QuickButton, value: string) => void;
+  onAdd: (path: number[]) => void;
+  onRemove: (path: number[], idx: number) => void;
+}) {
+  const pathKey = path.join("-");
+  const isExpanded = expandedPaths.has(pathKey);
+  const depthColors = [
+    "border-blue-200",
+    "border-green-200",
+    "border-purple-200",
+    "border-orange-200",
+    "border-pink-200",
+  ];
+  const borderColor = depthColors[(depth - 1) % depthColors.length];
+
+  return (
+    <div className="mt-2 pt-2 border-t border-slate-200">
+      <button
+        type="button"
+        onClick={() => onTogglePath(pathKey)}
+        className="flex items-center gap-2 text-xs font-medium text-blue-600 hover:text-blue-700"
+      >
+        <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+        {depth === 1 ? "フォローアップボタン" : `階層${depth}のボタン`} ({followUps.length})
+        {depth > 1 && <span className="text-[10px] text-slate-400">深さ {depth}/5</span>}
+      </button>
+      {isExpanded && (
+        <div className={`mt-2 space-y-2 pl-4 border-l-2 ${borderColor}`}>
+          {followUps.map((followUp, followUpIdx) => (
+            <div key={followUpIdx} className="bg-white rounded-lg p-2 space-y-1.5 border border-slate-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">
+                  {depth === 1 ? `次のボタン${followUpIdx + 1}` : `ボタン${followUpIdx + 1}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onRemove(path, followUpIdx)}
+                  className="text-xs text-red-500 hover:text-red-600"
+                >
+                  削除
+                </button>
+              </div>
+              <input
+                type="text"
+                placeholder="ラベル"
+                value={followUp.label}
+                onChange={(e) => onUpdateField(path, followUpIdx, "label", e.target.value)}
+                className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+              />
+              <input
+                type="text"
+                placeholder="送信メッセージ"
+                value={followUp.query}
+                onChange={(e) => onUpdateField(path, followUpIdx, "query", e.target.value)}
+                className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300"
+              />
+              <textarea
+                placeholder="カスタム返答（任意）"
+                value={followUp.response || ""}
+                onChange={(e) => onUpdateField(path, followUpIdx, "response", e.target.value)}
+                className="w-full border border-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300 resize-none"
+                rows={1}
+              />
+              {/* さらにネストされたフォローアップ（5階層まで） */}
+              {depth < 5 && followUp.label && followUp.query && followUp.response && (
+                <FollowUpButtonEditor
+                  followUps={followUp.followUpButtons || []}
+                  path={[...path, followUpIdx]}
+                  depth={depth + 1}
+                  expandedPaths={expandedPaths}
+                  onTogglePath={onTogglePath}
+                  onUpdateField={onUpdateField}
+                  onAdd={onAdd}
+                  onRemove={onRemove}
+                />
+              )}
+            </div>
+          ))}
+          {followUps.length < 3 && (
+            <button
+              type="button"
+              onClick={() => onAdd(path)}
+              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700"
+            >
+              <Plus className="w-3 h-3" />
+              {depth === 1 ? "フォローアップを追加" : `階層${depth}のボタンを追加`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DashboardContent() {
   const { data: session, status } = useSession();
   const searchParams = useSearchParams();
@@ -345,13 +457,104 @@ function DashboardContent() {
   // クイックボタン編集（Pro機能）
   const [editingQuickButtons, setEditingQuickButtons] = useState<string | null>(null);
   const [quickButtonsForm, setQuickButtonsForm] = useState<QuickButton[]>([
-    { label: "", query: "", response: "" },
-    { label: "", query: "", response: "" },
-    { label: "", query: "", response: "" },
-    { label: "", query: "", response: "" },
-    { label: "", query: "", response: "" },
+    { label: "", query: "", response: "", followUpButtons: [] },
+    { label: "", query: "", response: "", followUpButtons: [] },
+    { label: "", query: "", response: "", followUpButtons: [] },
+    { label: "", query: "", response: "", followUpButtons: [] },
+    { label: "", query: "", response: "", followUpButtons: [] },
   ]);
   const [savingQuickButtons, setSavingQuickButtons] = useState(false);
+  // 展開されているフォローアップのパスを追跡（例: "0-1-2" = ボタン0 → フォローアップ1 → フォローアップ2）
+  const [expandedFollowUpPaths, setExpandedFollowUpPaths] = useState<Set<string>>(new Set());
+
+  // パスの展開/折りたたみをトグル
+  const toggleFollowUpPath = (path: string) => {
+    setExpandedFollowUpPaths(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
+  // ネストされたフォローアップボタンを更新するヘルパー関数
+  const updateNestedFollowUp = (
+    buttons: QuickButton[],
+    path: number[],
+    updater: (followUps: QuickButton[]) => QuickButton[]
+  ): QuickButton[] => {
+    if (path.length === 1) {
+      const newButtons = [...buttons];
+      const idx = path[0];
+      newButtons[idx] = {
+        ...newButtons[idx],
+        followUpButtons: updater(newButtons[idx].followUpButtons || [])
+      };
+      return newButtons;
+    }
+
+    const [first, ...rest] = path;
+    const newButtons = [...buttons];
+    newButtons[first] = {
+      ...newButtons[first],
+      followUpButtons: updateNestedFollowUp(
+        newButtons[first].followUpButtons || [],
+        rest,
+        updater
+      )
+    };
+    return newButtons;
+  };
+
+  // ネストされたフォローアップボタンの特定のフィールドを更新
+  const updateFollowUpField = (
+    path: number[],
+    followUpIdx: number,
+    field: keyof QuickButton,
+    value: string
+  ) => {
+    const fullPath = [...path];
+    setQuickButtonsForm(prev =>
+      updateNestedFollowUp(prev, fullPath, (followUps) => {
+        const newFollowUps = [...followUps];
+        newFollowUps[followUpIdx] = { ...newFollowUps[followUpIdx], [field]: value };
+        return newFollowUps;
+      })
+    );
+  };
+
+  // フォローアップボタンを追加
+  const addFollowUp = (path: number[]) => {
+    setQuickButtonsForm(prev =>
+      updateNestedFollowUp(prev, path, (followUps) => [
+        ...followUps,
+        { label: "", query: "", response: "", followUpButtons: [] }
+      ])
+    );
+  };
+
+  // フォローアップボタンを削除
+  const removeFollowUp = (path: number[], followUpIdx: number) => {
+    setQuickButtonsForm(prev =>
+      updateNestedFollowUp(prev, path, (followUps) => {
+        const newFollowUps = [...followUps];
+        newFollowUps.splice(followUpIdx, 1);
+        return newFollowUps;
+      })
+    );
+  };
+
+  // ネストされたフォローアップを取得
+  const getNestedFollowUps = (buttons: QuickButton[], path: number[]): QuickButton[] => {
+    if (path.length === 0) return buttons;
+    const [first, ...rest] = path;
+    if (!buttons[first]?.followUpButtons) return [];
+    if (rest.length === 0) return buttons[first].followUpButtons || [];
+    return getNestedFollowUps(buttons[first].followUpButtons || [], rest);
+  };
 
   // Maxプラン購入数
   const [maxPlanCount, setMaxPlanCount] = useState(0);
@@ -636,19 +839,20 @@ function DashboardContent() {
   // クイックボタン編集開始
   const startEditingQuickButtons = (agent: Agent) => {
     const defaultButtons: QuickButton[] = [
-      { label: "会社について", query: "会社について教えてください", response: "" },
-      { label: "採用について", query: "採用情報について教えてください", response: "" },
-      { label: "サービスについて", query: "提供しているサービスについて教えてください", response: "" },
+      { label: "会社について", query: "会社について教えてください", response: "", followUpButtons: [] },
+      { label: "採用について", query: "採用情報について教えてください", response: "", followUpButtons: [] },
+      { label: "サービスについて", query: "提供しているサービスについて教えてください", response: "", followUpButtons: [] },
     ];
     const buttons = agent.quickButtons && agent.quickButtons.length > 0
-      ? agent.quickButtons.map(b => ({ ...b, response: b.response || "" }))
+      ? agent.quickButtons.map(b => ({ ...b, response: b.response || "", followUpButtons: b.followUpButtons || [] }))
       : defaultButtons;
     // 5つに揃える
     while (buttons.length < 5) {
-      buttons.push({ label: "", query: "", response: "" });
+      buttons.push({ label: "", query: "", response: "", followUpButtons: [] });
     }
     setQuickButtonsForm(buttons.slice(0, 5));
     setEditingQuickButtons(agent.agentId);
+    setExpandedFollowUpPaths(new Set());
   };
 
   // クイックボタン保存
@@ -2622,6 +2826,19 @@ function DashboardContent() {
                                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 resize-none"
                                 rows={2}
                               />
+                              {/* フォローアップボタン設定（5階層まで対応） */}
+                              {btn.label && btn.query && btn.response && (
+                                <FollowUpButtonEditor
+                                  followUps={btn.followUpButtons || []}
+                                  path={[idx]}
+                                  depth={1}
+                                  expandedPaths={expandedFollowUpPaths}
+                                  onTogglePath={toggleFollowUpPath}
+                                  onUpdateField={updateFollowUpField}
+                                  onAdd={addFollowUp}
+                                  onRemove={removeFollowUp}
+                                />
+                              )}
                             </div>
                           ))}
                           <div className="flex gap-2 pt-2">

@@ -42,9 +42,11 @@ export type SharedUser = {
 
 // クイックボタン
 export type QuickButton = {
+  id?: string;             // ボタンの識別子（フォローアップ用）
   label: string;           // ボタンに表示するテキスト（例: "会社について"）
   query: string;           // クリック時に送信するメッセージ
   response?: string;       // カスタム返答（設定されていればAIを使わずこの返答を表示）
+  followUpButtons?: QuickButton[];  // 返答後に表示するフォローアップボタン
 };
 
 // クロールしたページ情報

@@ -22,6 +22,15 @@ type Message = {
 
 type Language = "ja" | "en" | "zh";
 
+// クイックボタン型
+type QuickButton = {
+  id?: string;
+  label: string;
+  query: string;
+  response?: string;
+  followUpButtons?: QuickButton[];
+};
+
 // Color scheme
 const colors = {
   primary: "#D86672",      // メインレッド
@@ -148,7 +157,8 @@ function WidgetContent() {
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const [trackingSessionId] = useState(() => Math.random().toString(36).substring(2, 15));
   const [trackingEnabled, setTrackingEnabled] = useState(false);
-  const [customQuickButtons, setCustomQuickButtons] = useState<{ label: string; query: string }[] | null>(null);
+  const [customQuickButtons, setCustomQuickButtons] = useState<QuickButton[] | null>(null);
+  const [currentFollowUpButtons, setCurrentFollowUpButtons] = useState<QuickButton[] | null>(null);
   const [isPro, setIsPro] = useState(false);
 
   const t = translations[language];
@@ -395,9 +405,23 @@ function WidgetContent() {
   // メッセージID生成
   const generateId = () => Math.random().toString(36).substring(2, 9);
 
+  // プレーンテキストのURLをマークダウンリンクに変換
+  const autoLinkUrls = (text: string): string => {
+    // 既にマークダウンリンクになっているURLは除外
+    // URLパターン: http(s)://で始まり、スペースや改行まで
+    const urlPattern = /(?<!\]\()(?<!\[)(https?:\/\/[^\s\]）」\)]+)/g;
+    return text.replace(urlPattern, (url) => `[${url}](${url})`);
+  };
+
   // クイックボタンのクリック処理
-  const handleQuickQuestion = (query: string) => {
+  const handleQuickQuestion = (query: string, button?: QuickButton) => {
     setShowQuickButtons(false);
+    // フォローアップボタンがあれば設定
+    if (button?.followUpButtons && button.followUpButtons.length > 0) {
+      setCurrentFollowUpButtons(button.followUpButtons);
+    } else {
+      setCurrentFollowUpButtons(null);
+    }
     sendMessage(query);
   };
 
@@ -454,6 +478,11 @@ function WidgetContent() {
 
       if (data.sessionId) {
         setSessionId(data.sessionId);
+      }
+
+      // APIからフォローアップボタンが返ってきた場合はそれを使用
+      if (data.followUpButtons && data.followUpButtons.length > 0) {
+        setCurrentFollowUpButtons(data.followUpButtons);
       }
 
       const assistantMessage: Message = {
@@ -939,7 +968,7 @@ function WidgetContent() {
                         ),
                       }}
                     >
-                      {msg.content}
+                      {autoLinkUrls(msg.content)}
                     </ReactMarkdown>
                   </div>
                   <p
@@ -963,7 +992,7 @@ function WidgetContent() {
                 return (
                   <button
                     key={`${language}-${i}`}
-                    onClick={() => handleQuickQuestion(q.query)}
+                    onClick={() => handleQuickQuestion(q.query, 'followUpButtons' in q ? q as QuickButton : undefined)}
                     disabled={loading || !isInitialized || !companyId}
                     className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl border text-sm text-slate-700 transition-all shadow-sm disabled:opacity-50"
                     style={{ borderColor: `${themeColor}40` }}
@@ -1028,17 +1057,24 @@ function WidgetContent() {
 
         {/* Quick buttons at the end of conversation (always visible when not loading) */}
         {!loading && !isTranscribing && messages.length > 1 && (
-          <div className="flex flex-wrap gap-2 justify-center mt-4 mb-2" key={`quickbuttons-end-${language}`}>
-            {(customQuickButtons && customQuickButtons.length > 0 ? customQuickButtons : t.quickQuestions).slice(0, 5).map((q, i) => {
+          <div className="flex flex-wrap gap-2 justify-center mt-4 mb-2" key={`quickbuttons-end-${language}-${currentFollowUpButtons ? 'followup' : 'default'}`}>
+            {/* フォローアップボタンがある場合はそれを表示、なければデフォルト */}
+            {(currentFollowUpButtons && currentFollowUpButtons.length > 0
+              ? currentFollowUpButtons
+              : (customQuickButtons && customQuickButtons.length > 0 ? customQuickButtons : t.quickQuestions)
+            ).slice(0, 5).map((q, i) => {
               const icons = [Building2, Users, Briefcase, MessageCircle, HelpCircle];
               const Icon = icons[i % 5];
               return (
                 <button
-                  key={`end-${language}-${i}`}
-                  onClick={() => handleQuickQuestion(q.query)}
+                  key={`end-${language}-${i}-${q.label}`}
+                  onClick={() => handleQuickQuestion(q.query, 'followUpButtons' in q ? q as QuickButton : undefined)}
                   disabled={loading || !isInitialized || !companyId}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl border text-sm text-slate-700 transition-all shadow-sm disabled:opacity-50 hover:shadow-md"
-                  style={{ borderColor: `${themeColor}40` }}
+                  className={`flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl border text-sm text-slate-700 transition-all shadow-sm disabled:opacity-50 hover:shadow-md ${currentFollowUpButtons ? 'ring-2 ring-offset-1' : ''}`}
+                  style={{
+                    borderColor: `${themeColor}40`,
+                    ...(currentFollowUpButtons ? { ringColor: `${themeColor}30` } : {})
+                  }}
                 >
                   <Icon className="w-4 h-4" style={{ color: themeColor }} />
                   {q.label}
