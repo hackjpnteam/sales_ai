@@ -114,6 +114,9 @@ export type CompanyInfo = {
   crawledAt?: string;            // クロール日時
 };
 
+// 対応言語
+export type SupportedLanguage = "ja" | "zh" | "en";
+
 // AIエージェント設定
 export type Agent = {
   _id?: string;
@@ -132,6 +135,8 @@ export type Agent = {
   // ツールチップ設定
   tooltipText?: string; // ツールチップテキスト（デフォルト: "AIアシスタントが対応します"）
   tooltipDuration?: number; // ツールチップ表示時間（秒）（デフォルト: 5秒、0で非表示）
+  // 言語設定
+  languages?: SupportedLanguage[]; // 対応言語（デフォルト: ["ja"]）
   // クイックボタン（Pro機能）
   quickButtons?: QuickButton[];
   // プロンプト設定（Pro機能）

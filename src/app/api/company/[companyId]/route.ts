@@ -38,6 +38,7 @@ export async function GET(
         themeColor: agent.themeColor,
         avatarUrl: agent.avatarUrl || "/agent-avatar.png",
         quickButtons: agent.quickButtons || null,
+        languages: agent.languages || ["ja"],
       } : null,
     });
   } catch (error) {

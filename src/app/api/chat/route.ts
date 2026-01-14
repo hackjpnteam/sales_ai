@@ -29,90 +29,88 @@ export async function POST(req: NextRequest) {
     // sessionId がなければ新規生成
     const sessionId = existingSessionId || uuidv4();
 
-    // 会話ログコレクションを取得
-    const chatLogsCol = await getCollection<ChatLog>("chat_logs");
+    // コレクションを取得
+    const [chatLogsCol, agentsCol] = await Promise.all([
+      getCollection<ChatLog>("chat_logs"),
+      agentId ? getCollection<Agent>("agents") : Promise.resolve(null),
+    ]);
 
-    // 既存のセッションがある場合、直近の会話履歴を取得（最大6件 = 3往復）
-    let conversationHistory: { role: "user" | "assistant"; content: string }[] = [];
-    if (existingSessionId) {
-      const recentLogs = await chatLogsCol
-        .find({ sessionId, companyId })
-        .sort({ createdAt: -1 })
-        .limit(6)
-        .toArray();
+    // 並列で実行: 会話履歴取得、ユーザーメッセージ保存、エージェント設定取得
+    const [recentLogs, , agent] = await Promise.all([
+      // 会話履歴を取得
+      existingSessionId
+        ? chatLogsCol.find({ sessionId, companyId }).sort({ createdAt: -1 }).limit(6).toArray()
+        : Promise.resolve([]),
+      // ユーザーメッセージを保存
+      chatLogsCol.insertOne({
+        companyId,
+        agentId: agentId || "default",
+        sessionId,
+        role: "user",
+        content: message,
+        createdAt: new Date(),
+      }),
+      // エージェント設定を取得
+      agentsCol ? agentsCol.findOne({ agentId, companyId }) : Promise.resolve(null),
+    ]);
 
-      conversationHistory = recentLogs
-        .reverse()
-        .map((log) => ({
-          role: log.role as "user" | "assistant",
-          content: log.content,
-        }));
-    }
-
-    // ユーザーメッセージを保存
-    await chatLogsCol.insertOne({
-      companyId,
-      agentId: agentId || "default",
-      sessionId,
-      role: "user",
-      content: message,
-      createdAt: new Date(),
-    });
+    // 会話履歴を整形
+    const conversationHistory = recentLogs
+      .reverse()
+      .map((log) => ({
+        role: log.role as "user" | "assistant",
+        content: log.content,
+      }));
 
     // エージェントのプロンプト設定を取得
     let promptSettings: PromptSettings | undefined;
     let customResponse: string | null = null;
     let followUpButtons: { id?: string; label: string; query: string; response?: string; followUpButtons?: unknown[] }[] | null = null;
 
-    if (agentId) {
-      const agentsCol = await getCollection<Agent>("agents");
-      // セキュリティ: agentIdとcompanyIdの両方でフィルタリング
-      const agent = await agentsCol.findOne({ agentId, companyId });
-      if (agent) {
-        // クイックボタンのカスタム返答をチェック（5階層までのフォローアップボタンも含む）
-        if (agent.quickButtons && agent.quickButtons.length > 0) {
-          // 再帰的にボタンを検索する関数（最大5階層）
-          const findMatchingButton = (
-            buttons: typeof agent.quickButtons,
-            depth: number = 0
-          ): typeof agent.quickButtons[0] | null => {
-            if (depth > 5) return null; // 5階層まで
+    if (agent) {
+      // クイックボタンのカスタム返答をチェック（5階層までのフォローアップボタンも含む）
+      if (agent.quickButtons && agent.quickButtons.length > 0) {
+        // 再帰的にボタンを検索する関数（最大5階層）
+        const findMatchingButton = (
+          buttons: typeof agent.quickButtons,
+          depth: number = 0
+        ): typeof agent.quickButtons[0] | null => {
+          if (depth > 5) return null; // 5階層まで
 
-            for (const btn of buttons) {
-              // このボタンがマッチするかチェック
-              if (btn.query === message && btn.response && btn.response.trim()) {
-                return btn;
-              }
-              // フォローアップボタンを再帰的に検索
-              if (btn.followUpButtons && btn.followUpButtons.length > 0) {
-                const found = findMatchingButton(btn.followUpButtons, depth + 1);
-                if (found) return found;
-              }
+          for (const btn of buttons) {
+            // このボタンがマッチするかチェック
+            if (btn.query === message && btn.response && btn.response.trim()) {
+              return btn;
             }
-            return null;
-          };
-
-          const matchingButton = findMatchingButton(agent.quickButtons);
-
-          if (matchingButton) {
-            customResponse = matchingButton.response!;
-            // フォローアップボタンがあれば設定
-            if (matchingButton.followUpButtons && matchingButton.followUpButtons.length > 0) {
-              followUpButtons = matchingButton.followUpButtons;
+            // フォローアップボタンを再帰的に検索
+            if (btn.followUpButtons && btn.followUpButtons.length > 0) {
+              const found = findMatchingButton(btn.followUpButtons, depth + 1);
+              if (found) return found;
             }
           }
-        }
+          return null;
+        };
 
-        // プロンプト設定を取得
-        if (agent.systemPrompt || agent.knowledge || agent.style || agent.ngResponses) {
-          promptSettings = {
-            systemPrompt: agent.systemPrompt,
-            knowledge: agent.knowledge,
-            style: agent.style,
-            ngResponses: agent.ngResponses,
-            guardrails: agent.guardrails,
-          };
+        const matchingButton = findMatchingButton(agent.quickButtons);
+
+        if (matchingButton) {
+          customResponse = matchingButton.response!;
+          // フォローアップボタンがあれば設定
+          if (matchingButton.followUpButtons && matchingButton.followUpButtons.length > 0) {
+            followUpButtons = matchingButton.followUpButtons;
+          }
         }
+      }
+
+      // プロンプト設定を取得
+      if (agent.systemPrompt || agent.knowledge || agent.style || agent.ngResponses) {
+        promptSettings = {
+          systemPrompt: agent.systemPrompt,
+          knowledge: agent.knowledge,
+          style: agent.style,
+          ngResponses: agent.ngResponses,
+          guardrails: agent.guardrails,
+        };
       }
     }
 

@@ -61,14 +61,13 @@ export async function PATCH(
       const maxSlots = maxPlanCount * 5; // 1購入につき5枠
 
       // 既にMaxプランのcompanyを数え、使用可能な枠があるか確認
-      // 各Max companyは1枠を使用（将来的にエージェント数で管理も可能）
-      if (currentMaxCompanies >= maxPlanCount) {
+      if (currentMaxCompanies >= maxSlots) {
         return NextResponse.json(
           {
             error: "Max plan slots full",
             code: "MAX_SLOTS_FULL",
             currentMaxCompanies,
-            maxPlanCount
+            maxSlots
           },
           { status: 403 }
         );

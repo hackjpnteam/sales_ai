@@ -10,7 +10,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { agentId, name, welcomeMessage, voiceEnabled, avatarUrl, widgetPosition, widgetStyle, iconSize, tooltipText, tooltipDuration } = await req.json();
+    const { agentId, name, welcomeMessage, voiceEnabled, avatarUrl, widgetPosition, widgetStyle, iconSize, tooltipText, tooltipDuration, languages } = await req.json();
 
     if (!agentId) {
       return NextResponse.json(
@@ -81,6 +81,14 @@ export async function PUT(req: NextRequest) {
       updateFields.tooltipDuration = Number(tooltipDuration);
     }
 
+    if (languages !== undefined && Array.isArray(languages) && languages.length > 0) {
+      // Validate language codes
+      const validLanguages = languages.filter((l: string) => ["ja", "zh", "en"].includes(l));
+      if (validLanguages.length > 0) {
+        updateFields.languages = validLanguages;
+      }
+    }
+
     // Update the agent
     await agentsCol.updateOne(
       { agentId },
@@ -98,6 +106,7 @@ export async function PUT(req: NextRequest) {
       iconSize: updateFields.iconSize,
       tooltipText: updateFields.tooltipText,
       tooltipDuration: updateFields.tooltipDuration,
+      languages: updateFields.languages,
     });
   } catch (error) {
     console.error("Settings update error:", error);

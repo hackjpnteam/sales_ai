@@ -60,6 +60,7 @@ function WidgetLoading() {
 const translations = {
   ja: {
     defaultAgentName: "AI コンシェルジュ",
+    conciergeSuffix: "コンシェルジュ",
     welcomeMessage: "いらっしゃいませ。ご質問があれば何でもお聞きください。",
     subtitle: "24時間対応のAIアシスタント",
     stop: "停止",
@@ -85,6 +86,7 @@ const translations = {
   },
   en: {
     defaultAgentName: "AI Concierge",
+    conciergeSuffix: "Concierge",
     welcomeMessage: "Welcome! Please feel free to ask me anything.",
     subtitle: "24/7 AI Assistant",
     stop: "Stop",
@@ -110,6 +112,7 @@ const translations = {
   },
   zh: {
     defaultAgentName: "AI 礼宾服务",
+    conciergeSuffix: "礼宾服务",
     welcomeMessage: "欢迎光临！如有任何问题，请随时提问。",
     subtitle: "24小时AI助手",
     stop: "停止",
@@ -155,6 +158,7 @@ function WidgetContent() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
+  const [configuredLanguages, setConfiguredLanguages] = useState<Language[]>(["ja"]); // エージェントで設定された言語
   const [trackingSessionId] = useState(() => Math.random().toString(36).substring(2, 15));
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [customQuickButtons, setCustomQuickButtons] = useState<QuickButton[] | null>(null);
@@ -231,7 +235,12 @@ function WidgetContent() {
           if (res.ok) {
             const data = await res.json();
             console.log("[Widget] Company data:", data);
-            if (data.company?.language) {
+            // エージェントの言語設定を読み込む
+            if (data.agent?.languages && Array.isArray(data.agent.languages) && data.agent.languages.length > 0) {
+              setConfiguredLanguages(data.agent.languages);
+              // 最初の言語をデフォルトに設定
+              setLanguage(data.agent.languages[0]);
+            } else if (data.company?.language) {
               setLanguage(data.company.language);
             }
             if (data.agent?.name) {
@@ -745,42 +754,46 @@ function WidgetContent() {
             )}
           </div>
           <h1 className="text-white font-semibold text-base tracking-tight flex-1 truncate">
-            {agentName ? `${agentName} コンシェルジュ` : t.defaultAgentName}
+            {agentName ? `${agentName} ${t.conciergeSuffix}` : t.defaultAgentName}
           </h1>
           <div className="flex items-center gap-1 flex-shrink-0">
-            {/* 言語選択ドロップダウン */}
-            <div className="relative">
-              <button
-                onClick={() => setLanguageMenuOpen(!languageMenuOpen)}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-white/20 text-white text-sm hover:bg-white/30 transition-all"
-              >
-                <span className="text-base">{currentLanguage.flag}</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${languageMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {languageMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setLanguageMenuOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-lg shadow-lg overflow-hidden min-w-[100px]">
-                    {languageOptions.map((option) => (
-                      <button
-                        key={option.code}
-                        onClick={() => {
-                          setLanguage(option.code);
-                          setLanguageMenuOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-100 transition-all ${
-                          language === option.code ? 'bg-slate-50 font-medium' : ''
-                        }`}
-                        style={{ color: colors.text }}
-                      >
-                        <span className="text-base">{option.flag}</span>
-                        <span>{option.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+            {/* 言語選択ドロップダウン（複数言語設定時のみ表示） */}
+            {configuredLanguages.length >= 2 && (
+              <div className="relative">
+                <button
+                  onClick={() => setLanguageMenuOpen(!languageMenuOpen)}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-white/20 text-white text-sm hover:bg-white/30 transition-all"
+                >
+                  <span className="text-base">{currentLanguage.flag}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${languageMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {languageMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setLanguageMenuOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-white rounded-lg shadow-lg overflow-hidden min-w-[100px]">
+                      {languageOptions
+                        .filter((option) => configuredLanguages.includes(option.code))
+                        .map((option) => (
+                          <button
+                            key={option.code}
+                            onClick={() => {
+                              setLanguage(option.code);
+                              setLanguageMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-100 transition-all ${
+                              language === option.code ? 'bg-slate-50 font-medium' : ''
+                            }`}
+                            style={{ color: colors.text }}
+                          >
+                            <span className="text-base">{option.flag}</span>
+                            <span>{option.label}</span>
+                          </button>
+                        ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {/* 再生/停止ボタン */}
             {isPlaying ? (
               <button

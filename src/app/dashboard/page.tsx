@@ -67,6 +67,8 @@ type QuickButton = {
   followUpButtons?: QuickButton[];
 };
 
+type SupportedLanguage = "ja" | "zh" | "en";
+
 type Agent = {
   agentId: string;
   companyId: string;
@@ -82,6 +84,8 @@ type Agent = {
   // ツールチップ設定
   tooltipText?: string;
   tooltipDuration?: number;
+  // 言語設定
+  languages?: SupportedLanguage[];
   // クイックボタン（Pro機能）
   quickButtons?: QuickButton[];
   // プロンプト設定（Pro機能）
@@ -141,6 +145,13 @@ type CustomKnowledge = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+// 言語オプション
+const languageOptions: { code: SupportedLanguage; name: string; flag: string }[] = [
+  { code: "ja", name: "日本語", flag: "🇯🇵" },
+  { code: "zh", name: "中国語", flag: "🇨🇳" },
+  { code: "en", name: "English", flag: "🇺🇸" },
+];
 
 // カラーオプション
 const colorOptions = [
@@ -405,6 +416,7 @@ function DashboardContent() {
   const [editAvatarUrl, setEditAvatarUrl] = useState("/agent-avatar.png");
   const [editTooltipText, setEditTooltipText] = useState("AIアシスタントが対応します");
   const [editTooltipDuration, setEditTooltipDuration] = useState(5);
+  const [editLanguages, setEditLanguages] = useState<SupportedLanguage[]>(["ja"]);
   const [savingSettings, setSavingSettings] = useState(false);
 
   // 基本情報編集
@@ -1140,7 +1152,7 @@ function DashboardContent() {
         if (data.code === "NO_MAX_PLAN") {
           alert("Maxプランを購入していません");
         } else if (data.code === "MAX_SLOTS_FULL") {
-          alert(`Max枠が満杯です（${data.currentMaxCompanies}/${data.maxPlanCount}）`);
+          alert(`Max枠が満杯です（${data.currentMaxCompanies}/${data.maxSlots}）`);
         } else {
           alert("プラン変更に失敗しました");
         }
@@ -1563,6 +1575,7 @@ function DashboardContent() {
     setEditAvatarUrl(agent.avatarUrl || "/agent-avatar.png");
     setEditTooltipText(agent.tooltipText || "AIアシスタントが対応します");
     setEditTooltipDuration(agent.tooltipDuration ?? 5);
+    setEditLanguages(agent.languages || ["ja"]);
     // アバター一覧を取得
     await fetchAvatars(agent.agentId);
   };
@@ -1587,6 +1600,7 @@ function DashboardContent() {
           avatarUrl: editAvatarUrl,
           tooltipText: editTooltipText,
           tooltipDuration: editTooltipDuration,
+          languages: editLanguages,
         }),
       });
 
@@ -1607,6 +1621,7 @@ function DashboardContent() {
                           avatarUrl: editAvatarUrl,
                           tooltipText: editTooltipText,
                           tooltipDuration: editTooltipDuration,
+                          languages: editLanguages,
                         }
                       : agent
                   ),
@@ -1978,8 +1993,8 @@ function DashboardContent() {
                       <span className="font-medium">Max枠:</span>
                       <span className="font-bold">{planCounts.max}</span>
                       <span>/</span>
-                      <span>{maxPlanCount}</span>
-                      <span className="text-amber-500">（残り{maxPlanCount - planCounts.max}枠）</span>
+                      <span>{maxPlanCount * 5}</span>
+                      <span className="text-amber-500">（残り{maxPlanCount * 5 - planCounts.max}枠）</span>
                     </span>
                     <button
                       onClick={() => {
@@ -2477,6 +2492,48 @@ function DashboardContent() {
                             </div>
                           </div>
 
+                          {/* 対応言語設定 */}
+                          <div>
+                            <label className="block text-sm text-slate-600 mb-2">
+                              対応言語（複数選択可）
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                              {languageOptions.map((lang) => {
+                                const isSelected = editLanguages.includes(lang.code);
+                                return (
+                                  <button
+                                    key={lang.code}
+                                    type="button"
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        // 最低1つは選択必須
+                                        if (editLanguages.length > 1) {
+                                          setEditLanguages(editLanguages.filter(l => l !== lang.code));
+                                        }
+                                      } else {
+                                        setEditLanguages([...editLanguages, lang.code]);
+                                      }
+                                    }}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                                      isSelected
+                                        ? "border-rose-400 bg-rose-50 text-rose-700"
+                                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                    }`}
+                                  >
+                                    <span>{lang.flag}</span>
+                                    <span className="text-sm">{lang.name}</span>
+                                    {isSelected && <Check className="w-4 h-4" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-2">
+                              {editLanguages.length >= 2
+                                ? "チャット画面で言語切替が可能になります"
+                                : "複数選択すると言語切替が有効になります"}
+                            </p>
+                          </div>
+
                           {/* 音声モード（Proプラン以上限定） */}
                           <div className="flex items-center justify-between">
                             <label className="text-sm text-slate-600 flex items-center gap-2">
@@ -2548,23 +2605,15 @@ function DashboardContent() {
                                 <MessageCircle className="w-3 h-3" />
                                 チャットを試す
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPreviewAgent({
-                                    companyId: company.companyId,
-                                    agentId: agent.agentId,
-                                    agentName: agent.name,
-                                    themeColor: agent.themeColor,
-                                    widgetPosition: agent.widgetPosition || "bottom-right",
-                                  });
-                                  setShowWidgetPreview(true);
-                                }}
+                              <a
+                                href={`/widget?companyId=${company.companyId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 transition-all border border-slate-200"
                               >
-                                <Globe className="w-3 h-3" />
+                                <ExternalLink className="w-3 h-3" />
                                 ウィジェットで試す
-                              </button>
+                              </a>
                             </div>
                           </div>
 
@@ -3660,22 +3709,15 @@ function DashboardContent() {
                                 <MessageCircle className="w-4 h-4" />
                                 チャットを試す
                               </button>
-                              <button
-                                onClick={() => {
-                                  setPreviewAgent({
-                                    companyId: agent.companyId,
-                                    agentId: agent.agentId,
-                                    agentName: agent.name,
-                                    themeColor: agent.themeColor,
-                                    widgetPosition: agent.widgetPosition || "bottom-right",
-                                  });
-                                  setShowWidgetPreview(true);
-                                }}
+                              <a
+                                href={`/widget?companyId=${agent.companyId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-all border border-slate-200"
                               >
-                                <Globe className="w-4 h-4" />
+                                <ExternalLink className="w-4 h-4" />
                                 ウィジェットで試す
-                              </button>
+                              </a>
                             </div>
                           </div>
 

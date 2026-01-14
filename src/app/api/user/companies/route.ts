@@ -7,6 +7,11 @@ export async function GET() {
   try {
     const session = await auth();
 
+    console.log("[API /user/companies] session.user:", {
+      id: session?.user?.id,
+      email: session?.user?.email,
+    });
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: "Unauthorized" },
@@ -21,7 +26,21 @@ export async function GET() {
     // Get user
     const user = await usersCol.findOne({ userId: session.user.id });
 
+    console.log("[API /user/companies] DB user:", {
+      found: !!user,
+      userId: user?.userId,
+      email: user?.email,
+      companyIdsCount: user?.companyIds?.length || 0,
+    });
+
     if (!user) {
+      // Try to find by email as fallback
+      const userByEmail = await usersCol.findOne({ email: session.user.email?.toLowerCase() });
+      console.log("[API /user/companies] Fallback by email:", {
+        found: !!userByEmail,
+        userId: userByEmail?.userId,
+      });
+
       return NextResponse.json(
         { error: "User not found" },
         { status: 404 }
@@ -34,19 +53,25 @@ export async function GET() {
       .toArray();
 
     // 全エージェントを一括取得（N+1クエリ問題を解決）
+    // 重いフィールドを除外（companyInfo, base64データ）
     const ownedCompanyIds = ownedCompanies.map(c => c.companyId);
-    const ownedAgents = await agentsCol
+    const trimmedOwnedAgents = await agentsCol
       .find({ companyId: { $in: ownedCompanyIds } })
+      .project({
+        companyInfo: 0,
+        avatarUrl: 0,
+        iconVideoUrl: 0,
+      })
       .toArray();
 
     // 会社ごとにエージェントをマッピング
-    const ownedAgentsByCompany = ownedAgents.reduce((acc, agent) => {
+    const ownedAgentsByCompany = trimmedOwnedAgents.reduce((acc, agent) => {
       if (!acc[agent.companyId]) {
         acc[agent.companyId] = [];
       }
       acc[agent.companyId].push(agent);
       return acc;
-    }, {} as Record<string, typeof ownedAgents>);
+    }, {} as Record<string, typeof trimmedOwnedAgents>);
 
     const ownedCompaniesWithAgents = ownedCompanies.map((company) => ({
       ...company,
@@ -56,6 +81,7 @@ export async function GET() {
 
     // 共有されたエージェントを取得（userIdまたはemailで検索）
     // 自分が所有していない会社のエージェントのみ
+    // 重いフィールドを除外
     const sharedAgents = await agentsCol
       .find({
         companyId: { $nin: ownedCompanyIds },
@@ -63,6 +89,11 @@ export async function GET() {
           { "sharedWith.userId": session.user.id },
           { "sharedWith.email": session.user.email },
         ],
+      })
+      .project({
+        companyInfo: 0,
+        avatarUrl: 0,
+        iconVideoUrl: 0,
       })
       .toArray();
 
