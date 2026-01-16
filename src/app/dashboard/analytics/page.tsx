@@ -25,7 +25,6 @@ import {
   FileText,
   Brain,
   ArrowUpRight,
-  ArrowDownRight,
   MessagesSquare,
   ChevronDown,
   ChevronUp,
@@ -301,7 +300,6 @@ function AnalyticsContent() {
     { id: "overview", label: "概要", icon: BarChart3 },
     { id: "pages", label: "ページ別", icon: FileText, proOnly: true },
     { id: "conversations", label: "会話履歴", icon: MessagesSquare, proOnly: true },
-    { id: "chat", label: "チャット×CV", icon: Target, proOnly: true },
     { id: "questions", label: "質問分析", icon: MessageCircle, proOnly: true },
     { id: "ai", label: "AIレポート", icon: Brain, proOnly: true },
   ];
@@ -465,46 +463,6 @@ function AnalyticsContent() {
                 </div>
               </div>
             </div>
-
-            {/* CVR比較 */}
-            {isPro && (
-              <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
-                <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-rose-500" />
-                  チャットの効果
-                </h3>
-                <p className="text-xs text-slate-500 mb-4">
-                  CVR（コンバージョン率）= お問い合わせや購入などの目標達成率。チャットを利用したユーザーと利用していないユーザーでCVRを比較し、チャットの効果を測定します。
-                </p>
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="text-center p-4 bg-green-50 rounded-xl">
-                    <div className="text-sm text-slate-600 mb-1">チャット利用者のCVR</div>
-                    <div className="text-3xl font-bold text-green-600">
-                      {summary.chatCVR ?? "0"}%
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      {summary.chatSessions ?? 0}セッション / {summary.chatConversions ?? 0}CV
-                    </div>
-                  </div>
-                  <div className="text-center p-4 bg-slate-50 rounded-xl">
-                    <div className="text-sm text-slate-600 mb-1">非チャットユーザーのCVR</div>
-                    <div className="text-3xl font-bold text-slate-600">
-                      {summary.nonChatCVR ?? "0"}%
-                    </div>
-                  </div>
-                </div>
-                {parseFloat(summary.chatCVR ?? "0") > parseFloat(summary.nonChatCVR ?? "0") && (
-                  <div className="mt-4 p-3 bg-green-50 rounded-lg text-center">
-                    <span className="text-green-700 font-medium flex items-center justify-center gap-1">
-                      <ArrowUpRight className="w-4 h-4" />
-                      チャット利用者は非利用者より{" "}
-                      {(parseFloat(summary.chatCVR ?? "0") / Math.max(parseFloat(summary.nonChatCVR ?? "0"), 0.01)).toFixed(1)}倍
-                      CVしやすい！
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* 日別グラフ */}
             {isPro && dailyData.length > 0 && (
@@ -781,107 +739,6 @@ function AnalyticsContent() {
                   >
                     次へ
                   </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* チャット×CVタブ */}
-        {activeTab === "chat" && isPro && summary && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
-              <h3 className="font-bold text-slate-800 mb-4">チャットとコンバージョンの関係</h3>
-              <div className="grid md:grid-cols-2 gap-8">
-                {/* チャット利用者 */}
-                <div className="relative">
-                  <div className="text-center mb-4">
-                    <div className="text-lg font-medium text-slate-700">チャット利用者</div>
-                  </div>
-                  <div className="bg-gradient-to-b from-green-50 to-green-100 rounded-2xl p-6">
-                    <div className="text-center">
-                      <div className="text-5xl font-bold text-green-600 mb-2">
-                        {summary.chatCVR ?? "0"}%
-                      </div>
-                      <div className="text-sm text-slate-600">コンバージョン率</div>
-                      <div className="mt-4 pt-4 border-t border-green-200">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <div className="text-slate-500">セッション</div>
-                            <div className="font-bold text-slate-800">{summary.chatSessions ?? 0}</div>
-                          </div>
-                          <div>
-                            <div className="text-slate-500">CV数</div>
-                            <div className="font-bold text-slate-800">{summary.chatConversions ?? 0}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 非チャット利用者 */}
-                <div className="relative">
-                  <div className="text-center mb-4">
-                    <div className="text-lg font-medium text-slate-700">非チャット利用者</div>
-                  </div>
-                  <div className="bg-gradient-to-b from-slate-50 to-slate-100 rounded-2xl p-6">
-                    <div className="text-center">
-                      <div className="text-5xl font-bold text-slate-600 mb-2">
-                        {summary.nonChatCVR ?? "0"}%
-                      </div>
-                      <div className="text-sm text-slate-600">コンバージョン率</div>
-                      <div className="mt-4 pt-4 border-t border-slate-200">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <div className="text-slate-500">セッション</div>
-                            <div className="font-bold text-slate-800">
-                              {(summary.sessions ?? 0) - (summary.chatSessions ?? 0)}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-slate-500">CV数</div>
-                            <div className="font-bold text-slate-800">
-                              {(summary.conversions ?? 0) - (summary.chatConversions ?? 0)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* インサイト */}
-              {parseFloat(summary.chatCVR ?? "0") > parseFloat(summary.nonChatCVR ?? "0") ? (
-                <div className="mt-6 p-4 bg-green-50 rounded-xl border border-green-200">
-                  <div className="flex items-start gap-3">
-                    <ArrowUpRight className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-medium text-green-800">チャットがCVを後押ししています</div>
-                      <div className="text-sm text-green-700 mt-1">
-                        チャットを利用したユーザーは、非利用者と比較して
-                        <strong>
-                          {(parseFloat(summary.chatCVR ?? "0") / Math.max(parseFloat(summary.nonChatCVR ?? "0"), 0.01)).toFixed(1)}倍
-                        </strong>
-                        高い確率でコンバージョンしています。
-                        チャットの露出を増やすことで、さらなるCV増加が期待できます。
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-6 p-4 bg-amber-50 rounded-xl border border-amber-200">
-                  <div className="flex items-start gap-3">
-                    <ArrowDownRight className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <div className="font-medium text-amber-800">チャット体験の改善余地があります</div>
-                      <div className="text-sm text-amber-700 mt-1">
-                        チャット利用者のCVRが低めです。チャットの回答品質やユーザー導線を見直すことで、
-                        コンバージョン率の改善が期待できます。
-                      </div>
-                    </div>
-                  </div>
                 </div>
               )}
             </div>
