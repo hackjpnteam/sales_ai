@@ -24,11 +24,15 @@ export async function GET(
     const agentsCol = await getCollection<Agent>("agents");
     const agent = await agentsCol.findOne({ companyId });
 
+    // Pro/Maxプランかどうか
+    const isProPlan = company.plan === "pro" || company.plan === "max";
+
     return NextResponse.json({
       company: {
         companyId: company.companyId,
         name: company.name,
         language: company.language,
+        plan: company.plan,
       },
       agent: agent ? {
         agentId: agent.agentId,
@@ -39,6 +43,8 @@ export async function GET(
         avatarUrl: agent.avatarUrl || "/agent-avatar.png",
         quickButtons: agent.quickButtons || null,
         languages: agent.languages || ["ja"],
+        // コンバージョン設定（Pro以上のみ）
+        conversionSettings: isProPlan ? (agent.conversionSettings || null) : null,
       } : null,
     });
   } catch (error) {

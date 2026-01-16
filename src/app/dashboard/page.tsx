@@ -46,6 +46,7 @@ import {
   RefreshCw,
   Video,
   Play,
+  Target,
 } from "lucide-react";
 import Link from "next/link";
 import type { CompanyInfo } from "@/lib/types";
@@ -3378,13 +3379,22 @@ function DashboardContent() {
                             PRO
                           </span>
                         </h4>
-                        <Link
-                          href={`/dashboard/analytics?companyId=${company.companyId}&companyName=${encodeURIComponent(company.name)}`}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 transition-all"
-                        >
-                          詳細分析を見る
-                          <ExternalLink className="w-4 h-4" />
-                        </Link>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            href={`/dashboard/analytics?companyId=${company.companyId}&companyName=${encodeURIComponent(company.name)}`}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 transition-all"
+                          >
+                            詳細分析を見る
+                            <ExternalLink className="w-4 h-4" />
+                          </Link>
+                          <Link
+                            href={`/dashboard/conversions?companyId=${company.companyId}&companyName=${encodeURIComponent(company.name)}&agentId=${agent?.agentId || ""}`}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 transition-all"
+                          >
+                            <Target className="w-4 h-4" />
+                            CV設定
+                          </Link>
+                        </div>
                       </div>
                     )}
 

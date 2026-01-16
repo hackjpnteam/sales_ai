@@ -145,6 +145,8 @@ function WidgetContent() {
   const [language, setLanguage] = useState<Language>("ja");
   const [agentName, setAgentName] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [analyticsSessionId, setAnalyticsSessionId] = useState<string | null>(null);
+  const [pageUrl, setPageUrl] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [themeColor, setThemeColor] = useState(colors.primary);
   const [avatarUrl, setAvatarUrl] = useState("/agent-avatar.png");
@@ -212,7 +214,32 @@ function WidgetContent() {
       const cid = searchParams.get("companyId") || "";
       const paramAgentName = searchParams.get("agentName") || "";
       const paramThemeColor = searchParams.get("themeColor") || "";
+      const paramSessionId = searchParams.get("sessionId") || "";
+      const paramPageUrl = searchParams.get("pageUrl") || "";
       console.log("[Widget] Company ID from params:", cid, "Agent Name:", paramAgentName, "Theme Color:", paramThemeColor);
+
+      // アナリティクスのsessionIdとpageUrlを設定
+      if (paramSessionId) {
+        setAnalyticsSessionId(paramSessionId);
+        setSessionId(paramSessionId); // チャットAPIでも同じsessionIdを使用
+      }
+      // pageUrlを設定（URLパラメータ → referrer → 親ウィンドウURLの順で取得を試みる）
+      if (paramPageUrl) {
+        setPageUrl(paramPageUrl);
+      } else if (document.referrer) {
+        setPageUrl(document.referrer);
+      } else {
+        try {
+          // iframe内から親ウィンドウのURLを取得（同一オリジンの場合のみ）
+          const parentUrl = window.parent !== window ? window.parent.location.href : null;
+          if (parentUrl) {
+            setPageUrl(parentUrl);
+          }
+        } catch {
+          // クロスオリジンの場合は取得できない
+          console.log("[Widget] Cannot access parent URL due to cross-origin policy");
+        }
+      }
 
       if (!cid) {
         console.error("[Widget] ERROR: No companyId provided in URL params!");
@@ -468,6 +495,10 @@ function WidgetContent() {
     sendTrackingData("conversation", { message: messageText, role: "user" });
 
     try {
+      // デバイスタイプを取得
+      const device = getDeviceInfo();
+      const deviceTypeValue = device.type === "desktop" ? "pc" : device.type;
+
       console.log("[Widget] Sending chat with agentId:", agentId);
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -478,6 +509,8 @@ function WidgetContent() {
           message: messageText,
           sessionId,
           language,
+          pageUrl: pageUrl || undefined,
+          deviceType: deviceTypeValue,
         }),
       });
 

@@ -149,7 +149,33 @@ export type Agent = {
   sharedWith?: SharedUser[];
   // クロール時に抽出した基本情報
   companyInfo?: CompanyInfo;
+  // コンバージョン設定（Pro機能）
+  conversionSettings?: ConversionSettings;
   createdAt: Date;
+};
+
+// コンバージョン設定
+export type ConversionSettings = {
+  enabled: boolean;
+  triggers: ConversionTrigger[];
+};
+
+export type ConversionTrigger = {
+  id: string;
+  name: string;                    // コンバージョン名（例: "お問い合わせ完了"）
+  type: "url" | "click" | "form";  // トリガータイプ
+  // URL型: 特定のURLパターンにマッチしたらCV
+  urlPattern?: string;             // URLパターン（部分一致、例: "/thanks", "/complete"）
+  urlMatchType?: "contains" | "exact" | "regex";  // マッチ方法
+  // クリック型: 特定の要素がクリックされたらCV
+  clickSelector?: string;          // CSSセレクタ（例: "#submit-btn", ".contact-btn"）
+  clickText?: string;              // ボタンのテキスト（例: "送信する"）- セレクタより優先
+  // フォーム型: 特定のフォームが送信されたらCV
+  formSelector?: string;           // フォームのCSSセレクタ
+  formButtonText?: string;         // 送信ボタンのテキスト - セレクタより優先
+  // 共通
+  value?: number;                  // コンバージョン価値（オプション）
+  enabled: boolean;
 };
 
 // 招待
@@ -187,6 +213,9 @@ export type ChatLog = {
   sessionId: string;
   role: "user" | "assistant";
   content: string;
+  // ページ情報（会話履歴で表示用）
+  pageUrl?: string;
+  deviceType?: "pc" | "mobile" | "tablet";
   createdAt: Date;
 };
 

@@ -71,6 +71,8 @@
 
   // [Analytics] コンバージョントラッキング用グローバル関数
   var _trackingContext = null;
+  var _conversionTracked = {}; // 重複トラッキング防止
+
   window.saleschatTrackConversion = function(conversionType, conversionValue) {
     if (_trackingContext) {
       sendTrackingEvent(
@@ -87,16 +89,282 @@
     }
   };
 
+  // [Analytics] HTMLをCSSセレクタに変換
+  function htmlToSelector(input) {
+    if (!input || typeof input !== 'string') return input;
+
+    // HTMLっぽくなければそのまま返す
+    var trimmed = input.trim();
+    if (!trimmed.startsWith('<')) return input;
+
+    try {
+      // 簡易パース: <tag attr="value" attr2="value2">
+      var match = trimmed.match(/^<(\w+)([^>]*)>/);
+      if (!match) return input;
+
+      var tagName = match[1].toLowerCase();
+      var attrsStr = match[2];
+      var selector = tagName;
+
+      // 属性を抽出
+      var attrRegex = /(\w+)=["']([^"']*)["']/g;
+      var attrMatch;
+      while ((attrMatch = attrRegex.exec(attrsStr)) !== null) {
+        var attrName = attrMatch[1];
+        var attrValue = attrMatch[2];
+        // id属性は#で、class属性は.で、その他は[]で
+        if (attrName === 'id') {
+          selector += '#' + attrValue;
+        } else if (attrName === 'class') {
+          selector += '.' + attrValue.split(/\s+/).join('.');
+        } else {
+          selector += '[' + attrName + '="' + attrValue + '"]';
+        }
+      }
+
+      return selector;
+    } catch (e) {
+      return input;
+    }
+  }
+
+  // [Analytics] 自動コンバージョントラッキングの設定
+  function setupConversionTracking(settings, trackingContext) {
+    console.log('[CV Debug] setupConversionTracking called with:', settings);
+    if (!settings || !settings.triggers || !Array.isArray(settings.triggers)) {
+      console.log('[CV Debug] No settings or triggers found');
+      return;
+    }
+
+    var enabledTriggers = settings.triggers.filter(function(t) { return t.enabled; });
+    console.log('[CV Debug] Enabled triggers:', enabledTriggers.length);
+    if (enabledTriggers.length === 0) return;
+
+    // URLベースのコンバージョンチェック
+    function checkUrlConversion() {
+      var currentUrl = window.location.href;
+      var currentPath = window.location.pathname + window.location.search;
+
+      enabledTriggers.forEach(function(trigger) {
+        if (trigger.type !== 'url' || !trigger.urlPattern) return;
+        if (_conversionTracked[trigger.id]) return; // 既にトラッキング済み
+
+        var matched = false;
+        var matchType = trigger.urlMatchType || 'contains';
+        var pattern = trigger.urlPattern;
+
+        if (matchType === 'contains') {
+          matched = currentUrl.indexOf(pattern) !== -1 || currentPath.indexOf(pattern) !== -1;
+        } else if (matchType === 'exact') {
+          matched = currentUrl === pattern || currentPath === pattern;
+        } else if (matchType === 'regex') {
+          try {
+            var regex = new RegExp(pattern);
+            matched = regex.test(currentUrl) || regex.test(currentPath);
+          } catch (e) {
+            console.warn('[AI Widget] Invalid regex pattern:', pattern);
+          }
+        }
+
+        if (matched) {
+          _conversionTracked[trigger.id] = true;
+          sendTrackingEvent(
+            {
+              type: 'conversion',
+              conversionType: trigger.name || 'url_match',
+              conversionValue: trigger.value,
+              triggerId: trigger.id
+            },
+            trackingContext.apiBase,
+            trackingContext.companyId,
+            trackingContext.visitorId,
+            trackingContext.sessionId
+          );
+        }
+      });
+    }
+
+    // クリックベースのコンバージョン
+    function setupClickTracking() {
+      var clickTriggers = enabledTriggers.filter(function(t) {
+        return t.type === 'click' && (t.clickSelector || t.clickText);
+      });
+      console.log('[CV Debug] Click triggers:', clickTriggers.length, clickTriggers);
+      if (clickTriggers.length === 0) return;
+
+      document.addEventListener('click', function(e) {
+        console.log('[CV Debug] Click detected on:', e.target.tagName, e.target.textContent?.slice(0, 50));
+        clickTriggers.forEach(function(trigger) {
+          if (_conversionTracked[trigger.id]) {
+            console.log('[CV Debug] Already tracked:', trigger.id);
+            return;
+          }
+
+          try {
+            var targetEl = e.target;
+            var matched = false;
+
+            // テキストマッチング（優先）
+            if (trigger.clickText) {
+              console.log('[CV Debug] Checking text match for:', trigger.clickText);
+              while (targetEl && targetEl !== document) {
+                var elText = (targetEl.textContent || targetEl.innerText || '').trim();
+                var buttonText = trigger.clickText.trim();
+                console.log('[CV Debug] Element:', targetEl.tagName, 'Text:', elText.slice(0, 50));
+                // 部分一致でマッチ
+                if (elText.indexOf(buttonText) !== -1 || buttonText.indexOf(elText) !== -1) {
+                  // ボタン/リンク/inputのみ対象
+                  var tagName = targetEl.tagName && targetEl.tagName.toLowerCase();
+                  console.log('[CV Debug] Text matched! Tag:', tagName);
+                  if (tagName === 'button' || tagName === 'a' || tagName === 'input') {
+                    matched = true;
+                    console.log('[CV Debug] ✅ MATCH FOUND!');
+                    break;
+                  }
+                }
+                targetEl = targetEl.parentElement;
+              }
+            }
+            // セレクタマッチング
+            else if (trigger.clickSelector) {
+              var selector = htmlToSelector(trigger.clickSelector);
+              console.log('[CV Debug] Checking selector:', selector);
+              while (targetEl && targetEl !== document) {
+                if (targetEl.matches && targetEl.matches(selector)) {
+                  matched = true;
+                  console.log('[CV Debug] ✅ Selector MATCH FOUND!');
+                  break;
+                }
+                targetEl = targetEl.parentElement;
+              }
+            }
+
+            if (matched) {
+              console.log('[CV Debug] 🎯 Sending conversion event for:', trigger.name);
+              _conversionTracked[trigger.id] = true;
+              sendTrackingEvent(
+                {
+                  type: 'conversion',
+                  conversionType: trigger.name || 'click',
+                  conversionValue: trigger.value,
+                  triggerId: trigger.id
+                },
+                trackingContext.apiBase,
+                trackingContext.companyId,
+                trackingContext.visitorId,
+                trackingContext.sessionId
+              );
+            }
+          } catch (err) {
+            console.error('[CV Debug] Error:', err);
+          }
+        });
+      }, true);
+    }
+
+    // フォーム送信ベースのコンバージョン
+    function setupFormTracking() {
+      var formTriggers = enabledTriggers.filter(function(t) { return t.type === 'form'; });
+      if (formTriggers.length === 0) return;
+
+      document.addEventListener('submit', function(e) {
+        formTriggers.forEach(function(trigger) {
+          if (_conversionTracked[trigger.id]) return;
+
+          var formEl = e.target;
+          var shouldTrack = false;
+
+          // 送信ボタンのテキストでマッチ（優先）
+          if (trigger.formButtonText) {
+            var submitButtons = formEl.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])');
+            for (var i = 0; i < submitButtons.length; i++) {
+              var btn = submitButtons[i];
+              var btnText = (btn.textContent || btn.innerText || btn.value || '').trim();
+              if (btnText.indexOf(trigger.formButtonText.trim()) !== -1) {
+                shouldTrack = true;
+                break;
+              }
+            }
+          }
+          // セレクタでマッチ
+          else if (trigger.formSelector) {
+            try {
+              var selector = htmlToSelector(trigger.formSelector);
+              shouldTrack = formEl.matches && formEl.matches(selector);
+            } catch (e) {
+              // セレクタエラーは無視
+            }
+          }
+          // 指定なし = すべてのフォーム
+          else {
+            shouldTrack = true;
+          }
+
+          if (shouldTrack) {
+            _conversionTracked[trigger.id] = true;
+            sendTrackingEvent(
+              {
+                type: 'conversion',
+                conversionType: trigger.name || 'form_submit',
+                conversionValue: trigger.value,
+                triggerId: trigger.id
+              },
+              trackingContext.apiBase,
+              trackingContext.companyId,
+              trackingContext.visitorId,
+              trackingContext.sessionId
+            );
+          }
+        });
+      }, true);
+    }
+
+    // 初期チェック（ページ読み込み時）
+    checkUrlConversion();
+
+    // SPAのURL変更を監視
+    if (typeof window.history !== 'undefined' && window.history.pushState) {
+      var originalPushState = window.history.pushState;
+      window.history.pushState = function() {
+        originalPushState.apply(window.history, arguments);
+        setTimeout(checkUrlConversion, 100);
+      };
+
+      window.addEventListener('popstate', function() {
+        setTimeout(checkUrlConversion, 100);
+      });
+    }
+
+    // クリック・フォーム監視を設定
+    setupClickTracking();
+    setupFormTracking();
+  }
+
   // data-company-id を使う実装
   function init() {
     var scriptTag = document.currentScript;
-    if (!scriptTag) return;
+
+    // Next.js等で動的読み込みされた場合、currentScriptがnullになる
+    // その場合はdata-company-id属性を持つscriptタグを探す
+    if (!scriptTag) {
+      var scripts = document.querySelectorAll('script[data-company-id]');
+      if (scripts.length > 0) {
+        scriptTag = scripts[scripts.length - 1]; // 最後のものを使用
+      }
+    }
+
+    if (!scriptTag) {
+      console.warn('[AI Widget] Script tag not found');
+      return;
+    }
 
     var companyId = scriptTag.getAttribute("data-company-id");
     var widgetBase =
       scriptTag.getAttribute("data-widget-base-url") ||
       window.NEXT_PUBLIC_WIDGET_BASE_URL ||
       "";
+
+    console.log('[AI Widget] Init - companyId:', companyId, 'widgetBase:', widgetBase);
 
     if (!companyId || !widgetBase) {
       console.warn("[AI Widget] companyId or widgetBase is missing.");
@@ -128,9 +396,18 @@
     sendTrackingEvent({ type: 'page_view' }, apiBase, companyId, visitorId, sessionId);
 
     // サーバーから設定を取得して初期化
+    console.log('[AI Widget] Fetching settings from:', apiBase + '/api/widget/settings?companyId=' + companyId);
     fetch(apiBase + '/api/widget/settings?companyId=' + encodeURIComponent(companyId))
       .then(function(res) { return res.json(); })
       .then(function(settings) {
+        console.log('[AI Widget] Settings received, conversionSettings:', settings.conversionSettings);
+        // コンバージョントラッキングを設定（Pro機能）
+        if (settings.conversionSettings && settings.conversionSettings.enabled) {
+          setupConversionTracking(settings.conversionSettings, _trackingContext);
+        } else {
+          console.log('[AI Widget] Conversion tracking not enabled or no settings');
+        }
+
         // 設定を取得成功
         initWidget({
           companyId: companyId,
@@ -477,7 +754,13 @@
       "&agentName=" +
       encodeURIComponent(agentName) +
       "&themeColor=" +
-      encodeURIComponent(themeColor);
+      encodeURIComponent(themeColor) +
+      "&sessionId=" +
+      encodeURIComponent(sessionId) +
+      "&visitorId=" +
+      encodeURIComponent(visitorId) +
+      "&pageUrl=" +
+      encodeURIComponent(window.location.href);
     iframe.style.border = "none";
     iframe.style.width = "100%";
     iframe.style.height = "100%";

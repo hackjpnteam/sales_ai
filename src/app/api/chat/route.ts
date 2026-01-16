@@ -17,7 +17,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { companyId, agentId, message, sessionId: existingSessionId, language } = await req.json();
+    const { companyId, agentId, message, sessionId: existingSessionId, language, pageUrl, deviceType } = await req.json();
+
+    console.log("[Chat] Received - pageUrl:", pageUrl, "deviceType:", deviceType);
 
     if (!companyId || !message) {
       return NextResponse.json(
@@ -48,6 +50,8 @@ export async function POST(req: NextRequest) {
         sessionId,
         role: "user",
         content: message,
+        pageUrl: pageUrl || undefined,
+        deviceType: deviceType || undefined,
         createdAt: new Date(),
       }),
       // エージェント設定を取得
@@ -140,6 +144,8 @@ export async function POST(req: NextRequest) {
       sessionId,
       role: "assistant",
       content: reply,
+      pageUrl: pageUrl || undefined,
+      deviceType: deviceType || undefined,
       createdAt: new Date(),
     });
 

@@ -36,6 +36,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // Pro/Maxプランかどうか
+    const isProPlan = company.plan === "pro" || company.plan === "max";
+
     // ウィジェットに必要な設定を返す
     const settings = {
       agentName: agent.name || "AIコンシェルジュ",
@@ -51,6 +54,10 @@ export async function GET(req: NextRequest) {
       voiceEnabled: agent.voiceEnabled !== false,
       companyName: company.name || "",
       quickButtons: agent.quickButtons || [], // クイックボタン（カスタム返答含む）
+      // コンバージョン設定（Pro以上のみ）
+      conversionSettings: isProPlan && agent.conversionSettings?.enabled
+        ? agent.conversionSettings
+        : null,
     };
 
     // CORSヘッダーを追加（外部サイトからのアクセスを許可）

@@ -468,6 +468,7 @@ export default function Home() {
             </div>
 
             <button
+              id="create-agent-btn"
               type="submit"
               disabled={loading}
               className="w-full py-4 rounded-xl font-semibold text-white shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
@@ -1743,9 +1744,13 @@ export default function Home() {
         {/* デモ用 hackjpn AI ウィジェット - widget.jsで表示 */}
         {!result && (
           <Script
-            src="https://saleschat.me/widget.js"
+            src={process.env.NODE_ENV === "development"
+              ? "/widget.js"
+              : "https://saleschat.me/widget.js"}
             data-company-id="e2c748ed-b950-4774-8591-06836b2e430c"
-            data-widget-base-url="https://saleschat.me/widget"
+            data-widget-base-url={process.env.NODE_ENV === "development"
+              ? "/widget"
+              : "https://saleschat.me/widget"}
             strategy="lazyOnload"
           />
         )}
