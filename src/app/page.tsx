@@ -1751,7 +1751,7 @@ export default function Home() {
             data-widget-base-url={process.env.NODE_ENV === "development"
               ? "/widget"
               : "https://saleschat.me/widget"}
-            strategy="lazyOnload"
+            strategy="afterInteractive"
           />
         )}
       </>
