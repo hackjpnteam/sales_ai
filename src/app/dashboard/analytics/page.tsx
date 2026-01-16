@@ -29,7 +29,21 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
+  Info,
 } from "lucide-react";
+
+// ツールチップコンポーネント
+function Tooltip({ text }: { text: string }) {
+  return (
+    <div className="group relative inline-flex ml-1">
+      <Info className="w-3.5 h-3.5 text-slate-400 cursor-help" />
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50 shadow-lg">
+        {text}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+      </div>
+    </div>
+  );
+}
 
 type SummaryData = {
   totalPV: number;
@@ -427,6 +441,7 @@ function AnalyticsContent() {
                 <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
                   <Eye className="w-4 h-4" />
                   総PV
+                  <Tooltip text="ページが表示された回数の合計" />
                 </div>
                 <div className="text-2xl font-bold text-slate-800">
                   {(summary.totalPV ?? 0).toLocaleString()}
@@ -436,6 +451,7 @@ function AnalyticsContent() {
                 <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
                   <Users className="w-4 h-4" />
                   セッション
+                  <Tooltip text="ユニークな訪問数（30分以内の再訪問は同一セッション）" />
                 </div>
                 <div className="text-2xl font-bold text-slate-800">
                   {(summary.sessions ?? 0).toLocaleString()}
@@ -445,18 +461,21 @@ function AnalyticsContent() {
                 <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
                   <MessageCircle className="w-4 h-4" />
                   チャット開始
+                  <Tooltip text="チャットウィジェットを開いた回数" />
                 </div>
                 <div className="text-2xl font-bold text-slate-800">
                   {(summary.chatOpens ?? 0).toLocaleString()}
                 </div>
-                <div className="text-xs text-slate-500 mt-1">
+                <div className="flex items-center text-xs text-slate-500 mt-1">
                   開始率 {summary.chatOpenRate ?? "0"}%
+                  <Tooltip text="セッション数に対するチャット開始数の割合" />
                 </div>
               </div>
               <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
                 <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
                   <Target className="w-4 h-4" />
                   コンバージョン
+                  <Tooltip text="設定したコンバージョン目標が達成された回数" />
                 </div>
                 <div className="text-2xl font-bold text-slate-800">
                   {(summary.conversions ?? 0).toLocaleString()}
@@ -539,9 +558,24 @@ function AnalyticsContent() {
                 <thead className="bg-slate-50 text-sm text-slate-600">
                   <tr>
                     <th className="text-left px-4 py-3">ページ</th>
-                    <th className="text-right px-4 py-3">PV</th>
-                    <th className="text-right px-4 py-3">チャット開始率</th>
-                    <th className="text-right px-4 py-3">チャットCVR</th>
+                    <th className="text-right px-4 py-3">
+                      <span className="inline-flex items-center">
+                        PV
+                        <Tooltip text="そのページが表示された回数" />
+                      </span>
+                    </th>
+                    <th className="text-right px-4 py-3">
+                      <span className="inline-flex items-center">
+                        チャット開始率
+                        <Tooltip text="そのページでチャットを開いた割合" />
+                      </span>
+                    </th>
+                    <th className="text-right px-4 py-3">
+                      <span className="inline-flex items-center">
+                        チャットCVR
+                        <Tooltip text="チャット利用者のコンバージョン率" />
+                      </span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
