@@ -2197,6 +2197,48 @@ function DashboardContent() {
                 {/* 展開コンテンツ */}
                 {isExpanded && agent && (
                   <div className="px-6 pb-6 space-y-6 border-t border-slate-100 pt-6">
+                    {/* プレビュー（最上部に配置） */}
+                    <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
+                      <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
+                        <ExternalLink className="w-4 h-4 text-blue-500" />
+                        チャットをテスト
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => {
+                            setCreatedAgent({
+                              companyId: company.companyId,
+                              agentId: agent.agentId,
+                              agentName: agent.name,
+                              themeColor: agent.themeColor,
+                              widgetPosition: agent.widgetPosition || "bottom-right",
+                              widgetStyle: agent.widgetStyle || "bubble",
+                              avatarUrl: agent.avatarUrl,
+                              iconVideoUrl: agent.iconVideoUrl,
+                              iconSize: agent.iconSize || "medium",
+                              tooltipText: agent.tooltipText || "AIアシスタントが対応します",
+                              tooltipDuration: agent.tooltipDuration ?? 5,
+                            });
+                            setChatWindowOpen(false);
+                            setShowWidget(true);
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          チャットを試す
+                        </button>
+                        <a
+                          href={`/widget?companyId=${company.companyId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-all border border-slate-200"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          ウィジェットで試す
+                        </a>
+                      </div>
+                    </div>
+
                     {/* 基本設定（無料） */}
                     <div className="bg-slate-50 rounded-xl p-4">
                       <div className="flex items-center justify-between mb-4">
@@ -2459,6 +2501,9 @@ function DashboardContent() {
                               rows={3}
                               placeholder="いらっしゃいませ。ご質問があれば何でもお聞きください。"
                             />
+                            <p className="text-xs text-slate-500 mt-1">
+                              チャット画面を開いた時に最初に表示されるメッセージです
+                            </p>
                           </div>
 
                           {/* ツールチップ設定 */}
@@ -2536,42 +2581,47 @@ function DashboardContent() {
                           </div>
 
                           {/* 音声モード（Proプラン以上限定） */}
-                          <div className="flex items-center justify-between">
-                            <label className="text-sm text-slate-600 flex items-center gap-2">
-                              {(company.plan === "pro" || company.plan === "max") ? (
-                                editVoiceEnabled ? (
-                                  <Volume2 className="w-4 h-4 text-rose-500" />
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <label className="text-sm text-slate-600 flex items-center gap-2">
+                                {(company.plan === "pro" || company.plan === "max") ? (
+                                  editVoiceEnabled ? (
+                                    <Volume2 className="w-4 h-4 text-rose-500" />
+                                  ) : (
+                                    <VolumeX className="w-4 h-4 text-slate-400" />
+                                  )
                                 ) : (
-                                  <VolumeX className="w-4 h-4 text-slate-400" />
-                                )
-                              ) : (
-                                <Lock className="w-4 h-4 text-slate-400" />
-                              )}
-                              音声モード
-                              {(company.plan !== "pro" && company.plan !== "max") && (
-                                <span className="text-xs bg-gradient-to-r from-amber-400 to-orange-500 text-white px-2 py-0.5 rounded-full">
-                                  Pro
-                                </span>
-                              )}
-                            </label>
-                            {(company.plan === "pro" || company.plan === "max") ? (
-                              <button
-                                onClick={() => setEditVoiceEnabled(!editVoiceEnabled)}
-                                className={`relative w-12 h-6 rounded-full transition-all ${
-                                  editVoiceEnabled ? "bg-rose-500" : "bg-slate-300"
-                                }`}
-                              >
-                                <div
-                                  className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
-                                    editVoiceEnabled ? "left-7" : "left-1"
+                                  <Lock className="w-4 h-4 text-slate-400" />
+                                )}
+                                音声モード
+                                {(company.plan !== "pro" && company.plan !== "max") && (
+                                  <span className="text-xs bg-gradient-to-r from-amber-400 to-orange-500 text-white px-2 py-0.5 rounded-full">
+                                    Pro
+                                  </span>
+                                )}
+                              </label>
+                              {(company.plan === "pro" || company.plan === "max") ? (
+                                <button
+                                  onClick={() => setEditVoiceEnabled(!editVoiceEnabled)}
+                                  className={`relative w-12 h-6 rounded-full transition-all ${
+                                    editVoiceEnabled ? "bg-rose-500" : "bg-slate-300"
                                   }`}
-                                />
-                              </button>
-                            ) : (
-                              <div className="relative w-12 h-6 rounded-full bg-slate-200 cursor-not-allowed">
-                                <div className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full" />
-                              </div>
-                            )}
+                                >
+                                  <div
+                                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                                      editVoiceEnabled ? "left-7" : "left-1"
+                                    }`}
+                                  />
+                                </button>
+                              ) : (
+                                <div className="relative w-12 h-6 rounded-full bg-slate-200 cursor-not-allowed">
+                                  <div className="absolute top-1 left-1 w-4 h-4 bg-white rounded-full" />
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1">
+                              AIの回答を音声で読み上げます。マイクボタンで音声入力も可能になります
+                            </p>
                           </div>
 
                           {/* プレビュー */}
@@ -2822,12 +2872,15 @@ function DashboardContent() {
                           <span className="text-xs text-slate-500">アバター画像</span>
                         </button>
                       </div>
+                      <p className="text-xs text-slate-500 mt-2">
+                        サイト右下に表示されるチャットボタンのデザインを選択できます
+                      </p>
 
                     </div>
 
                     {/* クイックボタン - Lite以上で利用可能 */}
                     <div>
-                      <div className="flex items-center gap-2 mb-3">
+                      <div className="flex items-center gap-2 mb-1">
                         <h4 className="font-medium text-slate-700 flex items-center gap-2">
                           <MessageSquare className="w-4 h-4 text-rose-500" />
                           クイックボタン
@@ -2836,6 +2889,9 @@ function DashboardContent() {
                           無料
                         </span>
                       </div>
+                      <p className="text-xs text-slate-500 mb-3">
+                        チャット画面に表示されるショートカットボタンです。よくある質問を簡単にワンタップで送信できます
+                      </p>
                       {editingQuickButtons === agent.agentId ? (
                         <div className="space-y-3">
                           {quickButtonsForm.map((btn, idx) => (
@@ -2843,39 +2899,48 @@ function DashboardContent() {
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-medium text-slate-500 w-16">ボタン{idx + 1}</span>
                               </div>
-                              <input
-                                type="text"
-                                placeholder="ラベル（例: 会社について）"
-                                value={btn.label}
-                                onChange={(e) => {
-                                  const newButtons = [...quickButtonsForm];
-                                  newButtons[idx].label = e.target.value;
-                                  setQuickButtonsForm(newButtons);
-                                }}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
-                              />
-                              <input
-                                type="text"
-                                placeholder="送信メッセージ（例: 会社について教えてください）"
-                                value={btn.query}
-                                onChange={(e) => {
-                                  const newButtons = [...quickButtonsForm];
-                                  newButtons[idx].query = e.target.value;
-                                  setQuickButtonsForm(newButtons);
-                                }}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
-                              />
-                              <textarea
-                                placeholder="カスタム返答（任意：空欄ならAIが回答）"
-                                value={btn.response || ""}
-                                onChange={(e) => {
-                                  const newButtons = [...quickButtonsForm];
-                                  newButtons[idx].response = e.target.value;
-                                  setQuickButtonsForm(newButtons);
-                                }}
-                                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 resize-none"
-                                rows={2}
-                              />
+                              <div>
+                                <input
+                                  type="text"
+                                  placeholder="ラベル（例: 会社について）"
+                                  value={btn.label}
+                                  onChange={(e) => {
+                                    const newButtons = [...quickButtonsForm];
+                                    newButtons[idx].label = e.target.value;
+                                    setQuickButtonsForm(newButtons);
+                                  }}
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+                                />
+                                <p className="text-xs text-slate-400 mt-1">ボタンに表示されるテキスト</p>
+                              </div>
+                              <div>
+                                <input
+                                  type="text"
+                                  placeholder="送信メッセージ（例: 会社について教えてください）"
+                                  value={btn.query}
+                                  onChange={(e) => {
+                                    const newButtons = [...quickButtonsForm];
+                                    newButtons[idx].query = e.target.value;
+                                    setQuickButtonsForm(newButtons);
+                                  }}
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+                                />
+                                <p className="text-xs text-slate-400 mt-1">ボタンを押した時にAIに送信されるメッセージ</p>
+                              </div>
+                              <div>
+                                <textarea
+                                  placeholder="カスタム返答（任意：空欄ならAIが回答）"
+                                  value={btn.response || ""}
+                                  onChange={(e) => {
+                                    const newButtons = [...quickButtonsForm];
+                                    newButtons[idx].response = e.target.value;
+                                    setQuickButtonsForm(newButtons);
+                                  }}
+                                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 resize-none"
+                                  rows={2}
+                                />
+                                <p className="text-xs text-slate-400 mt-1">固定の返答を設定（空欄ならAIが自動回答）</p>
+                              </div>
                               {/* フォローアップボタン設定（5階層まで対応） */}
                               {btn.label && btn.query && btn.response && (
                                 <FollowUpButtonEditor
@@ -2945,7 +3010,7 @@ function DashboardContent() {
 
                     {/* 基本情報（自動取得） */}
                     <div className="bg-blue-50 rounded-xl p-4">
-                      <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center justify-between mb-1">
                         <h4 className="font-medium text-slate-700 flex items-center gap-2">
                           <Building2 className="w-4 h-4 text-blue-500" />
                           基本情報
@@ -2954,6 +3019,9 @@ function DashboardContent() {
                           自動取得
                         </span>
                       </div>
+                      <p className="text-xs text-slate-500 mb-3">
+                        ホームページから自動取得された情報です。AIがユーザーに回答する際に参照します
+                      </p>
 
                       {editingCompanyInfo === agent.agentId ? (
                         <div className="space-y-3">
@@ -3579,6 +3647,48 @@ function DashboardContent() {
                             このエージェントはあなたと共有されています。編集が可能です。
                           </p>
 
+                          {/* プレビュー */}
+                          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
+                            <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
+                              <ExternalLink className="w-4 h-4 text-blue-500" />
+                              プレビュー
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => {
+                                  setCreatedAgent({
+                                    companyId: company.companyId,
+                                    agentId: agent.agentId,
+                                    agentName: agent.name,
+                                    themeColor: agent.themeColor,
+                                    widgetPosition: agent.widgetPosition || "bottom-right",
+                                    widgetStyle: agent.widgetStyle || "bubble",
+                                    avatarUrl: agent.avatarUrl,
+                                    iconVideoUrl: agent.iconVideoUrl,
+                                    iconSize: agent.iconSize || "medium",
+                                    tooltipText: agent.tooltipText || "AIアシスタントが対応します",
+                                    tooltipDuration: agent.tooltipDuration ?? 5,
+                                  });
+                                  setChatWindowOpen(false);
+                                  setShowWidget(true);
+                                }}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                              >
+                                <MessageCircle className="w-4 h-4" />
+                                チャットを試す
+                              </button>
+                              <a
+                                href={`/widget?companyId=${agent.companyId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-all border border-slate-200"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                                ウィジェットで試す
+                              </a>
+                            </div>
+                          </div>
+
                           {/* 基本設定 */}
                           <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-4">
                             <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
@@ -3687,48 +3797,6 @@ function DashboardContent() {
                                 </button>
                               </div>
                             )}
-                          </div>
-
-                          {/* プレビュー */}
-                          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
-                            <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
-                              <ExternalLink className="w-4 h-4 text-blue-500" />
-                              プレビュー
-                            </h4>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                onClick={() => {
-                                  setCreatedAgent({
-                                    companyId: company.companyId,
-                                    agentId: agent.agentId,
-                                    agentName: agent.name,
-                                    themeColor: agent.themeColor,
-                                    widgetPosition: agent.widgetPosition || "bottom-right",
-                                    widgetStyle: agent.widgetStyle || "bubble",
-                                    avatarUrl: agent.avatarUrl,
-                                    iconVideoUrl: agent.iconVideoUrl,
-                                    iconSize: agent.iconSize || "medium",
-                                    tooltipText: agent.tooltipText || "AIアシスタントが対応します",
-                                    tooltipDuration: agent.tooltipDuration ?? 5,
-                                  });
-                                  setChatWindowOpen(false);
-                                  setShowWidget(true);
-                                }}
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 transition-all"
-                              >
-                                <MessageCircle className="w-4 h-4" />
-                                チャットを試す
-                              </button>
-                              <a
-                                href={`/widget?companyId=${agent.companyId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-all border border-slate-200"
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                                ウィジェットで試す
-                              </a>
-                            </div>
                           </div>
 
                           {/* カラー選択 */}
@@ -4323,6 +4391,9 @@ function DashboardContent() {
                   placeholder="例: 営業時間について"
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
                 />
+                <p className="text-xs text-slate-500 mt-1">
+                  管理しやすい名前を付けてください
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -4335,9 +4406,14 @@ function DashboardContent() {
                   rows={8}
                   className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm resize-y min-h-[150px] focus:outline-none focus:ring-2 focus:ring-purple-300"
                 />
-                <p className={`text-xs mt-1 ${knowledgeContent.length > 3000 ? "text-red-500" : "text-slate-400"}`}>
-                  {knowledgeContent.length} / 3000文字
-                </p>
+                <div className="flex justify-between items-center mt-1">
+                  <p className="text-xs text-slate-500">
+                    AIが質問に回答する際に参照する情報です
+                  </p>
+                  <p className={`text-xs ${knowledgeContent.length > 3000 ? "text-red-500" : "text-slate-400"}`}>
+                    {knowledgeContent.length} / 3000文字
+                  </p>
+                </div>
               </div>
             </div>
 
