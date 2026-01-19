@@ -273,7 +273,7 @@ function ConversionsContent() {
 
         {/* トリガー一覧 */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-1">
             <h2 className="font-bold text-slate-800">トリガー設定</h2>
             <button
               onClick={addTrigger}
@@ -283,6 +283,9 @@ function ConversionsContent() {
               追加
             </button>
           </div>
+          <p className="text-xs text-slate-500 mb-4">
+            コンバージョンとしてカウントする条件を設定します。チャット利用後のユーザー行動を追跡できます
+          </p>
 
           {settings.triggers.length === 0 ? (
             <div className="text-center py-8 text-slate-500">
@@ -340,6 +343,9 @@ function ConversionsContent() {
                         placeholder="例: お問い合わせ完了"
                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
                       />
+                      <p className="text-xs text-slate-500 mt-1">
+                        分析画面で表示される名前です
+                      </p>
                     </div>
 
                     {/* トリガータイプ */}
@@ -371,6 +377,9 @@ function ConversionsContent() {
                           </button>
                         ))}
                       </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        URL: 特定ページへのアクセス / クリック: ボタンのクリック / フォーム: フォーム送信
+                      </p>
                     </div>
 
                     {/* URL型の設定 */}
@@ -554,6 +563,9 @@ function ConversionsContent() {
                         placeholder="例: 10000"
                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
                       />
+                      <p className="text-xs text-slate-500 mt-1">
+                        1件あたりの売上金額を設定すると、ROIの計算に使用されます
+                      </p>
                     </div>
                   </div>
                 </div>
