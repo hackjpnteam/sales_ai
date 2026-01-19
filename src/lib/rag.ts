@@ -43,7 +43,7 @@ export async function findRelevantChunks(companyId: string, question: string): P
     const pipeline = [
       {
         $vectorSearch: {
-          index: "documents_vector_index",
+          index: "documents_vectoe_index",
           path: "embeddings",
           queryVector: queryVector,
           numCandidates: 100,
