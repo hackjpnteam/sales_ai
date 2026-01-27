@@ -960,6 +960,58 @@ export default function Home() {
               </div>
             </div>
 
+            {/* 未ログインユーザー向け登録促進バナー */}
+            {status !== "authenticated" && (
+              <div className="w-full bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl sm:rounded-3xl shadow-lg border border-amber-200 p-5 sm:p-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-amber-200/30 to-orange-200/30 rounded-full -translate-y-1/2 translate-x-1/2" />
+                <div className="relative">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg">
+                          <Rocket className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-slate-800 text-lg">エージェントをパワーアップ!</h3>
+                          <p className="text-amber-700 text-sm">無料会員登録でさらに便利に</p>
+                        </div>
+                      </div>
+                      <ul className="mt-3 space-y-1.5 text-sm text-slate-600">
+                        <li className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                          <span>エージェントを永続的に保存（登録しないと1週間で削除）</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                          <span>プロンプトやナレッジをカスタマイズ</span>
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                          <span>アクセス解析で顧客の質問傾向を把握</span>
+                        </li>
+                      </ul>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-shrink-0">
+                      <Link
+                        href="/register"
+                        className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg hover:shadow-xl"
+                      >
+                        <UserPlus className="w-5 h-5" />
+                        無料で会員登録
+                      </Link>
+                      <Link
+                        href="/login"
+                        className="flex items-center justify-center gap-2 px-6 py-2 text-amber-700 hover:text-amber-800 text-sm font-medium"
+                      >
+                        <LogIn className="w-4 h-4" />
+                        すでにアカウントをお持ちの方
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 取得した基本情報（詳細版） */}
             {result.companyInfo && Object.values(result.companyInfo).some(v => v) && (
               <div className="w-full bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8">
