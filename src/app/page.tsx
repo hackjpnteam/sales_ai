@@ -993,7 +993,7 @@ export default function Home() {
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-shrink-0">
                       <Link
-                        href="/register"
+                        href="/signup"
                         className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all shadow-lg hover:shadow-xl"
                       >
                         <UserPlus className="w-5 h-5" />
