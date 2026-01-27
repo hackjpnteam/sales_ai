@@ -979,7 +979,7 @@ export default function Home() {
                       <ul className="mt-3 space-y-1.5 text-sm text-slate-600">
                         <li className="flex items-center gap-2">
                           <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                          <span>エージェントを永続的に保存（登録しないと1週間で削除）</span>
+                          <span>エージェントを永続的に保存</span>
                         </li>
                         <li className="flex items-center gap-2">
                           <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
