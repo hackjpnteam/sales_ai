@@ -29,9 +29,14 @@ export async function GET(req: NextRequest) {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-    // 無料プランの会社を取得
+    // 無料プランの会社を取得（plan が "free" または未設定）
     const freeCompanies = await companiesCol
-      .find({ plan: { $in: ["free", null, undefined] } })
+      .find({
+        $or: [
+          { plan: "free" },
+          { plan: { $exists: false } },
+        ],
+      } as Parameters<typeof companiesCol.find>[0])
       .toArray();
 
     const freeCompanyIds = freeCompanies.map((c) => c.companyId);
