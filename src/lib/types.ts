@@ -26,6 +26,7 @@ export type Company = {
   planStartedAt?: Date;
   planEndedAt?: Date;
   createdAt: Date;
+  updatedAt?: Date;
   // ゲストユーザー作成時の情報
   creatorIp?: string;
   creatorUserAgent?: string;
@@ -45,7 +46,9 @@ export type QuickButton = {
   id?: string;             // ボタンの識別子（フォローアップ用）
   label: string;           // ボタンに表示するテキスト（例: "会社について"）
   query: string;           // クリック時に送信するメッセージ
+  responseType?: "text" | "prompt";  // 返答タイプ（text: 固定テキスト, prompt: AIプロンプト）
   response?: string;       // カスタム返答（設定されていればAIを使わずこの返答を表示）
+  responsePrompt?: string; // AIへの追加プロンプト（responseType: "prompt"の場合に使用）
   followUpButtons?: QuickButton[];  // 返答後に表示するフォローアップボタン
 };
 

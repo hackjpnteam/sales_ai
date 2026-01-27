@@ -69,7 +69,8 @@ export async function POST(req: NextRequest) {
     // エージェントのプロンプト設定を取得
     let promptSettings: PromptSettings | undefined;
     let customResponse: string | null = null;
-    let followUpButtons: { id?: string; label: string; query: string; response?: string; followUpButtons?: unknown[] }[] | null = null;
+    let customPromptAddition: string | null = null; // プロンプトモード用の追加プロンプト
+    let followUpButtons: { id?: string; label: string; query: string; response?: string; responseType?: string; responsePrompt?: string; followUpButtons?: unknown[] }[] | null = null;
 
     if (agent) {
       // クイックボタンのカスタム返答をチェック（5階層までのフォローアップボタンも含む）
@@ -82,8 +83,8 @@ export async function POST(req: NextRequest) {
           if (depth > 5) return null; // 5階層まで
 
           for (const btn of buttons) {
-            // このボタンがマッチするかチェック
-            if (btn.query === message && btn.response && btn.response.trim()) {
+            // このボタンがマッチするかチェック（queryのみでマッチ）
+            if (btn.query === message) {
               return btn;
             }
             // フォローアップボタンを再帰的に検索
@@ -98,7 +99,14 @@ export async function POST(req: NextRequest) {
         const matchingButton = findMatchingButton(agent.quickButtons);
 
         if (matchingButton) {
-          customResponse = matchingButton.response!;
+          // responseTypeによって処理を分岐
+          if (matchingButton.responseType === "prompt" && matchingButton.responsePrompt?.trim()) {
+            // プロンプトモード: AIに追加プロンプトを渡す
+            customPromptAddition = matchingButton.responsePrompt;
+          } else if (matchingButton.response && matchingButton.response.trim()) {
+            // テキストモード（デフォルト）: 固定テキストを返す
+            customResponse = matchingButton.response;
+          }
           // フォローアップボタンがあれば設定
           if (matchingButton.followUpButtons && matchingButton.followUpButtons.length > 0) {
             followUpButtons = matchingButton.followUpButtons;
@@ -107,7 +115,7 @@ export async function POST(req: NextRequest) {
       }
 
       // プロンプト設定を取得
-      if (agent.systemPrompt || agent.knowledge || agent.style || agent.ngResponses) {
+      if (agent.systemPrompt || agent.knowledge || agent.style || agent.ngResponses || customPromptAddition) {
         promptSettings = {
           systemPrompt: agent.systemPrompt,
           knowledge: agent.knowledge,
@@ -115,6 +123,11 @@ export async function POST(req: NextRequest) {
           ngResponses: agent.ngResponses,
           guardrails: agent.guardrails,
         };
+        // プロンプトモードの追加プロンプトを付加
+        if (customPromptAddition) {
+          promptSettings.systemPrompt = (promptSettings.systemPrompt || "") +
+            "\n\n【この質問への回答指示】\n" + customPromptAddition;
+        }
       }
     }
 

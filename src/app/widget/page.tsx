@@ -4,6 +4,8 @@ import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Mic, MicOff, Send, Volume2, VolumeX, Sparkles, Building2, Users, Briefcase, MessageCircle, HelpCircle, ExternalLink, Play, Square, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
+import rehypeRaw from "rehype-raw";
 
 type RelatedLink = {
   url: string;
@@ -69,7 +71,8 @@ const translations = {
     voiceOff: "音声OFF",
     recognizingVoice: "音声を認識中...",
     recording: "録音中... タップで停止",
-    inputPlaceholder: "メッセージを入力... (Shift+Enterで送信)",
+    inputPlaceholder: "メッセージを入力...",
+    sendHint: "Shift+Enter で送信",
     poweredBy: "Powered by AI • 24時間対応",
     voiceResponseOn: "🎧 音声応答ON",
     voiceResponseOff: "🔇 音声応答OFF",
@@ -95,7 +98,8 @@ const translations = {
     voiceOff: "Voice OFF",
     recognizingVoice: "Recognizing voice...",
     recording: "Recording... Tap to stop",
-    inputPlaceholder: "Type a message... (Shift+Enter to send)",
+    inputPlaceholder: "Type a message...",
+    sendHint: "Shift+Enter to send",
     poweredBy: "Powered by AI • Available 24/7",
     voiceResponseOn: "🎧 Voice Response ON",
     voiceResponseOff: "🔇 Voice Response OFF",
@@ -121,7 +125,8 @@ const translations = {
     voiceOff: "语音关",
     recognizingVoice: "正在识别语音...",
     recording: "录音中... 点击停止",
-    inputPlaceholder: "输入消息... (Shift+Enter发送)",
+    inputPlaceholder: "输入消息...",
+    sendHint: "Shift+Enter 发送",
     poweredBy: "由AI驱动 • 24小时服务",
     voiceResponseOn: "🎧 语音回复开",
     voiceResponseOff: "🔇 语音回复关",
@@ -373,6 +378,7 @@ function WidgetContent() {
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const trackingInitialized = useRef(false);
 
   // トラッキング関数
@@ -433,16 +439,32 @@ function WidgetContent() {
     initTracking();
   }, [trackingEnabled, companyId]);
 
-  // 自動スクロール
+  // 自動スクロール（無効化）
+  // ユーザーが読んでいる途中で勝手にスクロールしないように
+  // useEffect(() => {
+  //   messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // }, [messages]);
+
+  // テキストエリア自動リサイズ
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const textarea = textareaRef.current;
+    if (textarea) {
+      // 高さをリセットしてからscrollHeightを取得
+      textarea.style.height = "auto";
+      const newHeight = Math.min(textarea.scrollHeight, 200); // 最大200px
+      textarea.style.height = `${newHeight}px`;
+    }
+  }, [input]);
 
   // メッセージID生成
   const generateId = () => Math.random().toString(36).substring(2, 9);
 
   // プレーンテキストのURLをマークダウンリンクに変換
   const autoLinkUrls = (text: string): string => {
+    // HTMLタグが含まれている場合はそのまま返す（HTMLリンクを壊さない）
+    if (/<[a-z][\s\S]*>/i.test(text)) {
+      return text;
+    }
     // 既にマークダウンリンクになっているURLは除外
     // URLパターン: http(s)://で始まり、スペースや改行まで
     const urlPattern = /(?<!\]\()(?<!\[)(https?:\/\/[^\s\]）」\)]+)/g;
@@ -452,12 +474,11 @@ function WidgetContent() {
   // クイックボタンのクリック処理
   const handleQuickQuestion = (query: string, button?: QuickButton) => {
     setShowQuickButtons(false);
-    // フォローアップボタンがあれば設定
+    // フォローアップボタンがあれば設定、なければ現在のボタンを維持
     if (button?.followUpButtons && button.followUpButtons.length > 0) {
       setCurrentFollowUpButtons(button.followUpButtons);
-    } else {
-      setCurrentFollowUpButtons(null);
     }
+    // L2が指定されていない場合はcurrentFollowUpButtonsを維持（nullにしない）
     sendMessage(query);
   };
 
@@ -641,9 +662,11 @@ function WidgetContent() {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          sampleRate: 16000,
+          autoGainControl: true,
         }
       });
+
+      console.log("[Recording] Got audio stream, tracks:", stream.getAudioTracks().length);
 
       // サポートされているMIMEタイプを確認
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -652,12 +675,19 @@ function WidgetContent() {
         ? "audio/webm"
         : "audio/mp4";
 
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      // 高品質で録音
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType,
+        audioBitsPerSecond: 128000 // 128kbps
+      });
+
+      console.log("[Recording] MediaRecorder created with mimeType:", mimeType);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       recordingStartTimeRef.current = Date.now();
 
       mediaRecorder.ondataavailable = (event) => {
+        console.log("[Recording] Data available:", event.data.size, "bytes");
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
@@ -667,21 +697,20 @@ function WidgetContent() {
         stream.getTracks().forEach((track) => track.stop());
 
         const recordingDuration = Date.now() - recordingStartTimeRef.current;
-        console.log("[Recording] Duration:", recordingDuration, "ms");
+        console.log("[Recording] Stopped. Duration:", recordingDuration, "ms, Chunks:", audioChunksRef.current.length);
 
-        // 録音が短すぎる場合（500ms未満）はスキップ
-        if (recordingDuration < 500) {
-          console.log("[Recording] Too short, skipping transcription");
+        // チャンクがない場合はスキップ
+        if (audioChunksRef.current.length === 0) {
+          console.log("[Recording] No audio chunks collected");
           return;
         }
 
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        console.log("[Recording] Blob size:", audioBlob.size, "bytes, mimeType:", mimeType);
+        console.log("[Recording] Blob size:", audioBlob.size, "bytes, mimeType:", mimeType, "duration:", recordingDuration, "ms");
 
-        // 音声データが小さすぎる場合はスキップ
+        // 音声データが小さすぎる場合は警告を出すが送信は試みる
         if (audioBlob.size < 1000) {
-          console.log("[Recording] Blob too small, skipping transcription");
-          return;
+          console.log("[Recording] Warning: Blob very small:", audioBlob.size, "bytes");
         }
 
         // MIMEタイプに応じた拡張子を決定
@@ -717,9 +746,10 @@ function WidgetContent() {
         }
       };
 
-      // 100msごとにデータを取得（より細かくデータを収集）
-      mediaRecorder.start(100);
+      // 録音開始（1秒ごとにデータを収集）
+      mediaRecorder.start(1000);
       setIsRecording(true);
+      console.log("[Recording] Started with mimeType:", mimeType, "timeslice: 1000ms");
     } catch (error) {
       console.error("Failed to start recording:", error);
       alert(t.micPermissionError);
@@ -729,6 +759,7 @@ function WidgetContent() {
   // 録音停止
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      console.log("[Recording] Stopping, state:", mediaRecorderRef.current.state);
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
@@ -1003,12 +1034,24 @@ function WidgetContent() {
                     style={{ color: msg.role === "user" ? "#FFFFFF" : colors.text }}
                   >
                     <ReactMarkdown
+                      remarkPlugins={[remarkBreaks]}
+                      rehypePlugins={[rehypeRaw]}
                       components={{
-                        a: ({ href, children }) => (
-                          <a href={href} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: msg.role === "user" ? "#FFFFFF" : colors.primary }}>
-                            {children}
-                          </a>
-                        ),
+                        a: ({ href, children }) => {
+                          // tel: や mailto: リンクは新しいタブで開かない
+                          const isSpecialLink = href?.startsWith("tel:") || href?.startsWith("mailto:") || href?.startsWith("#");
+                          return (
+                            <a
+                              href={href}
+                              target={isSpecialLink ? undefined : "_blank"}
+                              rel={isSpecialLink ? undefined : "noopener noreferrer"}
+                              className="underline hover:opacity-80 transition-opacity"
+                              style={{ color: msg.role === "user" ? "#FFFFFF" : colors.primary }}
+                            >
+                              {children}
+                            </a>
+                          );
+                        },
                         p: ({ children }) => (
                           <p style={{ color: msg.role === "user" ? "#FFFFFF" : colors.text }}>{children}</p>
                         ),
@@ -1151,8 +1194,8 @@ function WidgetContent() {
           )}
 
           <div className="flex items-end gap-2">
-            {/* Mic button（Proプラン限定） */}
-            {isPro && (
+            {/* Mic button（Proプラン限定 & 音声モードON時のみ） */}
+            {isPro && voiceEnabled && (
               <button
                 onMouseDown={startRecording}
                 onMouseUp={stopRecording}
@@ -1187,20 +1230,21 @@ function WidgetContent() {
             {/* Text input */}
             <div className="flex-1 relative">
               <textarea
+                ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder={!isInitialized ? "読み込み中..." : !companyId ? "エラー: 設定が見つかりません" : t.inputPlaceholder}
                 rows={1}
                 disabled={isRecording || isTranscribing || loading || !isInitialized || !companyId}
-                className="w-full px-4 py-3 pr-12 rounded-xl bg-slate-50 placeholder-slate-400 text-sm resize-none focus:outline-none focus:ring-2 focus:bg-white transition-all disabled:opacity-50"
-                style={{ color: colors.text, minHeight: "48px", maxHeight: "120px" }}
+                className="w-full px-4 py-3 pr-12 rounded-xl bg-white border border-slate-300 placeholder-slate-400 text-sm resize-none focus:outline-none focus:ring-2 focus:border-slate-400 transition-all disabled:opacity-50 overflow-y-auto"
+                style={{ color: colors.text, minHeight: "48px", maxHeight: "200px" }}
               />
               {/* Send button */}
               <button
                 onClick={() => sendMessage()}
                 disabled={loading || !input.trim() || isRecording || isTranscribing || !isInitialized || !companyId}
-                className={`absolute right-2 bottom-2 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+                className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
                   input.trim() && !loading && isInitialized && companyId
                     ? "text-white shadow-md hover:shadow-lg hover:scale-105"
                     : "bg-slate-200 text-slate-400 cursor-not-allowed"
@@ -1215,6 +1259,8 @@ function WidgetContent() {
               </button>
             </div>
           </div>
+          {/* 送信ヒント */}
+          <p className="text-[10px] text-slate-400 mt-1 text-right pr-1">{t.sendHint}</p>
 
           {/* Footer */}
           <div className="mt-3 flex items-center justify-center">
