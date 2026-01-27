@@ -534,7 +534,7 @@ export default function SuperAdminPage() {
                         {user.email.charAt(0).toUpperCase()}
                       </div>
                       <div className="text-left min-w-0">
-                        <p className="text-slate-800 font-medium text-sm sm:text-base truncate">{user.email}</p>
+                        <p className="text-slate-800 font-medium text-sm sm:text-base truncate select-all cursor-pointer">{user.email}</p>
                         <p className="text-slate-500 text-xs sm:text-sm truncate">
                           {user.name || "名前未設定"} • 登録:{" "}
                           {formatDate(user.createdAt)}

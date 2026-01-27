@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
-import { User, Agent } from "@/lib/types";
+import { User, Agent, Company } from "@/lib/types";
 
 export async function PUT(req: NextRequest) {
   try {
@@ -93,6 +93,13 @@ export async function PUT(req: NextRequest) {
     await agentsCol.updateOne(
       { agentId },
       { $set: updateFields }
+    );
+
+    // Update company's updatedAt
+    const companiesCol = await getCollection<Company>("companies");
+    await companiesCol.updateOne(
+      { companyId: agent.companyId },
+      { $set: { updatedAt: new Date() } }
     );
 
     return NextResponse.json({

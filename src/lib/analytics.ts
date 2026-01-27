@@ -93,6 +93,10 @@ export function getDateRange(period: string): { from: Date; to: Date } {
       from.setDate(from.getDate() - 89);
       from.setHours(0, 0, 0, 0);
       break;
+    case "all":
+      // 全期間（2020年1月1日から）
+      from = new Date("2020-01-01T00:00:00.000Z");
+      break;
     default:
       // デフォルトは7日
       from = new Date(now);

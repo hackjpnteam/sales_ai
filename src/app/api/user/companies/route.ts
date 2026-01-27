@@ -53,13 +53,11 @@ export async function GET() {
       .toArray();
 
     // 全エージェントを一括取得（N+1クエリ問題を解決）
-    // 重いフィールドを除外（companyInfo, base64データ）
+    // iconVideoUrlのみ除外（大きな動画データ）
     const ownedCompanyIds = ownedCompanies.map(c => c.companyId);
     const trimmedOwnedAgents = await agentsCol
       .find({ companyId: { $in: ownedCompanyIds } })
       .project({
-        companyInfo: 0,
-        avatarUrl: 0,
         iconVideoUrl: 0,
       })
       .toArray();
@@ -81,7 +79,7 @@ export async function GET() {
 
     // 共有されたエージェントを取得（userIdまたはemailで検索）
     // 自分が所有していない会社のエージェントのみ
-    // 重いフィールドを除外
+    // iconVideoUrlのみ除外（大きな動画データ）
     const sharedAgents = await agentsCol
       .find({
         companyId: { $nin: ownedCompanyIds },
@@ -91,8 +89,6 @@ export async function GET() {
         ],
       })
       .project({
-        companyInfo: 0,
-        avatarUrl: 0,
         iconVideoUrl: 0,
       })
       .toArray();

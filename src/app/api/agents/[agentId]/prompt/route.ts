@@ -9,7 +9,8 @@ const DEFAULT_GUARDRAILS = `# 制約条件
 - 個人情報や機密情報は取り扱わない
 - 法的・税務・医療などの専門的助言は一般的な情報にとどめる
 - 競合他社の批判や比較は行わない
-- 不適切な内容や攻撃的な表現は使用しない`;
+- 不適切な内容や攻撃的な表現は使用しない
+- 謝罪表現は使用しない（申し訳、すみません、恐れ入りますなど）`;
 
 // GET: エージェントのプロンプト設定を取得
 export async function GET(
@@ -138,6 +139,12 @@ export async function PATCH(
     await agentsCol.updateOne(
       { agentId },
       { $set: updateData }
+    );
+
+    // Update company's updatedAt
+    await companiesCol.updateOne(
+      { companyId: agent.companyId },
+      { $set: { updatedAt: new Date() } }
     );
 
     console.log(`[Prompt] Agent ${agentId} prompt settings updated:`, Object.keys(updateData));

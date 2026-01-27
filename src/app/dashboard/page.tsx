@@ -18,6 +18,7 @@ import {
   BarChart3,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   X,
   CreditCard,
   Sparkles,
@@ -123,6 +124,7 @@ type Company = {
   plan?: "free" | "lite" | "pro" | "max";
   isShared?: boolean;
   createdAt: Date;
+  updatedAt?: Date;
   agents: Agent[];
 };
 
@@ -145,6 +147,30 @@ type CustomKnowledge = {
   content: string;
   createdAt: Date;
   updatedAt: Date;
+};
+
+// プラン優先度（高いほど上位）
+const planPriority: Record<string, number> = {
+  max: 4,
+  pro: 3,
+  lite: 2,
+  free: 1,
+};
+
+// 会社をソートする関数（有料プラン優先、直近編集順）
+const sortCompanies = (companies: Company[]): Company[] => {
+  return [...companies].sort((a, b) => {
+    // 1. プラン優先度で比較（有料プランが上位）
+    const planA = planPriority[a.plan || "free"] || 0;
+    const planB = planPriority[b.plan || "free"] || 0;
+    if (planA !== planB) {
+      return planB - planA;
+    }
+    // 2. 更新日時で比較（直近が上位）
+    const dateA = new Date(a.updatedAt || a.createdAt).getTime();
+    const dateB = new Date(b.updatedAt || b.createdAt).getTime();
+    return dateB - dateA;
+  });
 };
 
 // 言語オプション
@@ -440,6 +466,12 @@ function DashboardContent() {
   // エージェント削除
   const [deletingAgent, setDeletingAgent] = useState<string | null>(null);
 
+  // エージェント複製
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicatingAgentId, setDuplicatingAgentId] = useState<string | null>(null);
+  const [duplicateCompanyName, setDuplicateCompanyName] = useState("");
+  const [duplicating, setDuplicating] = useState(false);
+
   // 埋め込みコードヘルプモーダル
   const [showEmbedHelp, setShowEmbedHelp] = useState(false);
 
@@ -452,6 +484,7 @@ function DashboardContent() {
   const [knowledgeContent, setKnowledgeContent] = useState("");
   const [savingKnowledge, setSavingKnowledge] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   // プロンプト設定（Pro機能）
   const [showPromptModal, setShowPromptModal] = useState(false);
@@ -782,6 +815,76 @@ function DashboardContent() {
     }
   };
 
+  // ドラッグ&ドロップ処理
+  const handleFileDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !knowledgeCompanyId) return;
+
+    // ファイル形式チェック
+    const allowedTypes = [".pdf", ".docx", ".txt", ".md"];
+    const fileExtension = "." + file.name.split(".").pop()?.toLowerCase();
+    if (!allowedTypes.includes(fileExtension)) {
+      alert("対応形式: PDF, DOCX, TXT, MD のみアップロード可能です");
+      return;
+    }
+
+    // ファイルサイズチェック（20MB以下）
+    if (file.size > 20 * 1024 * 1024) {
+      alert("ファイルサイズは20MB以下にしてください");
+      return;
+    }
+
+    setUploadingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("companyId", knowledgeCompanyId);
+
+      const res = await fetch("/api/knowledge/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(`${data.message}\n（${data.totalCharacters}文字を読み込みました）`);
+        await fetchCustomKnowledge(knowledgeCompanyId);
+        setShowKnowledgeModal(false);
+        setKnowledgeTitle("");
+        setKnowledgeContent("");
+      } else {
+        alert(data.error || "アップロードに失敗しました");
+      }
+    } catch (error) {
+      console.error("Failed to upload file:", error);
+      alert("アップロードに失敗しました");
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(false);
+  };
+
   // プロンプト設定取得
   const fetchPromptSettings = async (agentId: string) => {
     setLoadingPrompt(true);
@@ -977,6 +1080,28 @@ function DashboardContent() {
       }
     } catch (error) {
       console.error("Failed to remove share:", error);
+    }
+  };
+
+  // 共有から抜ける（共有された側が自分で解除）
+  const handleLeaveShare = async (agentId: string) => {
+    if (!confirm("この共有エージェントへのアクセスを解除しますか？")) return;
+
+    try {
+      const res = await fetch(`/api/agents/${agentId}/share/leave`, {
+        method: "POST",
+      });
+
+      if (res.ok) {
+        fetchCompanies();
+        setExpandedCompany(null);
+      } else {
+        const data = await res.json();
+        alert(data.error || "解除に失敗しました");
+      }
+    } catch (error) {
+      console.error("Failed to leave share:", error);
+      alert("解除に失敗しました");
     }
   };
 
@@ -1519,10 +1644,16 @@ function DashboardContent() {
       });
 
       if (res.ok) {
-        setUploadedAvatars((prev) => prev.filter((a) => a.avatarId !== avatarId));
-        // 削除したアバターが選択中の場合はデフォルトに戻す
+        const remainingAvatars = uploadedAvatars.filter((a) => a.avatarId !== avatarId);
+        setUploadedAvatars(remainingAvatars);
+        // 削除したアバターが選択中の場合は別のアバターを選択
         if (editAvatarUrl === dataUrl) {
-          setEditAvatarUrl("/agent-avatar.png");
+          // 他のカスタムアバターがあればそれを選択、なければデフォルト
+          if (remainingAvatars.length > 0) {
+            setEditAvatarUrl(remainingAvatars[0].dataUrl);
+          } else {
+            setEditAvatarUrl("/agent-avatar.png");
+          }
         }
       } else {
         const data = await res.json();
@@ -1567,18 +1698,78 @@ function DashboardContent() {
     }
   };
 
+  // エージェントを複製
+  const handleDuplicateAgent = async () => {
+    if (!duplicatingAgentId || !duplicateCompanyName.trim()) return;
+
+    setDuplicating(true);
+
+    try {
+      const res = await fetch(`/api/agents/${duplicatingAgentId}/duplicate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          newCompanyName: duplicateCompanyName.trim(),
+          copyKnowledge: true,
+        }),
+      });
+
+      if (res.ok) {
+        // 成功したら会社一覧を再取得
+        await fetchCompanies();
+        setShowDuplicateModal(false);
+        setDuplicatingAgentId(null);
+        setDuplicateCompanyName("");
+        alert("ボットを複製しました");
+      } else {
+        const data = await res.json();
+        alert(data.error || "複製に失敗しました");
+      }
+    } catch (error) {
+      console.error("Duplicate agent error:", error);
+      alert("複製に失敗しました");
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
   // エージェント設定編集を開始
   const startEditingAgent = async (agent: Agent) => {
     setEditingAgent(agent.agentId);
     setEditAgentName(agent.name || "AI");
     setEditWelcomeMessage(agent.welcomeMessage || "いらっしゃいませ。ご質問があれば何でもお聞きください。");
     setEditVoiceEnabled(agent.voiceEnabled !== false);
-    setEditAvatarUrl(agent.avatarUrl || "/agent-avatar.png");
     setEditTooltipText(agent.tooltipText || "AIアシスタントが対応します");
     setEditTooltipDuration(agent.tooltipDuration ?? 5);
     setEditLanguages(agent.languages || ["ja"]);
+
     // アバター一覧を取得
-    await fetchAvatars(agent.agentId);
+    setLoadingAvatars(true);
+    try {
+      const avatarsRes = await fetch(`/api/avatars?agentId=${agent.agentId}`);
+
+      let avatars: UploadedAvatar[] = [];
+      if (avatarsRes.ok) {
+        const avatarsData = await avatarsRes.json();
+        avatars = avatarsData.avatars || [];
+        setUploadedAvatars(avatars);
+      }
+
+      // avatarUrlを設定（カスタムアバターがある場合はデフォルトを使わない）
+      const savedAvatarUrl = agent.avatarUrl || "/agent-avatar.png";
+
+      // カスタムアバターがあり、保存されているのがデフォルトの場合は最初のカスタムアバターを使用
+      if (avatars.length > 0 && savedAvatarUrl === "/agent-avatar.png") {
+        setEditAvatarUrl(avatars[0].dataUrl);
+      } else {
+        setEditAvatarUrl(savedAvatarUrl);
+      }
+    } catch (error) {
+      console.error("Failed to load avatars:", error);
+      setEditAvatarUrl(agent.avatarUrl || "/agent-avatar.png");
+    } finally {
+      setLoadingAvatars(false);
+    }
   };
 
   // エージェント設定を保存
@@ -1675,6 +1866,9 @@ function DashboardContent() {
           )
         );
         setEditingCompanyInfo(null);
+
+        // 保存後に自動で再クローリング（確認なし）
+        recrawlAgent(agentId, companyId, true);
       } else {
         const data = await res.json();
         alert(data.error || "基本情報の保存に失敗しました");
@@ -1694,8 +1888,8 @@ function DashboardContent() {
   };
 
   // 再クロールして基本情報を再取得
-  const recrawlAgent = async (agentId: string, companyId: string) => {
-    if (!confirm("サイトを再クロールして基本情報を更新しますか？\n\n※プロンプトやナレッジの設定は保持されます")) {
+  const recrawlAgent = async (agentId: string, companyId: string, skipConfirm: boolean = false) => {
+    if (!skipConfirm && !confirm("サイトを再クロールして基本情報を更新しますか？\n\n※プロンプトやナレッジの設定は保持されます")) {
       return;
     }
 
@@ -2120,8 +2314,8 @@ function DashboardContent() {
         })()}
       </div>
 
-      {/* 会社リスト */}
-      {companies.length === 0 && !showCreateForm ? (
+      {/* 会社リスト（所有しているエージェントのみ） */}
+      {companies.filter(c => !c.isShared).length === 0 && !showCreateForm ? (
         <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-12 text-center">
           <MessageCircle className="w-12 h-12 text-rose-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-slate-800 mb-2">
@@ -2133,7 +2327,7 @@ function DashboardContent() {
         </div>
       ) : (
         <div className="space-y-4">
-          {companies.map((company) => {
+          {sortCompanies(companies.filter(c => !c.isShared)).map((company) => {
             const isExpanded = expandedCompany === company.companyId;
             const agent = company.agents[0];
             const isPaid = company.plan === "lite" || company.plan === "pro" || company.plan === "max";
@@ -2150,10 +2344,27 @@ function DashboardContent() {
                 >
                   <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
                     <div
-                      className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                      className={`w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center flex-shrink-0 overflow-hidden ${agent?.widgetStyle === "bubble" && agent?.iconVideoUrl ? "rounded-full" : "rounded-xl"}`}
                       style={{ backgroundColor: agent?.themeColor + "20" }}
                     >
-                      <Globe className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: agent?.themeColor }} />
+                      {agent?.widgetStyle === "bubble" ? (
+                        agent?.iconVideoUrl ? (
+                          <video
+                            src={agent.iconVideoUrl}
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Globe className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: agent?.themeColor }} />
+                        )
+                      ) : agent?.avatarUrl ? (
+                        <img src={agent.avatarUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <Globe className="w-5 h-5 sm:w-6 sm:h-6" style={{ color: agent?.themeColor }} />
+                      )}
                     </div>
                     <div className="text-left min-w-0 flex-1">
                       <h3 className="font-semibold text-slate-800 truncate">{agent?.name || company.name + " AI"}</h3>
@@ -2197,6 +2408,23 @@ function DashboardContent() {
                 {/* 展開コンテンツ */}
                 {isExpanded && agent && (
                   <div className="px-6 pb-6 space-y-6 border-t border-slate-100 pt-6">
+                    {/* 詳細ページへのリンク */}
+                    <Link
+                      href={`/dashboard/agent/${agent.agentId}`}
+                      className="flex items-center justify-between p-4 bg-gradient-to-r from-rose-50 to-pink-50 rounded-xl border border-rose-100 hover:border-rose-200 hover:shadow-md transition-all group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
+                          <Sparkles className="w-5 h-5 text-rose-500" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-slate-800">エージェント詳細ページ</h4>
+                          <p className="text-xs text-slate-500">全ての設定をタブで管理</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-rose-400 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+
                     {/* チャットをテスト */}
                     <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4">
                       <h4 className="font-medium text-slate-700 flex items-center gap-2 mb-3">
@@ -2299,23 +2527,25 @@ function DashboardContent() {
 
                             {/* アバター選択エリア */}
                             <div className="flex flex-wrap gap-3 items-start">
-                              {/* デフォルトアバター */}
-                              <button
-                                type="button"
-                                onClick={() => setEditAvatarUrl("/agent-avatar.png")}
-                                className={`relative w-14 h-14 rounded-full overflow-hidden border-2 transition-all flex-shrink-0 ${
-                                  editAvatarUrl === "/agent-avatar.png" && !agent.iconVideoUrl
-                                    ? "border-rose-500 ring-2 ring-rose-200"
-                                    : "border-slate-200 hover:border-slate-300"
-                                }`}
-                                title="デフォルト"
-                              >
-                                <img
-                                  src="/agent-avatar.png"
-                                  alt="Default"
-                                  className="w-full h-full object-cover"
-                                />
-                              </button>
+                              {/* デフォルトアバター（カスタムアバターがない場合のみ表示） */}
+                              {uploadedAvatars.length === 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setEditAvatarUrl("/agent-avatar.png")}
+                                  className={`relative w-14 h-14 rounded-full overflow-hidden border-2 transition-all flex-shrink-0 ${
+                                    editAvatarUrl === "/agent-avatar.png" && !agent.iconVideoUrl
+                                      ? "border-rose-500 ring-2 ring-rose-200"
+                                      : "border-slate-200 hover:border-slate-300"
+                                  }`}
+                                  title="デフォルト"
+                                >
+                                  <img
+                                    src="/agent-avatar.png"
+                                    alt="Default"
+                                    className="w-full h-full object-cover"
+                                  />
+                                </button>
+                              )}
 
                               {/* アップロード済みアバター */}
                               {loadingAvatars ? (
@@ -2688,15 +2918,24 @@ function DashboardContent() {
                         <div className="space-y-3">
                           {/* 現在の設定を表示 */}
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200">
-                              <img
-                                src={agent.avatarUrl || "/agent-avatar.png"}
-                                alt="Agent avatar"
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.currentTarget.src = "/agent-avatar.png";
-                                }}
-                              />
+                            <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 bg-slate-100">
+                              {agent.avatarUrl && agent.avatarUrl !== "/agent-avatar.png" ? (
+                                <img
+                                  src={agent.avatarUrl}
+                                  alt="Agent avatar"
+                                  className="w-full h-full object-cover"
+                                  loading="eager"
+                                  onError={(e) => {
+                                    e.currentTarget.src = "/agent-avatar.png";
+                                  }}
+                                />
+                              ) : (
+                                <img
+                                  src="/agent-avatar.png"
+                                  alt="Agent avatar"
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
                             </div>
                             <div className="flex-1">
                               <p className="text-sm text-slate-700 line-clamp-2">
@@ -2853,11 +3092,12 @@ function DashboardContent() {
                             </div>
                           )}
                           {/* アイコンプレビュー（アバター画像） */}
-                          <div className="w-12 h-12 rounded-full overflow-hidden shadow-md mb-2 border-2 border-white">
+                          <div className="w-12 h-12 rounded-full overflow-hidden shadow-md mb-2 border-2 border-white bg-slate-100">
                             <img
-                              src={agent.avatarUrl || "/agent-avatar.png"}
+                              src={agent.avatarUrl && agent.avatarUrl !== "/agent-avatar.png" ? agent.avatarUrl : "/agent-avatar.png"}
                               alt="Avatar"
                               className="w-full h-full object-cover"
+                              loading="eager"
                             />
                           </div>
                           <span className="font-medium text-slate-700">アイコン</span>
@@ -3230,6 +3470,15 @@ function DashboardContent() {
                           </button>
                         )}
                       </div>
+                      {/* カスタムナレッジとプロンプトナレッジの違いの説明 */}
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-3">
+                        <p className="text-xs text-blue-700 leading-relaxed">
+                          <span className="font-semibold">カスタムナレッジ</span>: 大量の情報を登録可能。ユーザーの質問に<span className="font-semibold">関連する情報のみ</span>をAIが検索して回答に使用します。（FAQ、製品情報など向け）
+                        </p>
+                        <p className="text-xs text-blue-600 mt-1.5 leading-relaxed">
+                          <span className="font-semibold">プロンプトナレッジ</span>（下の「プロンプト設定」内）: <span className="font-semibold">常にAIに渡される</span>基本情報。短い重要な情報向け。
+                        </p>
+                      </div>
                       {(company.plan === "pro" || company.plan === "max") ? (
                         <div className="space-y-2">
                           {(customKnowledges[company.companyId] || []).length === 0 ? (
@@ -3525,6 +3774,20 @@ function DashboardContent() {
                           )}
                         </button>
                       )}
+                      {/* 複製ボタン（自分が所有するエージェントのみ） */}
+                      {!agent.isShared && (
+                        <button
+                          onClick={() => {
+                            setDuplicatingAgentId(agent.agentId);
+                            setDuplicateCompanyName("");
+                            setShowDuplicateModal(true);
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 transition-all"
+                        >
+                          <Copy className="w-4 h-4" />
+                          複製
+                        </button>
+                      )}
                       {/* 削除ボタン（自分が所有するエージェントのみ） */}
                       {!agent.isShared && (
                         <button
@@ -3567,7 +3830,7 @@ function DashboardContent() {
                 共有されたエージェント
               </h2>
               <div className="space-y-4">
-                {sharedCompanies.map((company) => {
+                {sortCompanies(sharedCompanies).map((company) => {
                   const isExpanded = expandedCompany === company.companyId;
                   const agent = company.agents[0];
                   const isPaid = company.plan === "lite" || company.plan === "pro" || company.plan === "max";
@@ -3578,11 +3841,11 @@ function DashboardContent() {
                       className="bg-white rounded-2xl shadow-lg border border-blue-100 overflow-hidden"
                     >
                       {/* ヘッダー */}
-                      <button
-                        onClick={() => setExpandedCompany(isExpanded ? null : company.companyId)}
-                        className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-all"
-                      >
-                        <div className="flex items-center gap-4">
+                      <div className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50 transition-all">
+                        <button
+                          onClick={() => setExpandedCompany(isExpanded ? null : company.companyId)}
+                          className="flex items-center gap-4 flex-1"
+                        >
                           <div
                             className="w-12 h-12 rounded-xl flex items-center justify-center relative"
                             style={{ backgroundColor: (agent?.themeColor || "#3B82F6") + "20" }}
@@ -3606,20 +3869,41 @@ function DashboardContent() {
                               {company.name}
                             </p>
                           </div>
+                        </button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleLeaveShare(agent?.agentId || "")}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-all"
+                          >
+                            外す
+                          </button>
+                          <button
+                            onClick={() => setExpandedCompany(isExpanded ? null : company.companyId)}
+                          >
+                            {isExpanded ? (
+                              <ChevronUp className="w-5 h-5 text-slate-400" />
+                            ) : (
+                              <ChevronDown className="w-5 h-5 text-slate-400" />
+                            )}
+                          </button>
                         </div>
-                        {isExpanded ? (
-                          <ChevronUp className="w-5 h-5 text-slate-400" />
-                        ) : (
-                          <ChevronDown className="w-5 h-5 text-slate-400" />
-                        )}
-                      </button>
+                      </div>
 
                       {/* 展開コンテンツ（編集機能付き） */}
                       {isExpanded && agent && (
                         <div className="px-6 pb-6 border-t border-slate-100 pt-4 space-y-6">
-                          <p className="text-sm text-slate-500">
-                            このエージェントはあなたと共有されています。編集が可能です。
-                          </p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm text-slate-500">
+                              このエージェントはあなたと共有されています。編集が可能です。
+                            </p>
+                            <button
+                              onClick={() => handleLeaveShare(agent.agentId)}
+                              className="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-all flex items-center gap-1"
+                            >
+                              <X className="w-3 h-3" />
+                              共有から外す
+                            </button>
+                          </div>
 
                           {/* 基本設定 */}
                           <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-4">
@@ -3697,15 +3981,24 @@ function DashboardContent() {
                             ) : (
                               <div className="space-y-3">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200">
-                                    <img
-                                      src={agent.avatarUrl || "/agent-avatar.png"}
-                                      alt="Agent avatar"
-                                      className="w-full h-full object-cover"
-                                      onError={(e) => {
-                                        e.currentTarget.src = "/agent-avatar.png";
-                                      }}
-                                    />
+                                  <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-200 bg-slate-100">
+                                    {agent.avatarUrl && agent.avatarUrl !== "/agent-avatar.png" ? (
+                                      <img
+                                        src={agent.avatarUrl}
+                                        alt="Agent avatar"
+                                        className="w-full h-full object-cover"
+                                        loading="eager"
+                                        onError={(e) => {
+                                          e.currentTarget.src = "/agent-avatar.png";
+                                        }}
+                                      />
+                                    ) : (
+                                      <img
+                                        src="/agent-avatar.png"
+                                        alt="Agent avatar"
+                                        className="w-full h-full object-cover"
+                                      />
+                                    )}
                                   </div>
                                   <div className="flex-1">
                                     <p className="text-sm font-medium text-slate-800">{agent.name}</p>
@@ -3885,11 +4178,12 @@ function DashboardContent() {
                                   </div>
                                 )}
                                 {/* アイコンプレビュー（アバター画像） */}
-                                <div className="w-12 h-12 rounded-full overflow-hidden shadow-md mb-2 border-2 border-white">
+                                <div className="w-12 h-12 rounded-full overflow-hidden shadow-md mb-2 border-2 border-white bg-slate-100">
                                   <img
-                                    src={agent.avatarUrl || "/agent-avatar.png"}
+                                    src={agent.avatarUrl && agent.avatarUrl !== "/agent-avatar.png" ? agent.avatarUrl : "/agent-avatar.png"}
                                     alt="Avatar"
                                     className="w-full h-full object-cover"
+                                    loading="eager"
                                   />
                                 </div>
                                 <span className="font-medium text-slate-700">アイコン</span>
@@ -4268,6 +4562,91 @@ function DashboardContent() {
         </div>
       )}
 
+      {/* ボット複製モーダル */}
+      {showDuplicateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl max-w-md w-full">
+            {/* ヘッダー */}
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <Copy className="w-5 h-5 text-purple-500" />
+                  ボットを複製
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                  新しい会社名を入力してください
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDuplicateModal(false);
+                  setDuplicatingAgentId(null);
+                  setDuplicateCompanyName("");
+                }}
+                className="p-2 rounded-full hover:bg-slate-100 transition-all"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            {/* コンテンツ */}
+            <div className="p-4 sm:p-6 space-y-4">
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                <p className="text-xs text-blue-700 leading-relaxed">
+                  ボットの設定、クロールデータ、カスタムナレッジがすべてコピーされます。
+                  新しい会社として作成されるため、元のボットとは独立して動作します。
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  新しい会社名
+                </label>
+                <input
+                  type="text"
+                  value={duplicateCompanyName}
+                  onChange={(e) => setDuplicateCompanyName(e.target.value)}
+                  placeholder="例: ギグー株式会社"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* フッター */}
+            <div className="p-4 sm:p-6 border-t border-slate-100 flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowDuplicateModal(false);
+                  setDuplicatingAgentId(null);
+                  setDuplicateCompanyName("");
+                }}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-all"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleDuplicateAgent}
+                disabled={duplicating || !duplicateCompanyName.trim()}
+                className="px-6 py-2 rounded-xl text-sm font-medium text-white bg-purple-500 hover:bg-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {duplicating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    複製中...
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    複製する
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* カスタムナレッジ追加・編集モーダル */}
       {showKnowledgeModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -4300,13 +4679,27 @@ function DashboardContent() {
             <div className="p-4 sm:p-6 space-y-4">
               {/* ファイルアップロード（新規追加時のみ） */}
               {!editingKnowledge && (
-                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 border border-purple-100">
+                <div
+                  className={`bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-4 border-2 transition-all ${
+                    isDraggingFile
+                      ? "border-purple-500 bg-purple-100 scale-[1.02]"
+                      : "border-purple-100"
+                  }`}
+                  onDrop={handleFileDrop}
+                  onDragOver={handleDragOver}
+                  onDragEnter={handleDragEnter}
+                  onDragLeave={handleDragLeave}
+                >
                   <label className="block text-sm font-medium text-purple-700 mb-3 flex items-center gap-2">
                     <Upload className="w-4 h-4" />
                     ファイルからインポート
                   </label>
                   <div className="flex items-center gap-3">
-                    <label className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-dashed border-purple-300 bg-white cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all ${uploadingFile ? "opacity-50 cursor-not-allowed" : ""}`}>
+                    <label className={`flex-1 flex flex-col items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 border-dashed bg-white cursor-pointer transition-all ${
+                      isDraggingFile
+                        ? "border-purple-500 bg-purple-50"
+                        : "border-purple-300 hover:border-purple-400 hover:bg-purple-50"
+                    } ${uploadingFile ? "opacity-50 cursor-not-allowed" : ""}`}>
                       <input
                         type="file"
                         accept=".pdf,.docx,.txt,.md"
@@ -4316,13 +4709,19 @@ function DashboardContent() {
                       />
                       {uploadingFile ? (
                         <>
-                          <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
+                          <Loader2 className="w-6 h-6 text-purple-500 animate-spin" />
                           <span className="text-sm text-purple-600">読み込み中...</span>
+                        </>
+                      ) : isDraggingFile ? (
+                        <>
+                          <Upload className="w-8 h-8 text-purple-600" />
+                          <span className="text-sm font-medium text-purple-700">ここにドロップ</span>
                         </>
                       ) : (
                         <>
-                          <Upload className="w-5 h-5 text-purple-500" />
-                          <span className="text-sm text-purple-600">PDF / Word / テキストファイルを選択</span>
+                          <Upload className="w-6 h-6 text-purple-500" />
+                          <span className="text-sm text-purple-600">クリックまたはドラッグ&ドロップ</span>
+                          <span className="text-xs text-purple-400">PDF / Word / テキストファイル</span>
                         </>
                       )}
                     </label>

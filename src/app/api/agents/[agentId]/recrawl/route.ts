@@ -87,6 +87,12 @@ export async function POST(
               }
             );
 
+            // Update company's updatedAt
+            await companiesCol.updateOne(
+              { companyId: agent.companyId },
+              { $set: { updatedAt: new Date() } }
+            );
+
             console.log(`[Recrawl] Updated company info for agent ${agentId}`);
 
             sendEvent({

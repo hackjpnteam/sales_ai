@@ -190,7 +190,8 @@ const DEFAULT_GUARDRAILS = `# 制約条件
 - 個人情報や機密情報は取り扱わない
 - 法的・税務・医療などの専門的助言は一般的な情報にとどめる
 - 競合他社の批判や比較は行わない
-- 不適切な内容や攻撃的な表現は使用しない`;
+- 不適切な内容や攻撃的な表現は使用しない
+- 謝罪表現は使用しない（申し訳、すみません、恐れ入りますなど）`;
 
 export type ConversationMessage = {
   role: "user" | "assistant";
@@ -210,9 +211,9 @@ export async function answerWithRAG(params: {
 
   if (chunks.length === 0) {
     const noInfoMessages = {
-      ja: "申し訳ございません。お探しの情報が見つかりませんでした。別のご質問をお試しください。",
-      en: "I apologize, but I couldn't find the information you're looking for. Please try a different question.",
-      zh: "抱歉，我找不到您要查找的信息。请尝试其他问题。",
+      ja: "お探しの情報が見つかりませんでした。別のご質問をお試しください。",
+      en: "I couldn't find the information you're looking for. Please try a different question.",
+      zh: "找不到您要查找的信息。请尝试其他问题。",
     };
     return {
       reply: noInfoMessages[language as keyof typeof noInfoMessages] || noInfoMessages.ja,
@@ -242,9 +243,9 @@ export async function answerWithRAG(params: {
   });
 
   // URLを持つチャンクのみからリンクを抽出（カスタムナレッジは除外）
-  // AI評価を省略し、高スコアのリンクを直接返す（速度優先）
+  // 高スコア（0.6以上）かつ質問と直接関連するリンクのみ表示
   const relatedLinks: RelatedLink[] = relevantChunks
-    .filter(c => c.url && !c.isCustomKnowledge && c.score >= 0.4)
+    .filter(c => c.url && !c.isCustomKnowledge && c.score >= 0.6)
     .slice(0, 2)
     .map(c => ({
       url: c.url,
@@ -425,23 +426,33 @@ export async function answerWithRAG(params: {
     // デフォルトのシステムプロンプト（言語別・簡素化版）
     const systemPrompts = {
       ja: `あなたは丁寧なカスタマーサポートです。
-・質問に簡潔に答える（150文字以内）
+・簡単な質問には簡潔に（100文字程度）
+・詳細な分析（年収査定など）は構造的に要点をまとめる（400文字以内）
+・回答は必ず文章として完結させる
 ・参考情報にない内容は「把握しておりません」と答える
 ・架空の人名や情報は生成しない
-・URLは記載しない`,
+・【重要】絶対に謝罪しない。「申し訳ありません」「申し訳ございません」「すみません」「恐れ入りますが」などの謝罪表現は一切使わない
+・必要な情報を聞く時は謝罪なしでシンプルに質問する
+・情報を提供できない場合も謝らず、代わりに必要な情報を聞く`,
 
       en: `You are a polite customer support agent.
 ・Answer concisely (under 150 chars)
+・If info is lengthy, summarize key points to avoid truncation
 ・If info not in reference, say "I don't have that information"
 ・Never make up names or facts
 ・Don't include URLs
+・Always complete your sentences
+・Never apologize - just ask questions directly when needed
 RESPOND IN ENGLISH ONLY.`,
 
       zh: `您是礼貌的客服人员。
 ・简洁回答（150字以内）
+・信息较多时，请总结要点，避免回答被截断
 ・参考信息中没有的内容回答"我没有这方面的信息"
 ・不编造人名或信息
 ・不贴URL
+・确保回答完整
+・不要道歉，需要时直接提问
 请只用中文回复。`,
     };
 
@@ -532,7 +543,7 @@ ${question}
     model: "gpt-4o-mini",
     messages,
     temperature: 0.3,
-    max_tokens: 200,
+    max_tokens: 500,
   });
 
   const reply = completion.choices[0].message.content ?? "";
