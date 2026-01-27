@@ -155,6 +155,7 @@ export type Agent = {
   // コンバージョン設定（Pro機能）
   conversionSettings?: ConversionSettings;
   createdAt: Date;
+  lastUsedAt?: Date; // 最終使用日時（チャット送信時に更新）
 };
 
 // コンバージョン設定

@@ -4,5 +4,11 @@
       "maxDuration": 60,
       "memory": 1024
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/cleanup-agents",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

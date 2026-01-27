@@ -150,17 +150,23 @@ export async function POST(req: NextRequest) {
       relatedLinks = ragResult.relatedLinks;
     }
 
-    // アシスタントメッセージを保存
-    await chatLogsCol.insertOne({
-      companyId,
-      agentId: agentId || "default",
-      sessionId,
-      role: "assistant",
-      content: reply,
-      pageUrl: pageUrl || undefined,
-      deviceType: deviceType || undefined,
-      createdAt: new Date(),
-    });
+    // アシスタントメッセージを保存 & エージェントの最終使用日を更新
+    await Promise.all([
+      chatLogsCol.insertOne({
+        companyId,
+        agentId: agentId || "default",
+        sessionId,
+        role: "assistant",
+        content: reply,
+        pageUrl: pageUrl || undefined,
+        deviceType: deviceType || undefined,
+        createdAt: new Date(),
+      }),
+      // 最終使用日を更新（無料エージェント自動削除用）
+      agentsCol && agentId
+        ? agentsCol.updateOne({ agentId }, { $set: { lastUsedAt: new Date() } })
+        : Promise.resolve(),
+    ]);
 
     return NextResponse.json({ reply, sessionId, relatedLinks, followUpButtons });
   } catch (error) {

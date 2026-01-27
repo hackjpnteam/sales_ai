@@ -55,63 +55,9 @@ export async function POST(req: NextRequest) {
   const agentsCol = await getCollection<Agent>("agents");
   const usersCol = await getCollection<User>("users");
 
-  // 認証ユーザーの場合、エージェント作成制限をチェック
-  if (userId) {
-    const user = await usersCol.findOne({ userId });
-    if (user && user.companyIds && user.companyIds.length > 0) {
-      // ユーザーが所有する会社のプランを取得（最上位プランを使用）
-      const userCompanies = await companiesCol
-        .find({ companyId: { $in: user.companyIds } })
-        .toArray();
-
-      // 最上位プランを判定
-      const planPriority = { free: 0, lite: 1, pro: 2, max: 3 };
-      let highestPlan = "free";
-      for (const company of userCompanies) {
-        const companyPlan = company.plan || "free";
-        if ((planPriority[companyPlan as keyof typeof planPriority] || 0) > (planPriority[highestPlan as keyof typeof planPriority] || 0)) {
-          highestPlan = companyPlan;
-        }
-      }
-
-      // 現在のエージェント数をカウント
-      const currentAgentCount = await agentsCol.countDocuments({
-        companyId: { $in: user.companyIds },
-      });
-
-      // プランごとのcompany数をカウント
-      const planCounts = { free: 0, lite: 0, pro: 0, max: 0 };
-      for (const company of userCompanies) {
-        const plan = (company.plan || "free") as keyof typeof planCounts;
-        if (plan in planCounts) {
-          planCounts[plan]++;
-        }
-      }
-
-      // エージェント上限を計算
-      // Free: 上限なし
-      // Lite/Pro: 各company × 1エージェント
-      // Max: maxPlanCount × 5エージェント
-      const maxPlanCount = user.maxPlanCount || 0;
-      const paidAgentLimit = planCounts.lite + planCounts.pro;
-      const maxAgentLimit = Math.max(maxPlanCount, planCounts.max > 0 ? 1 : 0) * 5;
-      const limit = paidAgentLimit + maxAgentLimit;
-
-      // 有料プランがある場合のみ上限チェック（Freeのみの場合は無制限）
-      if (limit > 0 && currentAgentCount >= limit) {
-        return new Response(
-          JSON.stringify({
-            error: "エージェント上限に達しているため作成できません。Maxプランを追加購入するとさらに作成できます。",
-            code: "AGENT_LIMIT_REACHED",
-            currentCount: currentAgentCount,
-            limit,
-            plan: highestPlan,
-          }),
-          { status: 403, headers: { "Content-Type": "application/json" } }
-        );
-      }
-    }
-  }
+  // 無料エージェントは無制限で作成可能（1週間未使用で自動削除される）
+  // 有料プランのエージェントのみ上限をチェック
+  // ※ この制限チェックは有料プランへのアップグレード時に適用される
 
   const companyId = randomUUID();
   const agentId = randomUUID();
@@ -136,6 +82,7 @@ export async function POST(req: NextRequest) {
     userId, // Link to user if authenticated
     plan: "free",
     createdAt: now,
+    updatedAt: now,
     // ゲストユーザー作成時の情報を保存
     creatorIp: !userId ? creatorIp : undefined,
     creatorUserAgent: !userId ? creatorUserAgent : undefined,
