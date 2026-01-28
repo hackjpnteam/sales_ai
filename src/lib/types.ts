@@ -330,3 +330,51 @@ export type AnalyticsDailyStat = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+// ==========================================
+// [Notifications] システム通知用の型定義
+// ==========================================
+
+// システム通知（管理者からユーザーへの一斉通知）
+export type SystemNotification = {
+  _id?: string;
+  notificationId: string;
+  title: string;              // 通知タイトル
+  message: string;            // 通知本文
+  type: "info" | "update" | "warning" | "maintenance";  // 通知タイプ
+  link?: string;              // リンク（オプション）
+  createdBy: string;          // 作成者のuserId
+  createdAt: Date;
+  expiresAt?: Date;           // 有効期限（オプション）
+};
+
+// ユーザーごとの通知既読状態
+export type NotificationRead = {
+  _id?: string;
+  userId: string;
+  notificationId: string;
+  readAt: Date;
+};
+
+// ==========================================
+// [Leads] リード（見込み客）用の型定義
+// ==========================================
+
+// リード（チャットで連絡先を取得した見込み客）
+export type Lead = {
+  _id?: string;
+  leadId: string;
+  companyId: string;
+  agentId: string;
+  sessionId: string;         // チャットセッションID
+  name?: string;             // 名前
+  email?: string;            // メールアドレス
+  phone?: string;            // 電話番号
+  inquiry?: string;          // 問い合わせ内容
+  pageUrl?: string;          // リード獲得時のページURL
+  deviceType?: DeviceType;   // デバイス
+  status: "new" | "contacted" | "converted" | "closed";  // ステータス
+  notes?: string;            // メモ
+  createdAt: Date;
+  updatedAt?: Date;
+};

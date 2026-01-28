@@ -276,9 +276,11 @@ export function QuickButtonsTab() {
   const [quickButtons, setQuickButtons] = useState<QuickButton[]>([]);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(["0", "1", "2"]));
 
-  // Initialize quick buttons from agent
+  // Initialize quick buttons from agent (only on initial load or agent change)
+  const [loadedAgentId, setLoadedAgentId] = useState<string | null>(null);
+
   useEffect(() => {
-    if (agent) {
+    if (agent && agent.agentId !== loadedAgentId) {
       const defaultButtons: QuickButton[] = [
         { label: "会社について", query: "会社について教えてください", responseType: "text", response: "", followUpButtons: [] },
         { label: "採用について", query: "採用情報について教えてください", responseType: "text", response: "", followUpButtons: [] },
@@ -294,19 +296,42 @@ export function QuickButtonsTab() {
           }))
         : defaultButtons;
       setQuickButtons(buttons);
+      setLoadedAgentId(agent.agentId);
     }
-  }, [agent?.agentId, agent?.quickButtons]);
+  }, [agent, loadedAgentId]);
 
   const handleSave = async () => {
     if (!agent?.agentId) return;
 
+    // 空のフィールドがあるボタンをチェック
+    const emptyQueryButtons = quickButtons.filter(b => b.label.trim() && !b.query.trim());
+    const emptyLabelButtons = quickButtons.filter(b => !b.label.trim() && b.query.trim());
+    const emptyBothButtons = quickButtons.filter(b => !b.label.trim() && !b.query.trim());
+
+    if (emptyQueryButtons.length > 0) {
+      alert(`「${emptyQueryButtons[0].label}」の送信メッセージが空です。送信メッセージを入力してください。`);
+      return;
+    }
+
+    if (emptyLabelButtons.length > 0) {
+      alert("ラベルが空のボタンがあります。ラベルを入力してください。");
+      return;
+    }
+
     setSaving(true);
     try {
       const validButtons = quickButtons.filter(b => b.label.trim() && b.query.trim());
+
+      if (validButtons.length === 0 && emptyBothButtons.length > 0) {
+        alert("ラベルと送信メッセージを入力してください。");
+        setSaving(false);
+        return;
+      }
+
       const success = await updateAgent({ quickButtons: validButtons });
 
       if (success) {
-        alert("クイックボタンを保存しました");
+        alert(`${validButtons.length}件のクイックボタンを保存しました`);
       } else {
         alert("保存に失敗しました");
       }

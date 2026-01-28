@@ -159,12 +159,16 @@ async function updateAgent(
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
     }
 
-    await agentsCol.updateOne(
+    const result = await agentsCol.updateOne(
       { agentId },
       { $set: updateData }
     );
 
     console.log(`[Update] Agent ${agentId} updated:`, Object.keys(updateData));
+    console.log(`[Update] Result: matchedCount=${result.matchedCount}, modifiedCount=${result.modifiedCount}`);
+    if (updateData.quickButtons) {
+      console.log(`[Update] quickButtons count:`, (updateData.quickButtons as unknown[]).length);
+    }
 
     return NextResponse.json({ success: true, updated: Object.keys(updateData) });
   } catch (error) {

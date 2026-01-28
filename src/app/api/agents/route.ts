@@ -124,18 +124,31 @@ export async function POST(req: NextRequest) {
 
         // クロールが失敗した場合（コンテンツが取得できなかった）
         if (!result.success || result.totalChunks === 0) {
-          // 作成したデータを削除
-          await companiesCol.deleteOne({ companyId });
-          await agentsCol.deleteOne({ agentId });
+          // 403エラーやスクレイピングブロックの場合は、手動設定モードとしてエージェントを作成
+          // エージェントは削除せず、デフォルト値で作成完了とする
 
-          // SPAサイトの場合はより詳細なエラーメッセージを表示
-          const errorMessage = result.isSPA
-            ? "このサイトはJavaScriptで動的にコンテンツを生成するSPA（シングルページアプリケーション）のため、コンテンツを取得できませんでした。サーバーサイドレンダリング（SSR）対応のURLをお試しください。"
-            : "サイトからコンテンツを取得できませんでした。URLを確認して再度お試しください。";
+          // Link company to user if authenticated
+          if (userId) {
+            await usersCol.updateOne(
+              { userId },
+              { $addToSet: { companyIds: companyId } }
+            );
+          }
+
+          // 警告付きで完了イベントを送信
+          const warningMessage = result.isSPA
+            ? "このサイトはSPA（シングルページアプリケーション）のため、コンテンツを自動取得できませんでした。エージェントは作成されましたが、手動でナレッジを追加してください。"
+            : "サイトからコンテンツを自動取得できませんでした（サイトがアクセスをブロックしている可能性があります）。エージェントは作成されましたが、手動でナレッジを追加してください。";
 
           sendEvent({
-            type: "error",
-            message: errorMessage,
+            type: "complete",
+            companyId,
+            agentId,
+            themeColor: userThemeColor || "#2563eb",
+            pagesVisited: 0,
+            totalChunks: 0,
+            warning: warningMessage,
+            manualSetupRequired: true,
           });
           return;
         }

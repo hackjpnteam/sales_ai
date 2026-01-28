@@ -27,6 +27,7 @@ import {
   DesignTab,
   EmbedTab,
   ShareTab,
+  UsersTab,
 } from "../../components/tabs";
 
 function AgentDetailContent() {
@@ -195,6 +196,8 @@ function AgentDetailContent() {
         return <EmbedTab />;
       case "share":
         return <ShareTab />;
+      case "users":
+        return <UsersTab />;
       default:
         return <SettingsTab />;
     }

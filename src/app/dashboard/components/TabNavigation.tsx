@@ -11,9 +11,10 @@ import {
   Code,
   Share2,
   Lock,
+  Users,
 } from "lucide-react";
 
-export type TabId = "settings" | "test" | "quickbuttons" | "knowledge" | "prompt" | "design" | "embed" | "share";
+export type TabId = "settings" | "test" | "quickbuttons" | "knowledge" | "prompt" | "design" | "embed" | "share" | "users";
 
 type TabConfig = {
   id: TabId;
@@ -32,6 +33,7 @@ const tabs: TabConfig[] = [
   { id: "design", label: "デザイン", icon: Palette },
   { id: "embed", label: "埋め込み", icon: Code },
   { id: "share", label: "共有", icon: Share2 },
+  { id: "users", label: "ユーザー", shortLabel: "ユーザー", icon: Users },
 ];
 
 type TabNavigationProps = {
@@ -51,9 +53,11 @@ export function TabNavigation({
   const searchParams = useSearchParams();
 
   const handleTabClick = (tabId: TabId) => {
-    // If Pro-only tab and not on Pro plan, don't navigate
     const tab = tabs.find(t => t.id === tabId);
+
+    // If Pro-only tab and not on Pro plan, redirect to pricing page
     if (tab?.proOnly && !isProOrHigher) {
+      router.push(`/pricing?feature=${encodeURIComponent(tab.label)}&return=/dashboard/agent/${agentId}`);
       return;
     }
 
@@ -79,14 +83,13 @@ export function TabNavigation({
             <button
               key={tab.id}
               onClick={() => handleTabClick(tab.id)}
-              disabled={isLocked}
               className={`
                 group relative flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap
                 border-b-2 transition-all min-w-fit
                 ${isActive
                   ? "border-rose-500 text-rose-600"
                   : isLocked
-                    ? "border-transparent text-slate-400 cursor-not-allowed"
+                    ? "border-transparent text-slate-400 hover:text-rose-500 hover:border-rose-300 cursor-pointer"
                     : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
                 }
               `}
@@ -95,7 +98,7 @@ export function TabNavigation({
               <span className="hidden sm:inline">{tab.label}</span>
               <span className="sm:hidden">{tab.shortLabel || tab.label}</span>
               {isLocked && (
-                <Lock className="w-3 h-3 text-slate-400" />
+                <Lock className="w-3 h-3 text-slate-400 group-hover:text-rose-500" />
               )}
               {tab.proOnly && !isLocked && (
                 <span className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-600">

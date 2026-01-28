@@ -48,6 +48,8 @@ import {
   Video,
   Play,
   Target,
+  Bell,
+  Wrench,
 } from "lucide-react";
 import Link from "next/link";
 import type { CompanyInfo } from "@/lib/types";
@@ -393,6 +395,18 @@ function DashboardContent() {
   const [pendingInvitations, setPendingInvitations] = useState<{ invitationId: string; email: string; role: string; status: string }[]>([]);
   const [loadingSharedUsers, setLoadingSharedUsers] = useState(false);
 
+  // システム通知
+  const [notifications, setNotifications] = useState<{
+    notificationId: string;
+    title: string;
+    message: string;
+    type: "info" | "update" | "warning" | "maintenance";
+    link?: string;
+    createdAt: string;
+    isRead: boolean;
+  }[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
   // 新規作成フォーム
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [rootUrl, setRootUrl] = useState("");
@@ -674,12 +688,27 @@ function DashboardContent() {
     }
   }, [searchParams, paymentVerified, verifyPayment]);
 
+  // 通知を取得
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    }
+  }, []);
+
   // 初期データ読み込み
   useEffect(() => {
     if (status === "authenticated") {
       fetchCompanies();
+      fetchNotifications();
     }
-  }, [status, fetchCompanies]);
+  }, [status, fetchCompanies, fetchNotifications]);
 
   // カード展開時にカスタムナレッジを自動読み込み
   useEffect(() => {
@@ -1199,6 +1228,13 @@ function DashboardContent() {
                 });
                 setShowWidget(true);
                 fetchCompanies();
+
+                // 警告メッセージがある場合はアラート表示
+                if (data.warning) {
+                  setTimeout(() => {
+                    alert(data.warning);
+                  }, 500);
+                }
               } else if (data.type === "error") {
                 setCreateError(data.message || "エラーが発生しました");
                 setProgress(null);
@@ -2105,6 +2141,20 @@ function DashboardContent() {
               <span className="sm:hidden">管理</span>
             </Link>
           )}
+
+          {/* 通知ベル */}
+          <Link
+            href="/notifications"
+            className="relative p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
+          >
+            <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 sm:w-5 sm:h-5 bg-rose-500 text-white text-[10px] sm:text-xs font-bold rounded-full flex items-center justify-center">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </Link>
+
           <button
             onClick={() => signOut({ callbackUrl: "/" })}
             className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-white border border-slate-200 text-slate-600 text-xs sm:text-sm hover:bg-slate-50 transition-all"

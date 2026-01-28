@@ -3,7 +3,7 @@
 
 import { MongoClient } from "mongodb";
 
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://hackjpn1204:WhclRCmmpnsDj7ez@cluster0.giuqi4s.mongodb.net/meeting-ai?retryWrites=true&w=majority&appName=Cluster0";
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://hack:hack1204@cluster0.ay4hkb3.mongodb.net/?appName=Cluster0";
 const DB_NAME = "voice_agent";
 
 async function checkStats() {

@@ -1,9 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import { answerWithRAG, PromptSettings } from "@/lib/rag";
 import { getCollection } from "@/lib/mongodb";
-import { ChatLog, Agent } from "@/lib/types";
+import { ChatLog, Agent, Lead } from "@/lib/types";
 import { v4 as uuidv4 } from "uuid";
 import { checkRateLimit, getClientIP, RATE_LIMIT_CONFIGS } from "@/lib/rate-limit";
+
+// メールアドレスを検出する正規表現
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+
+// 連絡先情報を抽出する関数
+function extractContactInfo(message: string): { email?: string; name?: string } {
+  const result: { email?: string; name?: string } = {};
+
+  // メールアドレスを抽出
+  const emailMatch = message.match(EMAIL_REGEX);
+  if (emailMatch) {
+    result.email = emailMatch[0];
+  }
+
+  // 名前を抽出（メールアドレスの前にある文字列、または「名前は」「私は」等の後）
+  const namePatterns = [
+    /(?:名前は|私は|私の名前は)\s*([^\s、。,\.@]+)/,
+    /^([^\s、。,\.@]+)\s*(?:です|と申します|といいます)/,
+    /([^\s、。,\.@]+)\s+[a-zA-Z0-9._%+-]+@/,  // メールの前の名前
+  ];
+
+  for (const pattern of namePatterns) {
+    const match = message.match(pattern);
+    if (match && match[1] && match[1].length >= 2 && match[1].length <= 20) {
+      result.name = match[1];
+      break;
+    }
+  }
+
+  return result;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -167,6 +198,52 @@ export async function POST(req: NextRequest) {
         ? agentsCol.updateOne({ agentId }, { $set: { lastUsedAt: new Date() } })
         : Promise.resolve(),
     ]);
+
+    // 連絡先情報を検出してリードとして保存
+    const contactInfo = extractContactInfo(message);
+    if (contactInfo.email) {
+      const leadsCol = await getCollection<Lead>("leads");
+
+      // 既存のリードを確認（同じセッションまたは同じメールアドレス）
+      const existingLead = await leadsCol.findOne({
+        companyId,
+        $or: [
+          { sessionId },
+          { email: contactInfo.email },
+        ],
+      });
+
+      if (existingLead) {
+        // 既存リードを更新
+        await leadsCol.updateOne(
+          { _id: existingLead._id },
+          {
+            $set: {
+              ...(contactInfo.name && { name: contactInfo.name }),
+              ...(contactInfo.email && { email: contactInfo.email }),
+              updatedAt: new Date(),
+            },
+          }
+        );
+        console.log("[Lead] Updated existing lead:", existingLead.leadId);
+      } else {
+        // 新規リードを作成
+        const newLead: Lead = {
+          leadId: uuidv4(),
+          companyId,
+          agentId: agentId || "default",
+          sessionId,
+          name: contactInfo.name,
+          email: contactInfo.email,
+          pageUrl: pageUrl || undefined,
+          deviceType: deviceType || undefined,
+          status: "new",
+          createdAt: new Date(),
+        };
+        await leadsCol.insertOne(newLead);
+        console.log("[Lead] Created new lead:", newLead.leadId, contactInfo);
+      }
+    }
 
     return NextResponse.json({ reply, sessionId, relatedLinks, followUpButtons });
   } catch (error) {

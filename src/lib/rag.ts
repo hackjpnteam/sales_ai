@@ -398,7 +398,17 @@ export async function answerWithRAG(params: {
 
   if (promptSettings && (promptSettings.systemPrompt || promptSettings.knowledge || promptSettings.style || promptSettings.ngResponses)) {
     // カスタムプロンプト設定がある場合
-    const baseSystemPrompt = promptSettings.systemPrompt || 'あなたは丁寧なカスタマーサポートAIです。お客様のご質問に的確に、簡潔に回答してください。';
+    const baseSystemPrompt = promptSettings.systemPrompt || `あなたはこの企業で働くプロフェッショナルなアシスタントです。お客様の立場に立ち、親身になって対応します。
+
+【絶対禁止】否定的な対応は完全禁止
+・「わかりません」「存じません」「把握しておりません」
+・「できません」「対応できません」「お答えできません」
+・「申し訳ありません」「すみません」等の謝罪
+
+【情報がない場合・答えられない場合】
+1. 「担当者におつなぎしますね」と伝える
+2. 「お名前とメールアドレスを教えていただけますか？」と聞く
+3. 連絡先をもらったら「ありがとうございます。担当者より折り返しご連絡いたします」と回答`;
 
     const knowledgeSection = promptSettings.knowledge
       ? `\n\n# 重要な情報（必ず参照すること）\n${promptSettings.knowledge}\n\n※上記の情報（電話番号、連絡先、指示事項など）は最優先で回答に含めてください。`
@@ -410,49 +420,88 @@ export async function answerWithRAG(params: {
 
     // NG回答セクション（絶対に回答してはいけない内容）
     const ngResponsesSection = promptSettings.ngResponses
-      ? `\n\n# 【重要】NG回答（絶対に回答してはいけない内容）\n以下のトピックや質問には絶対に回答しないでください。該当する質問があった場合は「申し訳ございませんが、その件についてはお答えできません」と丁寧にお断りしてください。\n\n${promptSettings.ngResponses}`
+      ? `\n\n# 【重要】NG回答（絶対に回答してはいけない内容）\n以下のトピックや質問には回答せず、「担当者におつなぎしますね。お名前とメールアドレスを教えていただけますか？」と対応してください。\n\n${promptSettings.ngResponses}`
       : '';
 
     const guardrailsSection = promptSettings.guardrails || DEFAULT_GUARDRAILS;
 
     const languageInstructions = {
-      ja: '\n\n■回答のルール\n- 質問に直接的に答える\n- 上記の「重要な情報」に記載された電話番号や連絡先は必ず伝える\n- 200文字以内で簡潔に\n- 敬語を使いつつ自然な日本語で',
+      ja: '\n\n■回答のルール\n- 質問に直接的に答える\n- 上記の「重要な情報」に記載された電話番号や連絡先は必ず伝える\n- 300文字以内で簡潔に\n- 敬語を使いつつ自然な日本語で',
       en: '\n\n■ Response Rules\n- Answer the question directly\n- Always include phone numbers and contact info from "Important Information" above\n- Keep it within 200 characters\n- Professional but friendly English\n\nIMPORTANT: Respond ONLY in English.',
       zh: '\n\n■ 回答规则\n- 直接回答问题\n- 务必包含上述"重要信息"中的电话号码和联系方式\n- 保持在200字以内\n- 专业但友好的中文\n\n重要：请只用中文回复。',
     };
 
     finalSystemPrompt = `${baseSystemPrompt}${knowledgeSection}${styleSection}${ngResponsesSection}\n\n${guardrailsSection}${languageInstructions[language as keyof typeof languageInstructions] || languageInstructions.ja}`;
   } else {
-    // デフォルトのシステムプロンプト（言語別・簡素化版）
+    // デフォルトのシステムプロンプト（言語別・企業のプロアシスタント版）
     const systemPrompts = {
-      ja: `あなたは丁寧なカスタマーサポートです。
-・簡単な質問には簡潔に（100文字程度）
-・詳細な分析（年収査定など）は構造的に要点をまとめる（400文字以内）
-・回答は必ず文章として完結させる
-・参考情報にない内容は「把握しておりません」と答える
-・架空の人名や情報は生成しない
-・【重要】絶対に謝罪しない。「申し訳ありません」「申し訳ございません」「すみません」「恐れ入りますが」などの謝罪表現は一切使わない
-・必要な情報を聞く時は謝罪なしでシンプルに質問する
-・情報を提供できない場合も謝らず、代わりに必要な情報を聞く`,
+      ja: `あなたはこの企業で働くプロフェッショナルなアシスタントです。お客様の立場に立ち、親身になって対応します。
 
-      en: `You are a polite customer support agent.
-・Answer concisely (under 150 chars)
-・If info is lengthy, summarize key points to avoid truncation
-・If info not in reference, say "I don't have that information"
-・Never make up names or facts
-・Don't include URLs
-・Always complete your sentences
-・Never apologize - just ask questions directly when needed
+【基本姿勢】
+・お客様を「いらっしゃいませ」ではなく、企業の一員として温かくお迎えする
+・「わかりません」と突き放さず、お客様のお役に立てるよう最大限努力する
+・参考情報にない内容でも、関連する情報を提供したり、適切な案内をする
+
+【回答ルール】
+・簡潔で分かりやすく（300文字以内）
+・回答は必ず文章として完結させる
+・架空の人名や具体的な数値は生成しない
+
+【絶対禁止】否定的な対応は完全禁止
+・「わかりません」「存じません」「把握しておりません」
+・「できません」「対応できません」「お答えできません」
+・「申し訳ありません」「すみません」等の謝罪
+・その他、お客様を突き放すような表現すべて
+
+【情報がない場合・答えられない場合の対応フロー】
+1. 「担当者におつなぎしますね」と伝える
+2. 「お名前とメールアドレスを教えていただけますか？」と連絡先を聞く
+3. 連絡先を教えてもらったら「ありがとうございます。担当者より折り返しご連絡いたします」と回答`,
+
+      en: `You are a professional assistant working for this company. You care about customers and provide helpful support.
+
+【Attitude】
+・Welcome customers warmly as a member of the company
+・Don't just say "I don't know" - try your best to be helpful
+・Even without specific info, provide related guidance
+
+【Rules】
+・Keep responses concise (under 300 chars)
+・Complete your sentences
+・Never fabricate names or specific numbers
+
+【Strictly forbidden】All negative responses are prohibited
+・"I don't know" / "I'm not sure" / "I'm not aware"
+・"I can't" / "Unable to" / "Cannot help"
+・"Sorry" / "I apologize"
+
+【When you can't answer - Follow this flow】
+1. Say "Let me connect you with our staff"
+2. Ask "Could you share your name and email address?"
+3. When they provide contact info, reply "Thank you. Our team will contact you shortly"
 RESPOND IN ENGLISH ONLY.`,
 
-      zh: `您是礼貌的客服人员。
-・简洁回答（150字以内）
-・信息较多时，请总结要点，避免回答被截断
-・参考信息中没有的内容回答"我没有这方面的信息"
-・不编造人名或信息
-・不贴URL
+      zh: `您是这家公司的专业助理。您关心客户，提供热情的支持。
+
+【态度】
+・作为公司的一员热情欢迎客户
+・不要只说"不知道"，尽最大努力提供帮助
+・即使没有具体信息，也提供相关指导
+
+【规则】
+・简洁回答（100-200字）
 ・确保回答完整
-・不要道歉，需要时直接提问
+・不编造人名或具体数字
+
+【严格禁止】所有否定性回答都被禁止
+・"不知道"、"不清楚"、"不了解"
+・"不能"、"无法"、"做不到"
+・"抱歉"、"对不起"
+
+【无法回答时 - 按以下流程】
+1. 说"让我为您转接专人"
+2. 问"请问您的姓名和邮箱地址是？"
+3. 收到联系方式后回复"谢谢您。我们的工作人员会尽快联系您"
 请只用中文回复。`,
     };
 
@@ -546,6 +595,82 @@ ${question}
     max_tokens: 500,
   });
 
-  const reply = completion.choices[0].message.content ?? "";
+  let reply = completion.choices[0].message.content ?? "";
+
+  // 禁止フレーズを検出して担当者対応に置換（言語別）
+  const forbiddenPhrases = {
+    ja: [
+      /わかりません/g,
+      /存じません/g,
+      /把握しておりません/g,
+      /把握していません/g,
+      /できません/g,
+      /対応できません/g,
+      /お答えできません/g,
+      /情報.*持っておりません/g,
+      /情報.*ありません/g,
+      /提供できません/g,
+      /申し訳ありません/g,
+      /申し訳ございません/g,
+      /すみません/g,
+    ],
+    en: [
+      /I don't know/gi,
+      /I'm not sure/gi,
+      /I'm not aware/gi,
+      /I can't/gi,
+      /I cannot/gi,
+      /Unable to/gi,
+      /Sorry/gi,
+      /I apologize/gi,
+    ],
+    zh: [
+      /不知道/g,
+      /不清楚/g,
+      /不了解/g,
+      /不能/g,
+      /无法/g,
+      /做不到/g,
+      /抱歉/g,
+      /对不起/g,
+    ],
+  };
+
+  const redirectResponses = {
+    ja: "担当者におつなぎしますね。お名前とメールアドレスを教えていただけますか？",
+    en: "Let me connect you with our staff. Could you share your name and email address?",
+    zh: "让我为您转接专人。请问您的姓名和邮箱地址是？",
+  };
+
+  const phrases = forbiddenPhrases[language as keyof typeof forbiddenPhrases] || forbiddenPhrases.ja;
+  const redirectResponse = redirectResponses[language as keyof typeof redirectResponses] || redirectResponses.ja;
+
+  // 禁止フレーズが含まれている場合、全体を担当者対応に置換
+  const containsForbidden = phrases.some((pattern) => pattern.test(reply));
+  if (containsForbidden) {
+    reply = redirectResponse;
+  }
+
+  // 300文字を超える場合は自動要約（文が途中で切れないようにAIで要約）
+  const MAX_CHARS = 300;
+  if (reply.length > MAX_CHARS) {
+    const summarizePrompts = {
+      ja: `以下の文章を300文字以内に要約してください。重要な情報は保持し、文章は必ず完結させてください。途中で切れないように。\n\n${reply}`,
+      en: `Summarize the following text to under 300 characters. Keep important information and ensure sentences are complete. Never cut off mid-sentence.\n\n${reply}`,
+      zh: `请将以下文字总结到300字以内。保留重要信息，确保句子完整。绝不要在句子中间截断。\n\n${reply}`,
+    };
+
+    const summarizePrompt = summarizePrompts[language as keyof typeof summarizePrompts] || summarizePrompts.ja;
+
+    const summarizeCompletion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: summarizePrompt }],
+      temperature: 0.3,
+      max_tokens: 300,
+    });
+
+    reply = summarizeCompletion.choices[0].message.content ?? reply;
+  }
+
   return { reply, sourceChunks: chunks, relatedLinks };
 }
