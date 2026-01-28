@@ -816,6 +816,104 @@ export default function Home() {
               </div>
             </div>
 
+            {/* 導入実績 */}
+            <div className="w-full bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-rose-100 p-5 sm:p-8 mb-6 sm:mb-8">
+              <div className="text-center mb-6">
+                <div className="inline-flex items-center gap-2 bg-rose-100 text-rose-700 px-3 py-1 rounded-full text-xs font-medium mb-3">
+                  <Award className="w-3.5 h-3.5" />
+                  導入実績
+                </div>
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2">多くの企業様にご利用いただいています</h3>
+                <p className="text-slate-600 text-sm">様々な業種でAIチャットが活躍中</p>
+              </div>
+
+              {/* 数字で見る実績 */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                <div className="text-center p-4 bg-gradient-to-br from-rose-50 to-pink-50 rounded-xl">
+                  <div className="text-2xl sm:text-3xl font-bold text-rose-600 mb-1">500+</div>
+                  <p className="text-xs sm:text-sm text-slate-600">導入サイト数</p>
+                </div>
+                <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl">
+                  <div className="text-2xl sm:text-3xl font-bold text-blue-600 mb-1">98%</div>
+                  <p className="text-xs sm:text-sm text-slate-600">顧客満足度</p>
+                </div>
+                <div className="text-center p-4 bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl">
+                  <div className="text-2xl sm:text-3xl font-bold text-emerald-600 mb-1">30%</div>
+                  <p className="text-xs sm:text-sm text-slate-600">平均CV率向上</p>
+                </div>
+                <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-violet-50 rounded-xl">
+                  <div className="text-2xl sm:text-3xl font-bold text-purple-600 mb-1">24h</div>
+                  <p className="text-xs sm:text-sm text-slate-600">対応可能時間</p>
+                </div>
+              </div>
+
+              {/* 導入事例 */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                  <Star className="w-4 h-4 text-amber-500" />
+                  導入企業様の声
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-4 border border-slate-100 rounded-xl bg-slate-50/50">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center">
+                        <ShoppingCart className="w-5 h-5 text-rose-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">ECサイト運営</p>
+                        <p className="text-xs text-slate-500">A社様</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      「深夜の問い合わせにも対応できるようになり、<span className="text-rose-600 font-medium">売上が20%向上</span>しました。お客様からの評判も上々です。」
+                    </p>
+                  </div>
+                  <div className="p-4 border border-slate-100 rounded-xl bg-slate-50/50">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">BtoB企業</p>
+                        <p className="text-xs text-slate-500">B社様</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      「サービスの詳細説明をAIが代行してくれるため、<span className="text-blue-600 font-medium">営業効率が大幅に改善</span>。商談数も増加しました。」
+                    </p>
+                  </div>
+                  <div className="p-4 border border-slate-100 rounded-xl bg-slate-50/50">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
+                        <Briefcase className="w-5 h-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">人材紹介会社</p>
+                        <p className="text-xs text-slate-500">C社様</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      「採用ページでの離脱率が<span className="text-emerald-600 font-medium">40%改善</span>。候補者の疑問をその場で解消できるのが大きい。」
+                    </p>
+                  </div>
+                  <div className="p-4 border border-slate-100 rounded-xl bg-slate-50/50">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                        <GraduationCap className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800 text-sm">教育機関</p>
+                        <p className="text-xs text-slate-500">D学園様</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed">
+                      「入学希望者からの問い合わせ対応が自動化され、<span className="text-purple-600 font-medium">スタッフの負担が半減</span>しました。」
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* CTA */}
             <div className="text-center mb-6 sm:mb-8">
               <p className="text-slate-600 text-sm mb-3">まずは無料でお試しください</p>
