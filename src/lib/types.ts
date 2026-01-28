@@ -345,7 +345,7 @@ export type SystemNotification = {
   link?: string;              // リンク（オプション）
   createdBy: string;          // 作成者のuserId
   createdAt: Date;
-  expiresAt?: Date;           // 有効期限（オプション）
+  expiresAt?: Date | null;    // 有効期限（オプション）
 };
 
 // ユーザーごとの通知既読状態

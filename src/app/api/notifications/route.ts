@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       .find({
         $or: [
           { expiresAt: { $exists: false } },
-          { expiresAt: null },
+          { expiresAt: { $eq: null } },
           { expiresAt: { $gt: now } },
         ],
       })

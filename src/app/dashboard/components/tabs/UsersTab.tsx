@@ -130,7 +130,7 @@ export function UsersTab() {
   if (loading) {
     return (
       <SectionCard
-        icon={Users}
+        icon={<Users className="w-5 h-5" />}
         title="ユーザー情報"
         description="連絡先を取得したユーザー一覧"
       >
@@ -143,7 +143,7 @@ export function UsersTab() {
 
   return (
     <SectionCard
-      icon={Users}
+      icon={<Users className="w-5 h-5" />}
       title="ユーザー情報"
       description="チャットで連絡先を取得したユーザー一覧"
       headerAction={
