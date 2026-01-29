@@ -471,9 +471,9 @@ export async function POST(req: NextRequest) {
     } else {
       browser = await puppeteer.launch({
         args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
+        defaultViewport: { width: 1280, height: 720 },
         executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
+        headless: true,
       });
     }
 
@@ -481,7 +481,7 @@ export async function POST(req: NextRequest) {
     await page.setContent(html, { waitUntil: "networkidle0" });
 
     // PDFを生成
-    const pdfBuffer = await page.pdf({
+    const pdfUint8Array = await page.pdf({
       format: "A4",
       printBackground: true,
       margin: { top: "0", right: "0", bottom: "0", left: "0" },
@@ -489,6 +489,7 @@ export async function POST(req: NextRequest) {
 
     await browser.close();
 
+    const pdfBuffer = Buffer.from(pdfUint8Array);
     const filename = `hackjpn-security-report-${new Date().toISOString().split("T")[0]}.pdf`;
 
     return new NextResponse(pdfBuffer, {

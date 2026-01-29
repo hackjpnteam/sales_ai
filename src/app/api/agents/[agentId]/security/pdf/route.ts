@@ -101,7 +101,7 @@ export async function GET(
     await page.setContent(html, { waitUntil: "networkidle0" });
 
     // PDFを生成
-    const pdfBuffer = await page.pdf({
+    const pdfUint8Array = await page.pdf({
       format: "A4",
       printBackground: true,
       margin: { top: "0", right: "0", bottom: "0", left: "0" },
@@ -109,6 +109,7 @@ export async function GET(
 
     await browser.close();
 
+    const pdfBuffer = Buffer.from(pdfUint8Array);
     const filename = `hackjpn-security-report-${agentId}-${new Date().toISOString().split("T")[0]}.pdf`;
 
     return new NextResponse(pdfBuffer, {
