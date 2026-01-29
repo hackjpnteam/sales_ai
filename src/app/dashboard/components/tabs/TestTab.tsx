@@ -11,13 +11,45 @@ type Message = {
   followUpButtons?: QuickButton[];
 };
 
-// マークダウンリンクをHTMLに変換
+// HTMLエスケープ（XSS対策）
+function escapeHtml(text: string): string {
+  const htmlEntities: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+  return text.replace(/[&<>"']/g, char => htmlEntities[char]);
+}
+
+// URLの安全性チェック
+function isSafeUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, 'https://example.com');
+    return ['http:', 'https:'].includes(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
+// マークダウンリンクをHTMLに変換（XSS対策付き）
 function convertMarkdownToHtml(text: string): string {
-  // マークダウンリンク [text](url) を <a> タグに変換
-  return text.replace(
+  // まずHTMLをエスケープ
+  let escaped = escapeHtml(text);
+
+  // マークダウンリンク [text](url) を <a> タグに変換（安全なURLのみ）
+  escaped = escaped.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+    (match, linkText, url) => {
+      if (isSafeUrl(url)) {
+        return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${linkText}</a>`;
+      }
+      return linkText; // 安全でないURLはリンク化しない
+    }
   );
+
+  return escaped;
 }
 
 export function TestTab() {
@@ -61,6 +93,7 @@ export function TestTab() {
           language: agent.languages?.[0] || "ja",
           pageUrl: window.location.href,
           deviceType: "pc",
+          source: "admin_test", // 管理画面からのテスト
         }),
       });
 

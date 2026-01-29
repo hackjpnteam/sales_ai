@@ -7,3 +7,4 @@ export { DesignTab } from "./DesignTab";
 export { EmbedTab } from "./EmbedTab";
 export { ShareTab } from "./ShareTab";
 export { UsersTab } from "./UsersTab";
+export { SecurityTab } from "./SecurityTab";

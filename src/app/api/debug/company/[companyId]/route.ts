@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { Company, User, Agent } from "@/lib/types";
+import { auth } from "@/lib/auth";
 
-// GET: 会社の詳細情報を取得（デバッグ用 - 開発環境のみ）
+const SUPER_ADMIN_EMAILS = ["tomura@hackjpn.com"];
+
+// GET: 会社の詳細情報を取得（デバッグ用 - SuperAdmin専用）
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ companyId: string }> }
 ) {
-  // 本番環境ではSuperAdmin認証が必要（一時的に無効化）
-  // const session = await auth();
-  // if (!session?.user?.email || !isSuperAdmin(session.user.email)) {
-  //   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  // }
+  // SuperAdmin認証必須
+  const session = await auth();
+  if (!session?.user?.email || !SUPER_ADMIN_EMAILS.includes(session.user.email.toLowerCase())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   try {
 

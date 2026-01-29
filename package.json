@@ -15,6 +15,8 @@
     "@types/maxmind": "^2.0.4",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.1.2",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
     "lucide-react": "^0.555.0",
     "mammoth": "^1.11.0",
     "maxmind": "^5.0.1",

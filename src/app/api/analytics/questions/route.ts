@@ -36,6 +36,8 @@ export async function GET(req: NextRequest) {
 
     const companyId = req.nextUrl.searchParams.get("companyId");
     const period = req.nextUrl.searchParams.get("period") || "7days";
+    // sourceフィルタ: "website"（デフォルト）、"all"（すべて）、"admin_test"（テストのみ）
+    const sourceFilter = req.nextUrl.searchParams.get("source") || "website";
 
     if (!companyId) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
@@ -64,12 +66,28 @@ export async function GET(req: NextRequest) {
     const { from, to } = getDateRange(period);
     const chatLogsCol = await getCollection<ChatLog>("chat_logs");
 
+    // sourceフィルタ条件を構築
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sourceCondition: any = {};
+    if (sourceFilter === "website") {
+      // websiteのみ（sourceが"website"または未設定のものを含む - 後方互換性）
+      sourceCondition.$or = [
+        { source: "website" },
+        { source: { $exists: false } },
+        { source: null },
+      ];
+    } else if (sourceFilter === "admin_test") {
+      sourceCondition.source = "admin_test";
+    }
+    // sourceFilter === "all" の場合は条件を追加しない（すべて取得）
+
     // ユーザーメッセージを取得（chat_logsから直接）
     const userMessages = await chatLogsCol
       .find({
         companyId,
         role: "user",
         createdAt: { $gte: from, $lte: to },
+        ...sourceCondition,
       })
       .sort({ createdAt: -1 })
       .limit(500)
@@ -119,6 +137,7 @@ export async function GET(req: NextRequest) {
       totalQuestions: userMessages.length,
       questionRanking,
       recentQuestions,
+      sourceFilter, // 現在のフィルタ状態
     });
   } catch (error) {
     console.error("[Analytics] Questions error:", error);

@@ -19,15 +19,18 @@ function SignupForm() {
 
   // 招待情報
   const invitationId = searchParams.get("invitation");
+  const inviteToken = searchParams.get("invite"); // URL共有リンクのトークン
   const [invitationInfo, setInvitationInfo] = useState<{
     agentName: string;
-    email: string;
+    email?: string;
+    isLinkInvite?: boolean;
   } | null>(null);
   const [loadingInvitation, setLoadingInvitation] = useState(false);
 
   // 招待情報を取得
   useEffect(() => {
     if (invitationId) {
+      // メール招待の場合
       setLoadingInvitation(true);
       fetch(`/api/invitations/${invitationId}`)
         .then((res) => res.json())
@@ -42,8 +45,23 @@ function SignupForm() {
         })
         .catch(console.error)
         .finally(() => setLoadingInvitation(false));
+    } else if (inviteToken) {
+      // URL共有リンクの場合
+      setLoadingInvitation(true);
+      fetch(`/api/invite/${inviteToken}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.valid) {
+            setInvitationInfo({
+              agentName: data.agentName,
+              isLinkInvite: true,
+            });
+          }
+        })
+        .catch(console.error)
+        .finally(() => setLoadingInvitation(false));
     }
-  }, [invitationId]);
+  }, [invitationId, inviteToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +90,7 @@ function SignupForm() {
           password,
           name,
           invitationId: invitationId || undefined,
+          inviteToken: inviteToken || undefined,
         }),
       });
 
@@ -94,14 +113,40 @@ function SignupForm() {
         // Registration succeeded but login failed - redirect to login
         router.push("/login");
       } else {
+        // セッションが確立されるまで少し待つ
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         // 招待がある場合は招待を受け入れる
         if (invitationId) {
           try {
-            await fetch(`/api/invitations/${invitationId}/accept`, {
+            const acceptRes = await fetch(`/api/invitations/${invitationId}/accept`, {
               method: "POST",
             });
+            const acceptData = await acceptRes.json();
+            console.log("[Signup] Accept invitation result:", acceptRes.status, acceptData);
+            if (acceptRes.ok && acceptData.agentId) {
+              router.push(`/dashboard/agent/${acceptData.agentId}`);
+              router.refresh();
+              return;
+            }
           } catch (e) {
             console.error("Failed to accept invitation:", e);
+          }
+        } else if (inviteToken) {
+          // URL共有リンクの場合
+          try {
+            const acceptRes = await fetch(`/api/invite/${inviteToken}/accept`, {
+              method: "POST",
+            });
+            const acceptData = await acceptRes.json();
+            console.log("[Signup] Accept invite result:", acceptRes.status, acceptData);
+            if (acceptRes.ok && acceptData.agentId) {
+              router.push(`/dashboard/agent/${acceptData.agentId}`);
+              router.refresh();
+              return;
+            }
+          } catch (e) {
+            console.error("Failed to accept invite:", e);
           }
         }
         router.push("/dashboard");
@@ -182,9 +227,9 @@ function SignupForm() {
               placeholder="your@email.com"
               className="w-full border border-rose-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 focus:border-rose-300 transition-all disabled:bg-slate-100 disabled:text-slate-500"
               required
-              disabled={loading || !!invitationInfo}
+              disabled={loading || (!!invitationInfo && !invitationInfo.isLinkInvite)}
             />
-            {invitationInfo && (
+            {invitationInfo && !invitationInfo.isLinkInvite && (
               <p className="text-xs text-slate-500 mt-1">
                 招待されたメールアドレスで登録してください
               </p>
@@ -251,7 +296,7 @@ function SignupForm() {
           <p className="text-xs sm:text-sm text-slate-600">
             既にアカウントをお持ちの方は{" "}
             <Link
-              href={invitationId ? `/login?invitation=${invitationId}` : "/login"}
+              href={invitationId ? `/login?invitation=${invitationId}` : inviteToken ? `/login?invite=${inviteToken}` : "/login"}
               className="text-rose-600 hover:text-rose-700 font-semibold"
             >
               ログイン

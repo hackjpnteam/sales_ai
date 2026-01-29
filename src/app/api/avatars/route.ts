@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
 import { User, Agent as AgentType } from "@/lib/types";
+import { randomUUID } from "crypto";
 
 // アバター型
 type Avatar = {
@@ -132,7 +133,7 @@ export async function POST(req: NextRequest) {
 
     // アバターを保存
     const avatarsCol = await getCollection<Avatar>("avatars");
-    const avatarId = Math.random().toString(36).substring(2, 15);
+    const avatarId = randomUUID();
 
     const avatar: Avatar = {
       avatarId,

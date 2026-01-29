@@ -41,6 +41,11 @@ export const RATE_LIMIT_CONFIGS = {
     windowMs: 60 * 1000, // 1分
     maxRequests: 5, // 1分あたり5回
   },
+  // 招待受付（ブルートフォース対策）
+  invite: {
+    windowMs: 60 * 1000, // 1分
+    maxRequests: 10, // 1分あたり10回
+  },
 };
 
 /**

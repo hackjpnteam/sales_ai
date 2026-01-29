@@ -12,6 +12,9 @@ import {
   AlertTriangle,
   Copy,
   LogOut,
+  Link,
+  RefreshCw,
+  X,
 } from "lucide-react";
 import { useAgent, type SharedUser } from "../AgentContext";
 import { SectionCard } from "../shared";
@@ -34,6 +37,11 @@ export function ShareTab() {
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // 共有リンク関連
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [shareLinkLoading, setShareLinkLoading] = useState(false);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
 
   // Check if current user is the owner
   const isOwner = !company?.isShared;
@@ -145,6 +153,86 @@ export function ShareTab() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // 共有リンクを取得
+  const fetchShareLink = useCallback(async () => {
+    if (!agent?.agentId) return;
+
+    try {
+      const res = await fetch(`/api/agents/${agent.agentId}/share/link`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.hasLink && data.token) {
+          setShareLink(`${window.location.origin}/invite/${data.token}`);
+        } else {
+          setShareLink(null);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch share link:", error);
+    }
+  }, [agent?.agentId]);
+
+  // 共有リンクを生成
+  const handleGenerateShareLink = async () => {
+    if (!agent?.agentId) return;
+
+    setShareLinkLoading(true);
+    try {
+      const res = await fetch(`/api/agents/${agent.agentId}/share/link`, {
+        method: "POST",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setShareLink(`${window.location.origin}/invite/${data.token}`);
+      }
+    } catch (error) {
+      console.error("Failed to generate share link:", error);
+    } finally {
+      setShareLinkLoading(false);
+    }
+  };
+
+  // 共有リンクを無効化
+  const handleDisableShareLink = async () => {
+    if (!agent?.agentId || !confirm("共有リンクを無効化しますか？")) return;
+
+    setShareLinkLoading(true);
+    try {
+      const res = await fetch(`/api/agents/${agent.agentId}/share/link`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setShareLink(null);
+      }
+    } catch (error) {
+      console.error("Failed to disable share link:", error);
+    } finally {
+      setShareLinkLoading(false);
+    }
+  };
+
+  // 共有リンクをコピー
+  const handleCopyShareLink = () => {
+    if (!shareLink) return;
+    navigator.clipboard.writeText(shareLink);
+    setShareLinkCopied(true);
+    setTimeout(() => setShareLinkCopied(false), 2000);
+  };
+
+  // 共有リンクを再生成
+  const handleRegenerateShareLink = async () => {
+    if (!confirm("新しいリンクを生成すると、以前のリンクは無効になります。続けますか？")) return;
+    await handleGenerateShareLink();
+  };
+
+  useEffect(() => {
+    if (agent?.agentId && isOwner) {
+      fetchShareLink();
+    }
+  }, [agent?.agentId, isOwner, fetchShareLink]);
+
   if (!agent || !company) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -232,36 +320,83 @@ export function ShareTab() {
         </div>
       </SectionCard>
 
-      {/* Copy link */}
-      <SectionCard title="リンクをコピー" icon={<Share2 className="w-5 h-5" />}>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={`${typeof window !== "undefined" ? window.location.origin : ""}/dashboard/agent/${agent.agentId}`}
-            readOnly
-            className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-600"
-          />
-          <button
-            onClick={handleCopyLink}
-            className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${
-              copied
-                ? "bg-green-50 border-green-200 text-green-600"
-                : "border-slate-200 text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            {copied ? (
-              <>
-                <Check className="w-4 h-4" />
-                コピー済み
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4" />
-                コピー
-              </>
-            )}
-          </button>
-        </div>
+      {/* URL Share Link */}
+      <SectionCard
+        title="URLで共有"
+        description="リンクを知っている人なら誰でも共有できます"
+        icon={<Link className="w-5 h-5" />}
+      >
+        {shareLink ? (
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={shareLink}
+                readOnly
+                className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-600 truncate"
+              />
+              <button
+                onClick={handleCopyShareLink}
+                className={`flex items-center gap-2 px-4 py-2.5 border rounded-xl transition-all ${
+                  shareLinkCopied
+                    ? "bg-green-50 border-green-200 text-green-600"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {shareLinkCopied ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    コピー済み
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    コピー
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleRegenerateShareLink}
+                disabled={shareLinkLoading}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${shareLinkLoading ? "animate-spin" : ""}`} />
+                リンクを再生成
+              </button>
+              <button
+                onClick={handleDisableShareLink}
+                disabled={shareLinkLoading}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-all disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+                無効化
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              このリンクにアクセスした人は、ログインまたは新規登録後にエージェントが共有されます。
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">
+              共有リンクを生成すると、リンクを知っている人なら誰でも登録後にエージェントにアクセスできます。
+            </p>
+            <button
+              onClick={handleGenerateShareLink}
+              disabled={shareLinkLoading}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-xl hover:from-rose-600 hover:to-rose-700 transition-all disabled:opacity-50"
+            >
+              {shareLinkLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Link className="w-4 h-4" />
+              )}
+              共有リンクを生成
+            </button>
+          </div>
+        )}
       </SectionCard>
 
       {/* Shared users */}
@@ -312,7 +447,7 @@ export function ShareTab() {
             ))}
 
             {/* Pending invitations */}
-            {pendingInvitations.map((invitation) => (
+            {pendingInvitations.filter(inv => inv.email).map((invitation) => (
               <div
                 key={invitation.invitationId}
                 className="flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100"

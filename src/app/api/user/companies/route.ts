@@ -80,12 +80,13 @@ export async function GET() {
     // 共有されたエージェントを取得（userIdまたはemailで検索）
     // 自分が所有していない会社のエージェントのみ
     // iconVideoUrlのみ除外（大きな動画データ）
+    const userEmail = session.user.email?.toLowerCase();
     const sharedAgents = await agentsCol
       .find({
         companyId: { $nin: ownedCompanyIds },
         $or: [
           { "sharedWith.userId": session.user.id },
-          { "sharedWith.email": session.user.email },
+          ...(userEmail ? [{ "sharedWith.email": userEmail }] : []),
         ],
       })
       .project({

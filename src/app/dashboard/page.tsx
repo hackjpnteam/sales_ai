@@ -50,6 +50,7 @@ import {
   Target,
   Bell,
   Wrench,
+  Link as LinkIcon,
 } from "lucide-react";
 import Link from "next/link";
 import type { CompanyInfo } from "@/lib/types";
@@ -394,6 +395,10 @@ function DashboardContent() {
   const [sharedUsers, setSharedUsers] = useState<SharedUser[]>([]);
   const [pendingInvitations, setPendingInvitations] = useState<{ invitationId: string; email: string; role: string; status: string }[]>([]);
   const [loadingSharedUsers, setLoadingSharedUsers] = useState(false);
+  // URL共有機能
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [shareLinkLoading, setShareLinkLoading] = useState(false);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
 
   // システム通知
   const [notifications, setNotifications] = useState<{
@@ -642,6 +647,7 @@ function DashboardContent() {
         setCompanies(data.companies || []);
         setSharedCompanies(data.sharedCompanies || []);
         setMaxPlanCount(data.maxPlanCount || 0);
+        console.log("[Dashboard] Shared companies:", data.sharedCompanies?.length, data.sharedCompanies?.map((c: Company) => c.name));
         // 初期状態では全て閉じた状態にする
         setHasFetched(true);
       }
@@ -1051,8 +1057,11 @@ function DashboardContent() {
     setShareEmail("");
     setShareError("");
     setShareSuccess("");
+    setShareLink(null);
+    setShareLinkCopied(false);
     setShowShareModal(true);
     fetchSharedUsers(agentId);
+    fetchShareLink(agentId);
   };
 
   // エージェント共有
@@ -1110,6 +1119,78 @@ function DashboardContent() {
     } catch (error) {
       console.error("Failed to remove share:", error);
     }
+  };
+
+  // 共有リンクを取得
+  const fetchShareLink = useCallback(async (agentId: string) => {
+    try {
+      const res = await fetch(`/api/agents/${agentId}/share/link`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.hasLink && data.token) {
+          setShareLink(`${window.location.origin}/invite/${data.token}`);
+        } else {
+          setShareLink(null);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch share link:", error);
+    }
+  }, []);
+
+  // 共有リンクを生成
+  const handleGenerateShareLink = async () => {
+    if (!shareAgentId) return;
+
+    setShareLinkLoading(true);
+    try {
+      const res = await fetch(`/api/agents/${shareAgentId}/share/link`, {
+        method: "POST",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setShareLink(`${window.location.origin}/invite/${data.token}`);
+      }
+    } catch (error) {
+      console.error("Failed to generate share link:", error);
+    } finally {
+      setShareLinkLoading(false);
+    }
+  };
+
+  // 共有リンクを無効化
+  const handleDisableShareLink = async () => {
+    if (!shareAgentId || !confirm("共有リンクを無効化しますか？")) return;
+
+    setShareLinkLoading(true);
+    try {
+      const res = await fetch(`/api/agents/${shareAgentId}/share/link`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setShareLink(null);
+      }
+    } catch (error) {
+      console.error("Failed to disable share link:", error);
+    } finally {
+      setShareLinkLoading(false);
+    }
+  };
+
+  // 共有リンクをコピー
+  const handleCopyShareLink = () => {
+    if (!shareLink) return;
+    navigator.clipboard.writeText(shareLink);
+    setShareLinkCopied(true);
+    setTimeout(() => setShareLinkCopied(false), 2000);
+  };
+
+  // 共有リンクを再生成
+  const handleRegenerateShareLink = async () => {
+    if (!confirm("新しいリンクを生成すると、以前のリンクは無効になります。続けますか？")) return;
+    await handleGenerateShareLink();
   };
 
   // 共有から抜ける（共有された側が自分で解除）
@@ -2365,7 +2446,7 @@ function DashboardContent() {
       </div>
 
       {/* 会社リスト（所有しているエージェントのみ） */}
-      {companies.filter(c => !c.isShared).length === 0 && !showCreateForm ? (
+      {companies.filter(c => !c.isShared).length === 0 && sharedCompanies.length === 0 && !showCreateForm ? (
         <div className="bg-white rounded-2xl shadow-lg border border-rose-100 p-12 text-center">
           <MessageCircle className="w-12 h-12 text-rose-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-slate-800 mb-2">
@@ -5076,6 +5157,85 @@ function DashboardContent() {
               )}
               {shareSuccess && (
                 <p className="text-sm text-green-600 mt-2">{shareSuccess}</p>
+              )}
+            </div>
+
+            {/* URLで共有 */}
+            <div className="p-4 sm:p-6 border-b border-slate-100">
+              <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+                <LinkIcon className="w-4 h-4 text-blue-500" />
+                URLで共有
+              </label>
+              {shareLink ? (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={shareLink}
+                      readOnly
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-600 truncate"
+                    />
+                    <button
+                      onClick={handleCopyShareLink}
+                      className={`px-3 py-2 border rounded-xl transition-all flex items-center gap-1.5 text-sm ${
+                        shareLinkCopied
+                          ? "bg-green-50 border-green-200 text-green-600"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {shareLinkCopied ? (
+                        <>
+                          <Check className="w-4 h-4" />
+                          コピー済み
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4" />
+                          コピー
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleRegenerateShareLink}
+                      disabled={shareLinkLoading}
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${shareLinkLoading ? "animate-spin" : ""}`} />
+                      再生成
+                    </button>
+                    <button
+                      onClick={handleDisableShareLink}
+                      disabled={shareLinkLoading}
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-all disabled:opacity-50"
+                    >
+                      <X className="w-4 h-4" />
+                      無効化
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    このリンクにアクセスした人は、ログインまたは新規登録後にエージェントが共有されます。
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-slate-600">
+                    共有リンクを生成すると、リンクを知っている人なら誰でも登録後にエージェントにアクセスできます。
+                  </p>
+                  <button
+                    onClick={handleGenerateShareLink}
+                    disabled={shareLinkLoading}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-all disabled:opacity-50"
+                  >
+                    {shareLinkLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <LinkIcon className="w-4 h-4" />
+                    )}
+                    共有リンクを生成
+                  </button>
+                </div>
               )}
             </div>
 

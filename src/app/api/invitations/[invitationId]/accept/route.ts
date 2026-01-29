@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
 import { User, Invitation, Agent, SharedUser } from "@/lib/types";
+import { sendShareNotification } from "@/lib/notifications";
 
 // POST: 招待を受け入れる
 export async function POST(
@@ -91,6 +92,20 @@ export async function POST(
       { invitationId },
       { $set: { status: "accepted" } }
     );
+
+    // 共有通知を送信
+    try {
+      const inviter = await usersCol.findOne({ userId: invitation.invitedBy });
+      await sendShareNotification({
+        toUserId: user.userId,
+        fromUserId: invitation.invitedBy,
+        fromUserName: inviter?.name || inviter?.email || "不明",
+        agentId: invitation.agentId,
+        agentName: agent.name || "無題のエージェント",
+      });
+    } catch (e) {
+      console.error("Failed to send share notification:", e);
+    }
 
     console.log(`[Invitation] ${user.email} accepted invitation to agent ${invitation.agentId}`);
 

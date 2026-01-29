@@ -28,6 +28,7 @@ import {
   EmbedTab,
   ShareTab,
   UsersTab,
+  SecurityTab,
 } from "../../components/tabs";
 
 function AgentDetailContent() {
@@ -198,6 +199,8 @@ function AgentDetailContent() {
         return <ShareTab />;
       case "users":
         return <UsersTab />;
+      case "security":
+        return <SecurityTab />;
       default:
         return <SettingsTab />;
     }

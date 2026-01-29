@@ -17,6 +17,7 @@ import {
   Smartphone,
   Tablet,
   RefreshCw,
+  Download,
 } from "lucide-react";
 
 type ConversationLog = {
@@ -127,6 +128,43 @@ export function UsersTab() {
     });
   };
 
+  // CSVエクスポート関数
+  const exportLeadsToCSV = () => {
+    if (leads.length === 0) return;
+
+    // BOM（Byte Order Mark）を追加してExcelで文字化けを防ぐ
+    const BOM = "\uFEFF";
+
+    // CSVヘッダー
+    const headers = ["名前", "メールアドレス", "電話番号", "問い合わせ内容", "ステータス", "デバイス", "取得日時"];
+
+    // CSVデータ行を生成
+    const rows = leads.map((lead) => {
+      const name = `"${(lead.name || lead.email?.split("@")[0] || "未取得").replace(/"/g, '""')}"`;
+      const email = `"${(lead.email || "").replace(/"/g, '""')}"`;
+      const phone = `"${(lead.phone || "").replace(/"/g, '""')}"`;
+      const inquiry = `"${(lead.inquiry || "").replace(/"/g, '""').replace(/\n/g, " ")}"`;
+      const status = statusLabels[lead.status];
+      const device = lead.deviceType === "mobile" ? "モバイル" : lead.deviceType === "tablet" ? "タブレット" : "PC";
+      const date = formatDate(lead.createdAt);
+      return [name, email, phone, inquiry, status, device, date].join(",");
+    });
+
+    // CSVコンテンツを生成
+    const csvContent = BOM + headers.join(",") + "\n" + rows.join("\n");
+
+    // Blobを作成してダウンロード
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `ユーザー情報_${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <SectionCard
@@ -147,13 +185,24 @@ export function UsersTab() {
       title="ユーザー情報"
       description="チャットで連絡先を取得したユーザー一覧"
       headerAction={
-        <button
-          onClick={fetchLeads}
-          className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-          title="更新"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportLeadsToCSV}
+            disabled={leads.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="CSVダウンロード"
+          >
+            <Download className="w-4 h-4" />
+            CSV
+          </button>
+          <button
+            onClick={fetchLeads}
+            className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+            title="更新"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
       }
     >
       {leads.length === 0 ? (
@@ -189,7 +238,7 @@ export function UsersTab() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-slate-900">
-                            {lead.name || "名前未取得"}
+                            {lead.name || lead.email?.split("@")[0] || "名前未取得"}
                           </span>
                           <span
                             className={`px-2 py-0.5 text-xs rounded-full ${
@@ -213,6 +262,15 @@ export function UsersTab() {
                             </span>
                           )}
                         </div>
+                        {/* 問い合わせ内容 */}
+                        {lead.inquiry && (
+                          <div className="mt-2 text-sm text-slate-600 bg-slate-100 rounded-lg p-2">
+                            <span className="font-medium text-slate-700">問い合わせ: </span>
+                            {lead.inquiry.length > 100
+                              ? lead.inquiry.slice(0, 100) + "..."
+                              : lead.inquiry}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-3">

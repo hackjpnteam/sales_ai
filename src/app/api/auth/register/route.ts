@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 import { getCollection } from "@/lib/mongodb";
 import type { User } from "@/lib/types";
+import { sendWelcomeNotification } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   try {
@@ -61,6 +62,13 @@ export async function POST(req: NextRequest) {
     };
 
     await usersCol.insertOne(user);
+
+    // ウェルカム通知を送信
+    try {
+      await sendWelcomeNotification(user.userId);
+    } catch (e) {
+      console.error("Failed to send welcome notification:", e);
+    }
 
     return NextResponse.json({
       success: true,

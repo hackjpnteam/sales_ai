@@ -5,6 +5,9 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
   Shield,
+  ShieldCheck,
+  ShieldAlert,
+  ShieldX,
   Users,
   Building2,
   Bot,
@@ -26,6 +29,10 @@ import {
   Info,
   Wrench,
   AlertTriangle,
+  Search,
+  X,
+  Download,
+  FileText,
 } from "lucide-react";
 import Footer from "@/components/Footer";
 
@@ -81,6 +88,32 @@ type SystemNotification = {
   expiresAt?: string;
 };
 
+type SecurityIssue = {
+  id: string;
+  type: string;
+  severity: "critical" | "high" | "medium" | "low" | "info";
+  title: string;
+  description: string;
+  recommendation: string;
+  details?: string;
+};
+
+type SecurityScanResult = {
+  url: string;
+  score: number;
+  grade: "A" | "B" | "C" | "D" | "F";
+  issuesSummary: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    info: number;
+    total: number;
+  };
+  issues: SecurityIssue[];
+  scannedAt: string;
+};
+
 const SUPER_ADMIN_EMAILS = ["tomura@hackjpn.com"];
 
 export default function SuperAdminPage() {
@@ -114,6 +147,13 @@ export default function SuperAdminPage() {
     link: "",
   });
   const [sendingNotification, setSendingNotification] = useState(false);
+
+  // セキュリティスキャン
+  const [scanningAgent, setScanningAgent] = useState<string | null>(null);
+  const [scanResult, setScanResult] = useState<SecurityScanResult | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [showScanModal, setShowScanModal] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const isSuperAdmin =
     session?.user?.email &&
@@ -237,6 +277,91 @@ export default function SuperAdminPage() {
         return <span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">メンテナンス</span>;
       default:
         return null;
+    }
+  };
+
+  // セキュリティスキャン実行
+  const handleSecurityScan = async (agentId: string, agentName: string) => {
+    setScanningAgent(agentId);
+    setScanResult(null);
+    setScanError(null);
+    setShowScanModal(true);
+
+    try {
+      const res = await fetch("/api/superadmin/security-scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setScanResult(data.result);
+      } else {
+        setScanError(data.error || "スキャンに失敗しました");
+      }
+    } catch (error) {
+      console.error("Security scan error:", error);
+      setScanError("スキャン中にエラーが発生しました");
+    } finally {
+      setScanningAgent(null);
+    }
+  };
+
+  const getGradeColor = (grade: string) => {
+    switch (grade) {
+      case "A": return "text-emerald-600 bg-emerald-100";
+      case "B": return "text-green-600 bg-green-100";
+      case "C": return "text-yellow-600 bg-yellow-100";
+      case "D": return "text-orange-600 bg-orange-100";
+      case "F": return "text-red-600 bg-red-100";
+      default: return "text-slate-600 bg-slate-100";
+    }
+  };
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity) {
+      case "critical": return "text-red-700 bg-red-50 border-red-200";
+      case "high": return "text-orange-700 bg-orange-50 border-orange-200";
+      case "medium": return "text-yellow-700 bg-yellow-50 border-yellow-200";
+      case "low": return "text-blue-700 bg-blue-50 border-blue-200";
+      case "info": return "text-slate-700 bg-slate-50 border-slate-200";
+      default: return "text-slate-700 bg-slate-50 border-slate-200";
+    }
+  };
+
+  // PDF ダウンロード（サーバーサイドで生成）
+  const handleDownloadPdf = async () => {
+    if (!scanResult) return;
+
+    setDownloadingPdf(true);
+    try {
+      const res = await fetch("/api/superadmin/security-scan/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(scanResult),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "PDF generation failed");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `hackjpn-security-report-${new Date().toISOString().split("T")[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("PDF download error:", error);
+      alert("PDFのダウンロードに失敗しました: " + (error instanceof Error ? error.message : "Unknown error"));
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -954,10 +1079,27 @@ export default function SuperAdminPage() {
                                 .map((agent) => (
                                   <div
                                     key={agent.agentId}
-                                    className="flex items-center gap-2 text-white/60 text-sm"
+                                    className="flex items-center justify-between gap-2 text-slate-600 text-sm py-1"
                                   >
-                                    <Bot className="w-3 h-3 text-purple-400" />
-                                    {agent.name}
+                                    <div className="flex items-center gap-2">
+                                      <Bot className="w-3 h-3 text-purple-500" />
+                                      {agent.name}
+                                    </div>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSecurityScan(agent.agentId, agent.name);
+                                      }}
+                                      disabled={scanningAgent === agent.agentId}
+                                      className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-all disabled:opacity-50"
+                                    >
+                                      {scanningAgent === agent.agentId ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Search className="w-3 h-3" />
+                                      )}
+                                      診断
+                                    </button>
                                   </div>
                                 ))}
                             </div>
@@ -1095,10 +1237,27 @@ export default function SuperAdminPage() {
                           {guest.agents.map((agent) => (
                             <div
                               key={agent.agentId}
-                              className="flex items-center gap-2 text-slate-600 text-sm"
+                              className="flex items-center justify-between gap-2 text-slate-600 text-sm py-1"
                             >
-                              <Bot className="w-3 h-3 text-purple-500" />
-                              {agent.name}
+                              <div className="flex items-center gap-2">
+                                <Bot className="w-3 h-3 text-purple-500" />
+                                {agent.name}
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSecurityScan(agent.agentId, agent.name);
+                                }}
+                                disabled={scanningAgent === agent.agentId}
+                                className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-all disabled:opacity-50"
+                              >
+                                {scanningAgent === agent.agentId ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Search className="w-3 h-3" />
+                                )}
+                                診断
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -1111,6 +1270,144 @@ export default function SuperAdminPage() {
           </div>
         </div>
       </main>
+
+      {/* セキュリティスキャン結果モーダル */}
+      {showScanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            {/* モーダルヘッダー */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-gradient-to-r from-emerald-500 to-teal-500">
+              <h3 className="text-white font-bold flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5" />
+                セキュリティ診断結果
+              </h3>
+              <button
+                onClick={() => {
+                  setShowScanModal(false);
+                  setScanResult(null);
+                  setScanError(null);
+                }}
+                className="text-white/80 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* モーダルコンテンツ */}
+            <div className="p-4 overflow-y-auto max-h-[calc(80vh-60px)]">
+              {scanningAgent && (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
+                  <p className="text-slate-600">サイトをスキャン中...</p>
+                  <p className="text-slate-400 text-sm mt-2">数秒～数十秒かかる場合があります</p>
+                </div>
+              )}
+
+              {scanError && (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
+                  <p className="text-red-600 font-medium">スキャンエラー</p>
+                  <p className="text-slate-500 text-sm mt-2">{scanError}</p>
+                </div>
+              )}
+
+              {scanResult && (
+                <div className="space-y-4">
+                  {/* スコア表示 */}
+                  <div className="flex items-center justify-between gap-4 p-4 bg-slate-50 rounded-xl">
+                    <div className="flex items-center gap-4">
+                      <div className={`text-4xl font-bold px-4 py-2 rounded-xl ${getGradeColor(scanResult.grade)}`}>
+                        {scanResult.grade}
+                      </div>
+                      <div>
+                        <p className="text-slate-800 font-bold text-xl">{scanResult.score}/100点</p>
+                        <p className="text-slate-500 text-sm truncate max-w-[250px]">{scanResult.url}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleDownloadPdf}
+                      disabled={downloadingPdf}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose-500 to-pink-500 text-white rounded-lg hover:from-rose-600 hover:to-pink-600 transition-all disabled:opacity-50 shrink-0"
+                    >
+                      {downloadingPdf ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <FileText className="w-4 h-4" />
+                      )}
+                      PDF診断書
+                    </button>
+                  </div>
+
+                  {/* サマリー */}
+                  <div className="grid grid-cols-5 gap-2">
+                    <div className="text-center p-2 rounded-lg bg-red-50 border border-red-200">
+                      <p className="text-red-700 text-lg font-bold">{scanResult.issuesSummary.critical}</p>
+                      <p className="text-red-600 text-xs">Critical</p>
+                    </div>
+                    <div className="text-center p-2 rounded-lg bg-orange-50 border border-orange-200">
+                      <p className="text-orange-700 text-lg font-bold">{scanResult.issuesSummary.high}</p>
+                      <p className="text-orange-600 text-xs">High</p>
+                    </div>
+                    <div className="text-center p-2 rounded-lg bg-yellow-50 border border-yellow-200">
+                      <p className="text-yellow-700 text-lg font-bold">{scanResult.issuesSummary.medium}</p>
+                      <p className="text-yellow-600 text-xs">Medium</p>
+                    </div>
+                    <div className="text-center p-2 rounded-lg bg-blue-50 border border-blue-200">
+                      <p className="text-blue-700 text-lg font-bold">{scanResult.issuesSummary.low}</p>
+                      <p className="text-blue-600 text-xs">Low</p>
+                    </div>
+                    <div className="text-center p-2 rounded-lg bg-slate-50 border border-slate-200">
+                      <p className="text-slate-700 text-lg font-bold">{scanResult.issuesSummary.info}</p>
+                      <p className="text-slate-600 text-xs">Info</p>
+                    </div>
+                  </div>
+
+                  {/* 問題一覧 */}
+                  {scanResult.issues.length > 0 ? (
+                    <div className="space-y-2">
+                      <h4 className="text-slate-700 font-medium">検出された問題 ({scanResult.issues.length}件)</h4>
+                      {scanResult.issues.map((issue, index) => (
+                        <div
+                          key={issue.id || index}
+                          className={`p-3 rounded-lg border ${getSeverityColor(issue.severity)}`}
+                        >
+                          <div className="flex items-start gap-2">
+                            {issue.severity === "critical" && <ShieldX className="w-4 h-4 mt-0.5 shrink-0" />}
+                            {issue.severity === "high" && <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />}
+                            {issue.severity === "medium" && <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />}
+                            {issue.severity === "low" && <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />}
+                            {issue.severity === "info" && <Info className="w-4 h-4 mt-0.5 shrink-0" />}
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">{issue.title}</p>
+                              <p className="text-xs mt-1 opacity-80">{issue.description}</p>
+                              {issue.details && (
+                                <p className="text-xs mt-1 opacity-60">{issue.details}</p>
+                              )}
+                              <p className="text-xs mt-2 pt-2 border-t border-current/10">
+                                <strong>推奨:</strong> {issue.recommendation}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center py-8 bg-emerald-50 rounded-xl">
+                      <CheckCircle className="w-12 h-12 text-emerald-500 mb-2" />
+                      <p className="text-emerald-700 font-medium">問題は検出されませんでした</p>
+                    </div>
+                  )}
+
+                  <p className="text-slate-400 text-xs text-center">
+                    スキャン日時: {new Date(scanResult.scannedAt).toLocaleString("ja-JP")}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </div>
   );

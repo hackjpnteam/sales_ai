@@ -3,6 +3,7 @@ import { getCollection } from "@/lib/mongodb";
 import { auth } from "@/lib/auth";
 import { User, Agent, Company, Invitation, SharedUser } from "@/lib/types";
 import { v4 as uuidv4 } from "uuid";
+import { sendShareNotification } from "@/lib/notifications";
 
 // GET: エージェントの共有ユーザー一覧を取得
 export async function GET(
@@ -36,10 +37,14 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    // 保留中の招待も取得
+    // 保留中の招待も取得（URL共有リンクは除外）
     const invitationsCol = await getCollection<Invitation>("invitations");
     const pendingInvitations = await invitationsCol
-      .find({ agentId, status: "pending" })
+      .find({
+        agentId,
+        status: "pending",
+        isLinkInvitation: { $ne: true }
+      })
       .toArray();
 
     return NextResponse.json({
@@ -120,9 +125,9 @@ export async function POST(
       );
     }
 
-    // 対象ユーザーが存在するか確認
+    // 対象ユーザーが存在するか確認（大文字小文字を区別しない）
     const targetUser = await usersCol.findOne({
-      email: { $regex: new RegExp(`^${normalizedEmail}$`, "i") },
+      email: normalizedEmail,
     });
 
     if (targetUser) {
@@ -138,6 +143,19 @@ export async function POST(
         { agentId },
         { $push: { sharedWith: sharedUser } }
       );
+
+      // 共有通知を送信
+      try {
+        await sendShareNotification({
+          toUserId: targetUser.userId,
+          fromUserId: session.user.id,
+          fromUserName: currentUser.name || currentUser.email,
+          agentId,
+          agentName: agent.name || "無題のエージェント",
+        });
+      } catch (e) {
+        console.error("Failed to send share notification:", e);
+      }
 
       console.log(`[Share] Agent ${agentId} shared with ${normalizedEmail}`);
 

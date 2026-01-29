@@ -73,6 +73,207 @@
   var _trackingContext = null;
   var _conversionTracked = {}; // 重複トラッキング防止
 
+  // [Security] セキュリティスキャン実行済みフラグ
+  var _securityScanned = false;
+
+  // [Security] セキュリティスキャン関数
+  function runSecurityScan(apiBase, companyId, sessionId) {
+    // セッション毎に1回のみ実行
+    var scanKey = 'saleschat_security_scanned_' + sessionId;
+    try {
+      if (sessionStorage.getItem(scanKey)) {
+        return;
+      }
+      sessionStorage.setItem(scanKey, 'true');
+    } catch (e) {
+      if (_securityScanned) return;
+      _securityScanned = true;
+    }
+
+    var issues = [];
+    var meta = {
+      protocol: window.location.protocol,
+      hasHttpForms: false,
+      hasMixedContent: false,
+      externalScripts: [],
+      jqueryVersion: null,
+      cookieFlags: { total: 0, httpOnly: 0, secure: 0 }
+    };
+
+    // 1. HTTPS未使用チェック
+    if (window.location.protocol !== 'https:') {
+      issues.push({
+        id: 'https_missing',
+        type: 'https_missing',
+        severity: 'critical',
+        title: 'HTTPS未使用',
+        description: 'サイトがHTTPSを使用していません。通信が暗号化されておらず、中間者攻撃のリスクがあります。',
+        recommendation: 'SSL/TLS証明書を導入し、サイト全体をHTTPS化してください。'
+      });
+    }
+
+    // 2. HTTPフォーム送信チェック
+    try {
+      var forms = document.querySelectorAll('form[action^="http:"]');
+      if (forms.length > 0) {
+        meta.hasHttpForms = true;
+        issues.push({
+          id: 'http_form',
+          type: 'http_form',
+          severity: 'critical',
+          title: 'HTTPフォーム送信',
+          description: forms.length + '個のフォームがHTTP（非暗号化）で送信される設定になっています。',
+          recommendation: 'フォームのaction属性をHTTPSのURLに変更してください。',
+          details: '対象フォーム数: ' + forms.length
+        });
+      }
+    } catch (e) {}
+
+    // 3. 混合コンテンツチェック
+    try {
+      var mixedResources = [];
+      // images
+      document.querySelectorAll('img[src^="http:"]').forEach(function(el) {
+        mixedResources.push(el.src);
+      });
+      // scripts
+      document.querySelectorAll('script[src^="http:"]').forEach(function(el) {
+        mixedResources.push(el.src);
+      });
+      // stylesheets
+      document.querySelectorAll('link[href^="http:"]').forEach(function(el) {
+        mixedResources.push(el.href);
+      });
+
+      if (mixedResources.length > 0 && window.location.protocol === 'https:') {
+        meta.hasMixedContent = true;
+        issues.push({
+          id: 'mixed_content',
+          type: 'mixed_content',
+          severity: 'high',
+          title: '混合コンテンツ',
+          description: mixedResources.length + '個のリソースがHTTPで読み込まれています。',
+          recommendation: 'すべてのリソースをHTTPS経由で読み込むようにしてください。',
+          details: mixedResources.slice(0, 5).join(', ') + (mixedResources.length > 5 ? '...' : '')
+        });
+      }
+    } catch (e) {}
+
+    // 4. 外部スクリプトチェック
+    try {
+      var currentHost = window.location.hostname;
+      var externalScripts = [];
+      document.querySelectorAll('script[src]').forEach(function(el) {
+        try {
+          var url = new URL(el.src);
+          if (url.hostname !== currentHost && !url.hostname.includes('cdn') && !url.hostname.includes('cloudflare')) {
+            externalScripts.push(url.hostname);
+          }
+        } catch (e) {}
+      });
+
+      meta.externalScripts = externalScripts;
+      if (externalScripts.length > 5) {
+        issues.push({
+          id: 'external_scripts',
+          type: 'external_scripts',
+          severity: 'info',
+          title: '多数の外部スクリプト',
+          description: externalScripts.length + '個の外部ドメインからスクリプトが読み込まれています。',
+          recommendation: '必要のないスクリプトを削除し、信頼できるソースのみを使用してください。',
+          details: externalScripts.slice(0, 5).join(', ')
+        });
+      }
+    } catch (e) {}
+
+    // 5. 古いjQueryチェック
+    try {
+      if (typeof jQuery !== 'undefined' && jQuery.fn && jQuery.fn.jquery) {
+        var version = jQuery.fn.jquery;
+        meta.jqueryVersion = version;
+        var parts = version.split('.');
+        var major = parseInt(parts[0], 10);
+        var minor = parseInt(parts[1], 10);
+
+        // jQuery 3.5.0未満は脆弱性あり
+        if (major < 3 || (major === 3 && minor < 5)) {
+          issues.push({
+            id: 'old_jquery',
+            type: 'old_jquery',
+            severity: 'medium',
+            title: '古いjQueryバージョン',
+            description: 'jQuery ' + version + 'が使用されています。セキュリティ脆弱性が存在する可能性があります。',
+            recommendation: 'jQueryを最新バージョンにアップデートしてください。',
+            details: '現在のバージョン: ' + version
+          });
+        }
+      }
+    } catch (e) {}
+
+    // 6. クッキーのセキュリティフラグチェック
+    try {
+      var cookies = document.cookie.split(';');
+      meta.cookieFlags.total = cookies.filter(function(c) { return c.trim().length > 0; }).length;
+      // document.cookieからはHttpOnlyクッキーは見えないので、
+      // HttpOnlyでないクッキーが多い場合は警告
+      if (meta.cookieFlags.total > 3) {
+        issues.push({
+          id: 'cookie_security',
+          type: 'cookie_security',
+          severity: 'medium',
+          title: 'JavaScriptからアクセス可能なCookie',
+          description: meta.cookieFlags.total + '個のCookieがJavaScriptからアクセス可能です。',
+          recommendation: 'セッションCookieにはHttpOnly属性を設定し、重要なCookieにはSecure属性を追加してください。',
+          details: 'アクセス可能なCookie数: ' + meta.cookieFlags.total
+        });
+      }
+    } catch (e) {}
+
+    // 7. パスワードフィールドのautocompleteチェック
+    try {
+      var passwordFields = document.querySelectorAll('input[type="password"]');
+      var insecurePasswords = [];
+      passwordFields.forEach(function(el) {
+        var autocomplete = el.getAttribute('autocomplete');
+        if (!autocomplete || autocomplete === 'on') {
+          insecurePasswords.push(el);
+        }
+      });
+
+      if (insecurePasswords.length > 0) {
+        issues.push({
+          id: 'password_autocomplete',
+          type: 'password_autocomplete',
+          severity: 'low',
+          title: 'パスワードフィールドのautocomplete',
+          description: insecurePasswords.length + '個のパスワードフィールドでautocompleteが適切に設定されていません。',
+          recommendation: 'パスワードフィールドにはautocomplete="new-password"または"current-password"を設定してください。'
+        });
+      }
+    } catch (e) {}
+
+    // スキャン結果を送信
+    try {
+      fetch(apiBase + '/api/security/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({
+          companyId: companyId,
+          sessionId: sessionId,
+          pageUrl: window.location.href,
+          issues: issues,
+          meta: meta,
+          userAgent: navigator.userAgent
+        })
+      }).catch(function() {
+        // エラーは握りつぶす（ウィジェット表示を邪魔しない）
+      });
+    } catch (e) {
+      // 無視
+    }
+  }
+
   window.saleschatTrackConversion = function(conversionType, conversionValue) {
     if (_trackingContext) {
       sendTrackingEvent(
@@ -406,6 +607,14 @@
           setupConversionTracking(settings.conversionSettings, _trackingContext);
         } else {
           console.log('[AI Widget] Conversion tracking not enabled or no settings');
+        }
+
+        // セキュリティスキャンを実行（Pro機能、設定で有効な場合）
+        if (settings.securityScanEnabled) {
+          // 少し遅延させてページ読み込み完了後に実行
+          setTimeout(function() {
+            runSecurityScan(apiBase, companyId, sessionId);
+          }, 3000);
         }
 
         // 設定を取得成功

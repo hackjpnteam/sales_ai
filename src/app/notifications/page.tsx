@@ -12,16 +12,21 @@ import {
   Wrench,
   Check,
   ExternalLink,
+  Share2,
+  Sparkles,
 } from "lucide-react";
 
 type Notification = {
   notificationId: string;
   title: string;
   message: string;
-  type: "info" | "update" | "warning" | "maintenance";
+  type: "info" | "update" | "warning" | "maintenance" | "share" | "welcome";
   link?: string;
   createdAt: string;
   isRead: boolean;
+  isSystem?: boolean;
+  fromUserName?: string;
+  agentName?: string;
 };
 
 export default function NotificationsPage() {
@@ -52,12 +57,12 @@ export default function NotificationsPage() {
     }
   }, [status, fetchNotifications, router]);
 
-  const markAsRead = async (notificationId: string) => {
+  const markAsRead = async (notificationId: string, isUserNotification: boolean) => {
     try {
       await fetch("/api/notifications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notificationId }),
+        body: JSON.stringify({ notificationId, isUserNotification }),
       });
       setNotifications((prev) =>
         prev.map((n) =>
@@ -66,6 +71,17 @@ export default function NotificationsPage() {
       );
     } catch (error) {
       console.error("Failed to mark as read:", error);
+    }
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    // 未読なら既読にする
+    if (!notification.isRead) {
+      await markAsRead(notification.notificationId, !notification.isSystem);
+    }
+    // 内部リンクなら遷移
+    if (notification.link && notification.link.startsWith("/")) {
+      router.push(notification.link);
     }
   };
 
@@ -92,27 +108,35 @@ export default function NotificationsPage() {
         return <AlertTriangle className="w-5 h-5 text-amber-500" />;
       case "maintenance":
         return <Wrench className="w-5 h-5 text-slate-500" />;
+      case "share":
+        return <Share2 className="w-5 h-5 text-purple-500" />;
+      case "welcome":
+        return <Sparkles className="w-5 h-5 text-rose-500" />;
       default:
         return <Bell className="w-5 h-5 text-slate-500" />;
     }
   };
 
   const getTypeBadge = (type: Notification["type"]) => {
-    const styles = {
+    const styles: Record<string, string> = {
       update: "bg-green-100 text-green-700",
       info: "bg-blue-100 text-blue-700",
       warning: "bg-amber-100 text-amber-700",
       maintenance: "bg-slate-100 text-slate-700",
+      share: "bg-purple-100 text-purple-700",
+      welcome: "bg-rose-100 text-rose-700",
     };
-    const labels = {
+    const labels: Record<string, string> = {
       update: "アップデート",
       info: "お知らせ",
       warning: "重要",
       maintenance: "メンテナンス",
+      share: "共有",
+      welcome: "ようこそ",
     };
     return (
-      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${styles[type]}`}>
-        {labels[type]}
+      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${styles[type] || styles.info}`}>
+        {labels[type] || "お知らせ"}
       </span>
     );
   };
@@ -173,12 +197,10 @@ export default function NotificationsPage() {
             notifications.map((notification) => (
               <div
                 key={notification.notificationId}
-                onClick={() => {
-                  if (!notification.isRead) {
-                    markAsRead(notification.notificationId);
-                  }
-                }}
+                onClick={() => handleNotificationClick(notification)}
                 className={`bg-white rounded-2xl border transition-all ${
+                  notification.link?.startsWith("/") ? "cursor-pointer hover:shadow-md" : ""
+                } ${
                   !notification.isRead
                     ? "border-rose-200 shadow-sm"
                     : "border-slate-200"
@@ -238,15 +260,28 @@ export default function NotificationsPage() {
                         })}
                     </div>
                     {notification.link && (
-                      <a
-                        href={notification.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 mt-4 px-4 py-2 rounded-xl bg-rose-50 text-rose-600 text-sm font-medium hover:bg-rose-100 transition-all"
-                      >
-                        詳細を見る
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
+                      notification.link.startsWith("/") ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNotificationClick(notification);
+                          }}
+                          className="inline-flex items-center gap-1 mt-4 px-4 py-2 rounded-xl bg-rose-50 text-rose-600 text-sm font-medium hover:bg-rose-100 transition-all"
+                        >
+                          詳細を見る
+                        </button>
+                      ) : (
+                        <a
+                          href={notification.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 mt-4 px-4 py-2 rounded-xl bg-rose-50 text-rose-600 text-sm font-medium hover:bg-rose-100 transition-all"
+                        >
+                          詳細を見る
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )
                     )}
                   </div>
                 </div>

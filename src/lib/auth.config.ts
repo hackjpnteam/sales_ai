@@ -57,6 +57,7 @@ export const authConfig: NextAuthConfig = {
   },
   session: {
     strategy: "jwt",
-    maxAge: 7 * 24 * 60 * 60, // 7 days
+    maxAge: 24 * 60 * 60, // 24時間（セキュリティ強化）
+    updateAge: 60 * 60, // 1時間ごとに更新（アクティブユーザーは延長）
   },
 };

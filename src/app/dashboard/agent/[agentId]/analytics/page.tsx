@@ -32,6 +32,7 @@ import {
   ExternalLink,
   Info,
   ArrowLeft,
+  Download,
 } from "lucide-react";
 
 // ツールチップコンポーネント
@@ -305,6 +306,39 @@ function AnalyticsContent() {
       }
       return newSet;
     });
+  };
+
+  // CSVエクスポート関数
+  const exportQuestionsToCSV = () => {
+    if (questionRanking.length === 0) return;
+
+    // BOM（Byte Order Mark）を追加してExcelで文字化けを防ぐ
+    const BOM = "\uFEFF";
+
+    // CSVヘッダー
+    const headers = ["順位", "質問内容", "出現回数", "最終日時"];
+
+    // CSVデータ行を生成
+    const rows = questionRanking.map((q, index) => {
+      // 質問内容にカンマや改行が含まれる場合はダブルクォートで囲む
+      const escapedText = `"${q.text.replace(/"/g, '""')}"`;
+      const lastDate = new Date(q.lastDate).toLocaleString("ja-JP");
+      return [index + 1, escapedText, q.count, lastDate].join(",");
+    });
+
+    // CSVコンテンツを生成
+    const csvContent = BOM + headers.join(",") + "\n" + rows.join("\n");
+
+    // Blobを作成してダウンロード
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `質問ランキング_${agentName}_${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -832,9 +866,20 @@ function AnalyticsContent() {
       {activeTab === "questions" && isPro && (
         <div className="space-y-6">
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-100">
-              <h3 className="font-bold text-slate-800">質問ランキング</h3>
-              <p className="text-sm text-slate-500 mt-1">ユーザーからの質問を頻度順に表示</p>
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-800">質問ランキング</h3>
+                <p className="text-sm text-slate-500 mt-1">ウェブサイトからの質問を頻度順に表示（管理画面テストは除外）</p>
+              </div>
+              <button
+                onClick={exportQuestionsToCSV}
+                disabled={questionRanking.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="CSVでダウンロード"
+              >
+                <Download className="w-4 h-4" />
+                CSVダウンロード
+              </button>
             </div>
             <div className="divide-y divide-slate-100">
               {questionRanking.map((q, i) => (

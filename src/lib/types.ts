@@ -186,7 +186,9 @@ export type ConversionTrigger = {
 export type Invitation = {
   _id?: string;
   invitationId: string;
-  email: string;
+  email?: string;            // メール招待の場合のメールアドレス
+  token?: string;            // URL共有の場合のトークン
+  isLinkInvitation?: boolean; // URL共有かどうか
   agentId: string;
   companyId: string;
   invitedBy: string;        // userId of inviter
@@ -209,6 +211,9 @@ export type DocChunk = {
   createdAt: Date;
 };
 
+// 会話ログのソース（どこからの送信か）
+export type ChatLogSource = "website" | "admin_test" | "preview";
+
 // 会話ログ
 export type ChatLog = {
   _id?: string;
@@ -220,6 +225,8 @@ export type ChatLog = {
   // ページ情報（会話履歴で表示用）
   pageUrl?: string;
   deviceType?: "pc" | "mobile" | "tablet";
+  // ソース情報（管理画面テストとウェブサイトを区別）
+  source?: ChatLogSource;
   createdAt: Date;
 };
 
@@ -354,6 +361,102 @@ export type NotificationRead = {
   userId: string;
   notificationId: string;
   readAt: Date;
+};
+
+// ユーザー個別通知（共有通知、ウェルカム通知など）
+export type UserNotification = {
+  _id?: string;
+  notificationId: string;
+  userId: string;             // 通知先ユーザーID
+  type: "share" | "welcome" | "info";  // 通知タイプ
+  title: string;              // 通知タイトル
+  message: string;            // 通知本文
+  link?: string;              // リンク先（エージェントページなど）
+  fromUserId?: string;        // 送信者のuserId（共有通知の場合）
+  fromUserName?: string;      // 送信者の名前
+  agentId?: string;           // 関連エージェントID
+  agentName?: string;         // 関連エージェント名
+  isRead: boolean;            // 既読フラグ
+  readAt?: Date;              // 既読日時
+  createdAt: Date;
+};
+
+// ==========================================
+// [Security] セキュリティ診断用の型定義
+// ==========================================
+
+// 重要度
+export type SecuritySeverity = "critical" | "high" | "medium" | "low" | "info";
+
+// 個別のセキュリティ問題
+export type SecurityIssue = {
+  id: string;
+  type: string;                    // 問題の種類（https_missing, mixed_content等）
+  severity: SecuritySeverity;
+  title: string;                   // 問題のタイトル
+  description: string;             // 詳細説明
+  recommendation: string;          // 推奨対策
+  details?: string;                // 追加情報（URL、バージョン等）
+  detectedAt: Date;
+};
+
+// スキャン結果
+export type SecurityScanResult = {
+  _id?: string;
+  scanId: string;
+  companyId: string;
+  agentId: string;
+  sessionId: string;               // ウィジェットのセッションID
+  pageUrl: string;                 // スキャンしたページURL
+  issues: SecurityIssue[];         // 検出した問題
+  // 収集したメタ情報
+  meta: {
+    protocol: string;              // http or https
+    hasHttpForms: boolean;
+    hasMixedContent: boolean;
+    externalScripts: string[];
+    jqueryVersion?: string;
+    cookieFlags: {
+      total: number;
+      httpOnly: number;
+      secure: number;
+    };
+  };
+  userAgent: string;
+  createdAt: Date;
+};
+
+// エージェント毎のセキュリティレポート
+export type SecurityReport = {
+  _id?: string;
+  reportId: string;
+  companyId: string;
+  agentId: string;
+  // スコア
+  score: number;                   // 0-100
+  grade: "A" | "B" | "C" | "D" | "F";
+  // 問題サマリー
+  issuesSummary: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    info: number;
+    total: number;
+  };
+  // 最新のスキャンからの問題一覧
+  latestIssues: SecurityIssue[];
+  // 履歴
+  scanCount: number;               // 総スキャン回数
+  lastScanAt: Date;
+  // 直近30日のスコア履歴
+  scoreHistory: {
+    date: string;                  // YYYY-MM-DD
+    score: number;
+    grade: "A" | "B" | "C" | "D" | "F";
+  }[];
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 // ==========================================

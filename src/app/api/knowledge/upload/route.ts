@@ -10,6 +10,46 @@ import { checkRateLimit, getClientIP, RATE_LIMIT_CONFIGS } from "@/lib/rate-limi
 const MAX_CONTENT_LENGTH = 50000; // アップロード時は50000文字まで許可
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
+// ファイルのマジックバイトを検証（セキュリティ対策）
+type FileType = "pdf" | "docx" | "txt" | "unknown";
+
+function detectFileType(buffer: Buffer): FileType {
+  // PDF: %PDF-
+  if (buffer.length >= 5 && buffer.slice(0, 5).toString() === "%PDF-") {
+    return "pdf";
+  }
+
+  // DOCX (ZIP形式): PK\x03\x04
+  if (buffer.length >= 4 &&
+      buffer[0] === 0x50 && buffer[1] === 0x4B &&
+      buffer[2] === 0x03 && buffer[3] === 0x04) {
+    return "docx";
+  }
+
+  // テキストファイル（UTF-8 BOMまたは印字可能文字のみ）
+  const sample = buffer.slice(0, Math.min(1000, buffer.length));
+  const isBOM = sample.length >= 3 && sample[0] === 0xEF && sample[1] === 0xBB && sample[2] === 0xBF;
+  const isText = Array.from(sample).every(byte =>
+    byte === 0x09 || byte === 0x0A || byte === 0x0D || (byte >= 0x20 && byte <= 0x7E) || byte >= 0x80
+  );
+
+  if (isBOM || isText) {
+    return "txt";
+  }
+
+  return "unknown";
+}
+
+function validateFileTypeMatch(fileName: string, detectedType: FileType): boolean {
+  const ext = fileName.toLowerCase();
+
+  if (ext.endsWith(".pdf") && detectedType === "pdf") return true;
+  if ((ext.endsWith(".docx") || ext.endsWith(".doc")) && detectedType === "docx") return true;
+  if ((ext.endsWith(".txt") || ext.endsWith(".md") || ext.endsWith(".csv")) && detectedType === "txt") return true;
+
+  return false;
+}
+
 // ユーザーが会社にアクセスできるか確認
 async function canAccessCompany(session: { user: { id?: string; email?: string | null } }, companyId: string): Promise<boolean> {
   const usersCol = await getCollection<User>("users");
@@ -142,6 +182,16 @@ export async function POST(req: NextRequest) {
     const fileName = file.name.toLowerCase();
     const buffer = Buffer.from(await file.arrayBuffer());
     let extractedText = "";
+
+    // マジックバイト検証（セキュリティ対策）
+    const detectedType = detectFileType(buffer);
+    if (!validateFileTypeMatch(fileName, detectedType)) {
+      console.warn(`[Upload] File type mismatch: ${fileName} detected as ${detectedType}`);
+      return NextResponse.json(
+        { error: "ファイル形式が不正です。正しいファイルをアップロードしてください。" },
+        { status: 400 }
+      );
+    }
 
     if (fileName.endsWith(".pdf")) {
       // PDF処理（unpdf使用）

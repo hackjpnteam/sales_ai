@@ -56,12 +56,16 @@ export async function GET(req: NextRequest) {
           .sort({ createdAt: 1 })
           .toArray();
 
+        // 問い合わせ内容がない場合は最初のユーザーメッセージを使用
+        const firstUserMessage = logs.find((log) => log.role === "user");
+        const inquiry = lead.inquiry || firstUserMessage?.content || undefined;
+
         return {
           leadId: lead.leadId,
           name: lead.name,
           email: lead.email,
           phone: lead.phone,
-          inquiry: lead.inquiry,
+          inquiry,
           pageUrl: lead.pageUrl,
           deviceType: lead.deviceType,
           status: lead.status,

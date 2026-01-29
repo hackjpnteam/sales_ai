@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCollection } from "@/lib/mongodb";
-import { Company, Agent } from "@/lib/types";
+import { Company, Agent, User } from "@/lib/types";
+import { isSuperAdmin } from "@/lib/admin";
 
 // GET: ウィジェット設定を取得（公開API - 認証不要）
 export async function GET(req: NextRequest) {
@@ -39,6 +40,14 @@ export async function GET(req: NextRequest) {
     // Pro/Maxプランかどうか
     const isProPlan = company.plan === "pro" || company.plan === "max";
 
+    // スーパーアドミンかどうか確認
+    const usersCol = await getCollection<User>("users");
+    const owner = company.userId ? await usersCol.findOne({ userId: company.userId }) : null;
+    const ownerIsSuperAdmin = owner ? isSuperAdmin(owner.email) : false;
+
+    // セキュリティスキャン有効かどうか（スーパーアドミン専用）
+    const securityScanEnabled = ownerIsSuperAdmin;
+
     // ウィジェットに必要な設定を返す
     const settings = {
       agentName: agent.name || "AIコンシェルジュ",
@@ -58,6 +67,8 @@ export async function GET(req: NextRequest) {
       conversionSettings: isProPlan && agent.conversionSettings?.enabled
         ? agent.conversionSettings
         : null,
+      // セキュリティスキャン設定（Pro以上のみ）
+      securityScanEnabled: securityScanEnabled,
     };
 
     // CORSヘッダーを追加（外部サイトからのアクセスを許可）

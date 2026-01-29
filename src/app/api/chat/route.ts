@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { answerWithRAG, PromptSettings } from "@/lib/rag";
 import { getCollection } from "@/lib/mongodb";
-import { ChatLog, Agent, Lead } from "@/lib/types";
+import { ChatLog, Agent, Lead, ChatLogSource } from "@/lib/types";
 import { v4 as uuidv4 } from "uuid";
 import { checkRateLimit, getClientIP, RATE_LIMIT_CONFIGS } from "@/lib/rate-limit";
 
@@ -48,9 +48,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { companyId, agentId, message, sessionId: existingSessionId, language, pageUrl, deviceType } = await req.json();
+    const { companyId, agentId, message, sessionId: existingSessionId, language, pageUrl, deviceType, source } = await req.json();
 
-    console.log("[Chat] Received - pageUrl:", pageUrl, "deviceType:", deviceType);
+    // sourceのバリデーション（指定がない場合はデフォルトで"website"）
+    const validSources: ChatLogSource[] = ["website", "admin_test", "preview"];
+    const chatSource: ChatLogSource = validSources.includes(source) ? source : "website";
+
+    console.log("[Chat] Received - pageUrl:", pageUrl, "deviceType:", deviceType, "source:", chatSource);
 
     if (!companyId || !message) {
       return NextResponse.json(
@@ -83,6 +87,7 @@ export async function POST(req: NextRequest) {
         content: message,
         pageUrl: pageUrl || undefined,
         deviceType: deviceType || undefined,
+        source: chatSource,
         createdAt: new Date(),
       }),
       // エージェント設定を取得
@@ -191,6 +196,7 @@ export async function POST(req: NextRequest) {
         content: reply,
         pageUrl: pageUrl || undefined,
         deviceType: deviceType || undefined,
+        source: chatSource,
         createdAt: new Date(),
       }),
       // 最終使用日を更新（無料エージェント自動削除用）
@@ -221,6 +227,8 @@ export async function POST(req: NextRequest) {
             $set: {
               ...(contactInfo.name && { name: contactInfo.name }),
               ...(contactInfo.email && { email: contactInfo.email }),
+              // 問い合わせ内容がまだない場合は追加
+              ...(!existingLead.inquiry && { inquiry: message }),
               updatedAt: new Date(),
             },
           }
@@ -235,6 +243,7 @@ export async function POST(req: NextRequest) {
           sessionId,
           name: contactInfo.name,
           email: contactInfo.email,
+          inquiry: message, // 問い合わせ内容を保存
           pageUrl: pageUrl || undefined,
           deviceType: deviceType || undefined,
           status: "new",

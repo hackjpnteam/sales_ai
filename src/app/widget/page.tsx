@@ -532,6 +532,7 @@ function WidgetContent() {
           language,
           pageUrl: pageUrl || undefined,
           deviceType: deviceTypeValue,
+          source: "website", // ウェブサイトからの送信
         }),
       });
 

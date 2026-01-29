@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   Settings,
   MessageCircle,
@@ -12,9 +13,13 @@ import {
   Share2,
   Lock,
   Users,
+  Shield,
 } from "lucide-react";
 
-export type TabId = "settings" | "test" | "quickbuttons" | "knowledge" | "prompt" | "design" | "embed" | "share" | "users";
+// スーパーアドミンのメールアドレス（クライアント側での表示制御用）
+const SUPER_ADMIN_EMAILS = ["tomura@hackjpn.com"];
+
+export type TabId = "settings" | "test" | "quickbuttons" | "knowledge" | "prompt" | "design" | "embed" | "share" | "users" | "security";
 
 type TabConfig = {
   id: TabId;
@@ -22,6 +27,7 @@ type TabConfig = {
   shortLabel?: string;
   icon: typeof Settings;
   proOnly?: boolean;
+  superAdminOnly?: boolean;
 };
 
 const tabs: TabConfig[] = [
@@ -34,6 +40,7 @@ const tabs: TabConfig[] = [
   { id: "embed", label: "埋め込み", icon: Code },
   { id: "share", label: "共有", icon: Share2 },
   { id: "users", label: "ユーザー", shortLabel: "ユーザー", icon: Users },
+  { id: "security", label: "セキュリティ", shortLabel: "診断", icon: Shield, superAdminOnly: true },
 ];
 
 type TabNavigationProps = {
@@ -49,8 +56,15 @@ export function TabNavigation({
   isProOrHigher,
   onTabChange,
 }: TabNavigationProps) {
+  const { data: session } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  // スーパーアドミンかどうかチェック
+  const isSuperAdmin = session?.user?.email && SUPER_ADMIN_EMAILS.includes(session.user.email.toLowerCase());
+
+  // スーパーアドミン専用タブをフィルタリング
+  const visibleTabs = tabs.filter(tab => !tab.superAdminOnly || isSuperAdmin);
 
   const handleTabClick = (tabId: TabId) => {
     const tab = tabs.find(t => t.id === tabId);
@@ -74,7 +88,7 @@ export function TabNavigation({
   return (
     <div className="border-b border-slate-200 bg-white rounded-t-2xl">
       <nav className="-mb-px flex overflow-x-auto scrollbar-hide" aria-label="Tabs">
-        {tabs.map((tab) => {
+        {visibleTabs.map((tab) => {
           const isActive = currentTab === tab.id;
           const isLocked = tab.proOnly && !isProOrHigher;
           const Icon = tab.icon;
@@ -103,6 +117,11 @@ export function TabNavigation({
               {tab.proOnly && !isLocked && (
                 <span className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-600">
                   Pro
+                </span>
+              )}
+              {tab.superAdminOnly && (
+                <span className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600">
+                  Admin
                 </span>
               )}
             </button>

@@ -69,11 +69,17 @@ export async function GET(req: NextRequest) {
     const chatLogsCol = await getCollection<ChatLog>("chat_logs");
 
     // チャットがあるセッションを取得（pageUrlとdeviceTypeも集約）
+    // 管理画面テストを除外（source: "admin_test"以外、または未設定のものを含む）
     const chatSessionsAgg = await chatLogsCol.aggregate([
       {
         $match: {
           companyId,
           createdAt: { $gte: from, $lte: to },
+          $or: [
+            { source: "website" },
+            { source: { $exists: false } },
+            { source: null },
+          ],
         },
       },
       {
@@ -92,12 +98,17 @@ export async function GET(req: NextRequest) {
       { $limit: limit },
     ]).toArray();
 
-    // 総セッション数を取得
+    // 総セッション数を取得（管理画面テストを除外）
     const totalSessionsAgg = await chatLogsCol.aggregate([
       {
         $match: {
           companyId,
           createdAt: { $gte: from, $lte: to },
+          $or: [
+            { source: "website" },
+            { source: { $exists: false } },
+            { source: null },
+          ],
         },
       },
       {
