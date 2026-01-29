@@ -1,39 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getCollection } from "@/lib/mongodb";
-import { Agent, Company, SecurityReport, SecuritySeverity } from "@/lib/types";
+import { Agent, Company, SecurityReport } from "@/lib/types";
 import { isSuperAdmin } from "@/lib/admin";
-
-// 重要度ラベルのマッピング
-const severityLabels: Record<SecuritySeverity, string> = {
-  critical: "Critical (重大)",
-  high: "High (高)",
-  medium: "Medium (中)",
-  low: "Low (低)",
-  info: "Info (情報)",
-};
-
-// グレードの説明
-const gradeDescriptions: Record<string, string> = {
-  A: "優秀 - セキュリティ状態は良好です",
-  B: "良好 - 軽微な問題があります",
-  C: "注意 - いくつかの問題に対処が必要です",
-  D: "警告 - 複数の重要な問題があります",
-  F: "危険 - 緊急の対処が必要です",
-};
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 
 // GET: PDFレポートを生成
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ agentId: string }> }
 ) {
+  let browser;
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { agentId } = await params;
@@ -46,19 +28,13 @@ export async function GET(
     // エージェントを取得
     const agent = await agentsCol.findOne({ agentId });
     if (!agent) {
-      return NextResponse.json(
-        { error: "Agent not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Agent not found" }, { status: 404 });
     }
 
-    // 会社を取得し、アクセス権をチェック
+    // 会社を取得
     const company = await companiesCol.findOne({ companyId: agent.companyId });
     if (!company) {
-      return NextResponse.json(
-        { error: "Company not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
     // スーパーアドミン専用チェック
@@ -71,13 +47,10 @@ export async function GET(
 
     // ユーザーがこのcompanyにアクセス権があるかチェック
     const isOwner = company.userId === userId;
-    const isShared = agent.sharedWith?.some(s => s.userId === userId);
+    const isShared = agent.sharedWith?.some((s) => s.userId === userId);
 
     if (!isOwner && !isShared) {
-      return NextResponse.json(
-        { error: "Access denied" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
     // レポートを取得
@@ -93,190 +66,219 @@ export async function GET(
       );
     }
 
-    // jspdfを動的インポート（サーバーサイドでのみ使用）
-    const { jsPDF } = await import("jspdf");
-    // @ts-expect-error - jspdf-autotableの型定義がない
-    const autoTable = (await import("jspdf-autotable")).default;
-
-    // PDFドキュメントを作成
-    const doc = new jsPDF();
-
-    // フォントの設定（日本語対応のためヘルパー関数を使用）
-    const addText = (text: string, x: number, y: number, options?: { fontSize?: number; fontStyle?: "normal" | "bold"; color?: [number, number, number] }) => {
-      if (options?.fontSize) doc.setFontSize(options.fontSize);
-      if (options?.fontStyle === "bold") {
-        doc.setFont("helvetica", "bold");
-      } else {
-        doc.setFont("helvetica", "normal");
-      }
-      if (options?.color) doc.setTextColor(...options.color);
-      else doc.setTextColor(0, 0, 0);
-      doc.text(text, x, y);
+    // superadmin版のPDF APIにリダイレクト（同じ形式で生成）
+    const scanResult = {
+      url: company.rootUrl || agent.rootUrl || "Unknown",
+      score: report.score,
+      grade: report.grade,
+      issuesSummary: report.issuesSummary,
+      issues: report.latestIssues,
+      scannedAt: report.lastScanAt,
     };
 
-    // ヘッダー
-    doc.setFillColor(225, 29, 72); // rose-600
-    doc.rect(0, 0, 210, 40, "F");
+    // HTMLを生成
+    const html = generateHTML(scanResult, agent.name);
 
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(24);
-    doc.setFont("helvetica", "bold");
-    doc.text("Security Report", 20, 25);
+    // Puppeteerでブラウザを起動
+    const isLocal = process.env.NODE_ENV === "development";
 
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Agent: ${agent.name}`, 20, 35);
+    if (isLocal) {
+      const puppeteerFull = await import("puppeteer");
+      browser = await puppeteerFull.default.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      });
+    } else {
+      browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+      });
+    }
 
-    // 生成日時
-    const now = new Date();
-    addText(`Generated: ${now.toLocaleString("en-US")}`, 140, 35, { fontSize: 10, color: [255, 255, 255] });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "networkidle0" });
 
-    // スコアセクション
-    let yPos = 55;
-
-    addText("Security Score", 20, yPos, { fontSize: 16, fontStyle: "bold" });
-    yPos += 15;
-
-    // グレードボックス
-    const gradeColors: Record<string, [number, number, number]> = {
-      A: [16, 185, 129], // emerald-500
-      B: [34, 197, 94],  // green-500
-      C: [234, 179, 8],  // yellow-500
-      D: [249, 115, 22], // orange-500
-      F: [239, 68, 68],  // red-500
-    };
-
-    const gradeColor = gradeColors[report.grade] || [100, 100, 100];
-    doc.setFillColor(...gradeColor);
-    doc.roundedRect(20, yPos, 40, 40, 5, 5, "F");
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(32);
-    doc.setFont("helvetica", "bold");
-    doc.text(report.grade, 33, yPos + 28);
-
-    // スコアと説明
-    addText(`Score: ${report.score}/100`, 70, yPos + 12, { fontSize: 14, fontStyle: "bold" });
-    addText(gradeDescriptions[report.grade] || "", 70, yPos + 24, { fontSize: 10, color: [100, 100, 100] });
-    addText(`Last scan: ${new Date(report.lastScanAt).toLocaleString("en-US")}`, 70, yPos + 36, { fontSize: 9, color: [150, 150, 150] });
-
-    yPos += 55;
-
-    // 問題サマリー
-    addText("Issue Summary", 20, yPos, { fontSize: 16, fontStyle: "bold" });
-    yPos += 10;
-
-    const summaryData = [
-      ["Critical", String(report.issuesSummary.critical)],
-      ["High", String(report.issuesSummary.high)],
-      ["Medium", String(report.issuesSummary.medium)],
-      ["Low", String(report.issuesSummary.low)],
-      ["Info", String(report.issuesSummary.info)],
-      ["Total", String(report.issuesSummary.total)],
-    ];
-
-    autoTable(doc, {
-      startY: yPos,
-      head: [["Severity", "Count"]],
-      body: summaryData,
-      theme: "striped",
-      headStyles: { fillColor: [225, 29, 72] },
-      margin: { left: 20, right: 20 },
-      tableWidth: 80,
+    // PDFを生成
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "0", right: "0", bottom: "0", left: "0" },
     });
 
-    // @ts-expect-error - autoTableのfinalYプロパティ
-    yPos = doc.lastAutoTable.finalY + 15;
+    await browser.close();
 
-    // 検出された問題の詳細
-    if (report.latestIssues.length > 0) {
-      addText("Detected Issues", 20, yPos, { fontSize: 16, fontStyle: "bold" });
-      yPos += 10;
-
-      const issuesData = report.latestIssues.map((issue) => [
-        severityLabels[issue.severity] || issue.severity,
-        issue.title,
-        issue.description.substring(0, 60) + (issue.description.length > 60 ? "..." : ""),
-      ]);
-
-      autoTable(doc, {
-        startY: yPos,
-        head: [["Severity", "Issue", "Description"]],
-        body: issuesData,
-        theme: "striped",
-        headStyles: { fillColor: [225, 29, 72] },
-        margin: { left: 20, right: 20 },
-        columnStyles: {
-          0: { cellWidth: 35 },
-          1: { cellWidth: 45 },
-          2: { cellWidth: "auto" },
-        },
-        styles: { fontSize: 9 },
-      });
-
-      // @ts-expect-error - autoTableのfinalYプロパティ
-      yPos = doc.lastAutoTable.finalY + 15;
-
-      // 推奨事項
-      if (yPos < 250) {
-        addText("Recommendations", 20, yPos, { fontSize: 16, fontStyle: "bold" });
-        yPos += 10;
-
-        const recommendations = report.latestIssues
-          .filter((issue) => issue.recommendation)
-          .slice(0, 5)
-          .map((issue, index) => [`${index + 1}.`, issue.title, issue.recommendation]);
-
-        if (recommendations.length > 0) {
-          autoTable(doc, {
-            startY: yPos,
-            head: [["#", "Issue", "Recommendation"]],
-            body: recommendations,
-            theme: "striped",
-            headStyles: { fillColor: [225, 29, 72] },
-            margin: { left: 20, right: 20 },
-            columnStyles: {
-              0: { cellWidth: 10 },
-              1: { cellWidth: 40 },
-              2: { cellWidth: "auto" },
-            },
-            styles: { fontSize: 9 },
-          });
-        }
-      }
-    } else {
-      addText("No security issues detected.", 20, yPos, { fontSize: 12, color: [16, 185, 129] });
-    }
-
-    // フッター
-    const pageCount = doc.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(150, 150, 150);
-      doc.text(
-        `Page ${i} of ${pageCount} | Generated by ChatSales Security Scanner`,
-        105,
-        290,
-        { align: "center" }
-      );
-    }
-
-    // PDFをバッファとして出力
-    const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
+    const filename = `hackjpn-security-report-${agentId}-${new Date().toISOString().split("T")[0]}.pdf`;
 
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="security-report-${agentId}.pdf"`,
+        "Content-Disposition": `attachment; filename="${filename}"`,
       },
     });
   } catch (error) {
     console.error("[Security PDF] Error:", error);
+    if (browser) await browser.close();
     return NextResponse.json(
       { error: "Failed to generate PDF report" },
       { status: 500 }
     );
   }
+}
+
+type ScanResult = {
+  url: string;
+  score: number;
+  grade: string;
+  issuesSummary: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    info: number;
+    total: number;
+  };
+  issues: Array<{
+    id: string;
+    type: string;
+    severity: string;
+    title: string;
+    description: string;
+    recommendation: string;
+    details?: string;
+  }>;
+  scannedAt: Date | string;
+};
+
+function generateHTML(scanResult: ScanResult, agentName: string): string {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("ja-JP", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const gradeColors: Record<string, string> = {
+    A: "#10b981",
+    B: "#22c55e",
+    C: "#eab308",
+    D: "#f97316",
+    F: "#ef4444",
+  };
+  const gradeColor = gradeColors[scanResult.grade] || "#64748b";
+
+  const gradeDescriptions: Record<string, { label: string; desc: string }> = {
+    A: { label: "優秀", desc: "セキュリティ対策が適切に実施されています。" },
+    B: { label: "良好", desc: "基本的なセキュリティ対策は実施されています。" },
+    C: { label: "要改善", desc: "複数のセキュリティ上の問題が検出されました。" },
+    D: { label: "危険", desc: "重大なセキュリティリスクが存在します。" },
+    F: { label: "緊急対応必要", desc: "複数の重大な脆弱性が検出されました。" },
+  };
+  const gradeInfo = gradeDescriptions[scanResult.grade] || { label: "-", desc: "" };
+
+  const severityLabels: Record<string, string> = {
+    critical: "重大",
+    high: "高",
+    medium: "中",
+    low: "低",
+    info: "情報",
+  };
+
+  const issuesHTML = scanResult.issues
+    .map((issue) => {
+      const label = severityLabels[issue.severity] || issue.severity;
+      return `
+      <div style="background: white; border-radius: 8px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); page-break-inside: avoid;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span style="background: #e11d48; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px;">${label}</span>
+          <strong style="font-size: 13px;">${issue.title}</strong>
+        </div>
+        <div style="color: #4b5563; font-size: 11px; line-height: 1.5;">${issue.description}</div>
+        <div style="margin-top: 8px; padding: 8px; background: #f0fdf4; border-radius: 4px; font-size: 10px; color: #166534;">
+          推奨対策: ${issue.recommendation}
+        </div>
+      </div>
+    `;
+    })
+    .join("");
+
+  return `
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { margin: 0; size: A4; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #1f2937;
+    }
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 15mm 20mm;
+      page-break-after: always;
+    }
+  </style>
+</head>
+<body>
+  <div class="page" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+    <div style="font-size: 11px; color: #64748b; letter-spacing: 3px; margin-bottom: 12px;">SECURITY ASSESSMENT REPORT</div>
+    <div style="font-size: 36px; font-weight: bold;">hackjpn</div>
+    <div style="font-size: 20px; margin-top: 8px; color: #e2e8f0;">セキュリティ診断書</div>
+    <div style="margin-top: 20px; font-size: 14px; color: #94a3b8;">${agentName}</div>
+
+    <div style="width: 100px; height: 100px; border-radius: 50%; background: ${gradeColor}; display: flex; align-items: center; justify-content: center; margin: 30px 0;">
+      <span style="font-size: 48px; font-weight: bold;">${scanResult.grade}</span>
+    </div>
+
+    <div style="font-size: 28px; font-weight: bold;">${scanResult.score}<span style="font-size: 16px; color: #94a3b8;"> / 100 点</span></div>
+    <div style="font-size: 14px; color: ${gradeColor}; margin-top: 8px;">${gradeInfo.label}</div>
+
+    <div style="margin-top: 30px; font-size: 12px; color: #64748b;">診断日: ${dateStr}</div>
+  </div>
+
+  <div class="page" style="background: #f8fafc;">
+    <div style="background: linear-gradient(135deg, #e11d48 0%, #be185d 100%); color: white; padding: 16px 20mm; margin: -15mm -20mm 20px -20mm;">
+      <h1 style="font-size: 18px; font-weight: bold;">検出された問題</h1>
+    </div>
+
+    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+      <div style="flex: 1; background: #fef2f2; border-radius: 8px; padding: 12px; text-align: center;">
+        <div style="font-size: 20px; font-weight: bold; color: #dc2626;">${scanResult.issuesSummary.critical}</div>
+        <div style="font-size: 10px; color: #991b1b;">重大</div>
+      </div>
+      <div style="flex: 1; background: #fff7ed; border-radius: 8px; padding: 12px; text-align: center;">
+        <div style="font-size: 20px; font-weight: bold; color: #ea580c;">${scanResult.issuesSummary.high}</div>
+        <div style="font-size: 10px; color: #9a3412;">高</div>
+      </div>
+      <div style="flex: 1; background: #fefce8; border-radius: 8px; padding: 12px; text-align: center;">
+        <div style="font-size: 20px; font-weight: bold; color: #ca8a04;">${scanResult.issuesSummary.medium}</div>
+        <div style="font-size: 10px; color: #854d0e;">中</div>
+      </div>
+      <div style="flex: 1; background: #eff6ff; border-radius: 8px; padding: 12px; text-align: center;">
+        <div style="font-size: 20px; font-weight: bold; color: #2563eb;">${scanResult.issuesSummary.low}</div>
+        <div style="font-size: 10px; color: #1e40af;">低</div>
+      </div>
+    </div>
+
+    ${scanResult.issues.length === 0 ? `
+      <div style="background: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; padding: 30px; text-align: center;">
+        <div style="font-size: 40px; margin-bottom: 12px;">✅</div>
+        <div style="font-size: 16px; font-weight: bold; color: #16a34a;">セキュリティ問題は検出されませんでした</div>
+      </div>
+    ` : issuesHTML}
+
+    <div style="position: absolute; bottom: 10mm; left: 20mm; right: 20mm; text-align: center; font-size: 9px; color: #94a3b8;">
+      hackjpn Security Assessment Report - Confidential
+    </div>
+  </div>
+</body>
+</html>
+  `;
 }
