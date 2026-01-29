@@ -79,7 +79,7 @@ export async function POST(
     // 既に共有されていないか確認
     const userEmail = session.user.email.toLowerCase();
     const existingShare = agent.sharedWith?.find(
-      (s) => s.email.toLowerCase() === userEmail || s.userId === session.user.id
+      (s) => s.email?.toLowerCase() === userEmail || s.userId === session.user.id
     );
 
     if (existingShare) {

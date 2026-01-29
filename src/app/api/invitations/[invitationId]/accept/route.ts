@@ -53,7 +53,7 @@ export async function POST(
     }
 
     // メールアドレスが一致するか確認
-    if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+    if (!invitation.email || user.email.toLowerCase() !== invitation.email.toLowerCase()) {
       return NextResponse.json(
         { error: "Email mismatch. This invitation was sent to a different email address." },
         { status: 403 }
@@ -70,7 +70,7 @@ export async function POST(
 
     // 既に共有されていないか確認
     const alreadyShared = agent.sharedWith?.some(
-      (s) => s.userId === user.userId || s.email.toLowerCase() === user.email.toLowerCase()
+      (s) => s.userId === user.userId || s.email?.toLowerCase() === user.email.toLowerCase()
     );
 
     if (!alreadyShared) {

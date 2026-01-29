@@ -116,7 +116,7 @@ export async function POST(
 
     // 既に共有されていないか確認
     const existingShare = agent.sharedWith?.find(
-      (s) => s.email.toLowerCase() === normalizedEmail
+      (s) => s.email?.toLowerCase() === normalizedEmail
     );
     if (existingShare) {
       return NextResponse.json(

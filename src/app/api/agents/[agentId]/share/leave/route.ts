@@ -31,7 +31,7 @@ export async function POST(
     const normalizedEmail = session.user.email.toLowerCase();
     const isSharedUser = agent.sharedWith?.some(
       (shared) =>
-        shared.email.toLowerCase() === normalizedEmail ||
+        shared.email?.toLowerCase() === normalizedEmail ||
         shared.userId === session.user?.id
     );
 
