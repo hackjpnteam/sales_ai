@@ -1076,9 +1076,9 @@ function WidgetContent() {
           {/* Quick buttons after welcome message */}
           {msg.id === "welcome" && showQuickButtons && (
             <div className="flex flex-wrap gap-2 justify-center mt-4" key={`quickbuttons-${language}`}>
-              {(customQuickButtons && customQuickButtons.length > 0 ? customQuickButtons : t.quickQuestions).slice(0, 5).map((q, i) => {
+              {(customQuickButtons && customQuickButtons.length > 0 ? customQuickButtons : t.quickQuestions).map((q, i) => {
                 const icons = [Building2, Users, Briefcase, MessageCircle, HelpCircle];
-                const Icon = icons[i % 5];
+                const Icon = icons[i % icons.length];
                 return (
                   <button
                     key={`${language}-${i}`}
@@ -1152,9 +1152,9 @@ function WidgetContent() {
             {(currentFollowUpButtons && currentFollowUpButtons.length > 0
               ? currentFollowUpButtons
               : (customQuickButtons && customQuickButtons.length > 0 ? customQuickButtons : t.quickQuestions)
-            ).slice(0, 5).map((q, i) => {
+            ).map((q, i) => {
               const icons = [Building2, Users, Briefcase, MessageCircle, HelpCircle];
-              const Icon = icons[i % 5];
+              const Icon = icons[i % icons.length];
               return (
                 <button
                   key={`end-${language}-${i}-${q.label}`}

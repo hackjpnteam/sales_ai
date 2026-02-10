@@ -78,7 +78,7 @@ function AgentDetailContent() {
       if (!agent?.companyId) return;
 
       try {
-        const res = await fetch(`/api/analytics/summary?companyId=${agent.companyId}&period=all`);
+        const res = await fetch(`/api/analytics/summary?companyId=${agent.companyId}&period=7days`);
         if (res.ok) {
           const data = await res.json();
           if (data.summary) {
@@ -280,7 +280,7 @@ function AgentDetailContent() {
           >
             <div className="flex items-center gap-2 text-slate-500 mb-1">
               <Eye className="w-4 h-4" />
-              <span className="text-xs">総PV</span>
+              <span className="text-xs">PV（7日間）</span>
             </div>
             <p className="text-2xl font-bold text-slate-800">{analytics.totalPV.toLocaleString()}</p>
           </Link>
@@ -290,7 +290,7 @@ function AgentDetailContent() {
           >
             <div className="flex items-center gap-2 text-slate-500 mb-1">
               <Users className="w-4 h-4" />
-              <span className="text-xs">セッション</span>
+              <span className="text-xs">セッション（7日間）</span>
             </div>
             <p className="text-2xl font-bold text-slate-800">{analytics.uniqueVisitors.toLocaleString()}</p>
           </Link>
@@ -300,7 +300,7 @@ function AgentDetailContent() {
           >
             <div className="flex items-center gap-2 text-slate-500 mb-1">
               <MessageCircle className="w-4 h-4" />
-              <span className="text-xs">チャット開始</span>
+              <span className="text-xs">チャット開始（7日間）</span>
             </div>
             <p className="text-2xl font-bold text-slate-800">{analytics.chatOpens.toLocaleString()}</p>
             <p className="text-xs text-slate-400 mt-0.5">開始率 {(Number(analytics.chatOpenRate) || 0).toFixed(2)}%</p>
@@ -311,7 +311,7 @@ function AgentDetailContent() {
           >
             <div className="flex items-center gap-2 text-slate-500 mb-1">
               <Target className="w-4 h-4" />
-              <span className="text-xs">コンバージョン</span>
+              <span className="text-xs">CV（7日間）</span>
             </div>
             <p className="text-2xl font-bold text-slate-800">{analytics.conversions.toLocaleString()}</p>
           </Link>

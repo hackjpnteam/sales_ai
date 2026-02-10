@@ -997,11 +997,7 @@ function DashboardContent() {
     const buttons = agent.quickButtons && agent.quickButtons.length > 0
       ? agent.quickButtons.map(b => ({ ...b, response: b.response || "", followUpButtons: b.followUpButtons || [] }))
       : defaultButtons;
-    // 5つに揃える
-    while (buttons.length < 5) {
-      buttons.push({ label: "", query: "", response: "", followUpButtons: [] });
-    }
-    setQuickButtonsForm(buttons.slice(0, 5));
+    setQuickButtonsForm(buttons);
     setEditingQuickButtons(agent.agentId);
     setExpandedFollowUpPaths(new Set());
   };
